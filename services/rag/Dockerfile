@@ -25,7 +25,7 @@ RUN python -c "from docling.document_converter import DocumentConverter; Documen
 COPY config.py ingest.py query_engine.py evaluator.py main.py __init__.py ./
 
 # Directories used at runtime
-RUN mkdir -p /sop-standards /app/logs /app/reports
+RUN mkdir -p /app/storage/docs /app/logs /app/reports
 
 # Default: keep the ingestion worker alive and refresh on changes.
 CMD ["python", "main.py", "--watch"]

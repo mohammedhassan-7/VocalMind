@@ -2,7 +2,7 @@
 """
 Upload local audio into Supabase Storage and register interactions via the backend API.
 
-Typical (NileTech benchmark set under AudioData/):
+Typical (NexaLink benchmark set under storage/audio/nexalink/):
   cd backend && uv run python ../infra/scripts/supabase_seed_audio.py
 
 All .mp3 in a folder:
@@ -10,7 +10,7 @@ All .mp3 in a folder:
 
 Explicit paths (anywhere on disk):
   cd backend && uv run python ../infra/scripts/supabase_seed_audio.py \\
-    --file ../AudioData/foo.mp3 --file D:/calls/bar.wav
+    --file ../storage/audio/nexalink/01a-refund-request-good.mp3 --file D:/calls/bar.wav
 
 Add uploads without wiping org DB / storage prefix (append-only):
   ... supabase_seed_audio.py --no-reset --glob "*.mp3" --storage-subdir my-batch-2026-04
@@ -234,8 +234,8 @@ def main() -> int:
     parser.add_argument(
         "--audio-dir",
         type=Path,
-        default=REPO / "AudioData",
-        help="Base directory for --glob and --names (default: repo AudioData/)",
+        default=REPO / "storage" / "audio",
+        help="Base directory for --glob and --names (default: repo storage/audio/)",
     )
     parser.add_argument(
         "--file",

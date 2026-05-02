@@ -71,11 +71,11 @@ class Settings(BaseSettings):
     SOP_MAX_CHUNKS: int = 2
     RAG_SUPPORTED_THRESHOLD: float = 0.82
     RAG_NEUTRAL_THRESHOLD: float = 0.55
-    POLICY_DOCS_ROOT: str = str(Path.cwd() / "storage" / "guidelines")
-    SOP_DOCS_ROOT: str = str(Path.cwd() / "sop-standards")
-    KNOWLEDGE_DOCS_ROOT: str = str(Path.cwd() / "storage" / "knowledge")
-    POLICY_PARSED_DOCS_ROOT: str = str(Path.cwd() / "sop-standards")
-    SOP_PARSED_DOCS_ROOT: str = str(Path.cwd() / "sop-standards")
+    POLICY_DOCS_ROOT: str = str(Path.cwd() / "storage" / "docs")
+    SOP_DOCS_ROOT: str = str(Path.cwd() / "storage" / "docs")
+    KNOWLEDGE_DOCS_ROOT: str = str(Path.cwd() / "storage" / "docs")
+    POLICY_PARSED_DOCS_ROOT: str = str(Path.cwd() / "storage" / "docs")
+    SOP_PARSED_DOCS_ROOT: str = str(Path.cwd() / "storage" / "docs")
 
     # Text emotion model used in text+acoustic fusion
     TEXT_EMOTION_PROVIDER: str = "rule_based"  # rule_based | hf_transformers

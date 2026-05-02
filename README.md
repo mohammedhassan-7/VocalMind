@@ -91,7 +91,10 @@ VocalMind/
 ├── data/             # General data and reference materials
 ├── docker/           # Shared Docker configuration artifacts
 ├── docs/             # Documentation assets
-├── AudioData/        # Sample audio inputs for testing
+├── storage/          # Unified local storage (docs, audio, uploads)
+│   ├── docs/         #   Organization documents (policy, SOP, KB)
+│   ├── audio/        #   Sample audio inputs for testing
+│   └── uploads/      #   Runtime audio uploads (gitignored)
 ├── .github/          # CI workflows (ci.yml, backend.yml, frontend.yml, rag_ci.yml)
 ├── docker-compose.yml# Multi-container service definitions
 ├── Makefile          # Unified development commands
@@ -137,7 +140,7 @@ make prepare-speaker-model  # Extract speaker-role classifier for WhisperX
 ### Utility Scripts
 ```bash
 python infra/scripts/measure_dashboard_baseline.py --api-base http://localhost:8000/api/v1
-python kaggle/scripts/kaggle_api_smoke_test.py --audio-file AudioData/nexalink/sample.wav
+python kaggle/scripts/kaggle_api_smoke_test.py --audio-file storage/audio/nexalink/sample.wav
 ```
 
 ### Speaker Classifier Artifact

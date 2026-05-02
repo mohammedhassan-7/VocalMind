@@ -24,7 +24,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 def parse_nexalink_readme_mapping(readme_path: Path) -> dict[str, str]:
-    """Return filename -> agent_name mapping parsed from AudioData README."""
+    """Return filename -> agent_name mapping parsed from storage/audio/nexalink README."""
     if not readme_path.exists():
         return {}
 
@@ -89,7 +89,7 @@ async def create_or_get_user(session: AsyncSession, org_id, email: str, name: st
 async def seed_policies_and_faqs(session: AsyncSession, org_id):
     """Ingest policy and SOP markdown documents into policy/FAQ tables."""
     backend_dir = Path(__file__).resolve().parents[1]
-    docs_dir = backend_dir / "sop-standards" / "nexalink" / "parsed-docs"
+    docs_dir = backend_dir.parent / "storage" / "docs" / "nexalink" / "parsed-docs"
     
     if not docs_dir.exists():
         print(f"Docs directory not found: {docs_dir}")
@@ -274,9 +274,9 @@ async def seed_interactions(
     manager: UserModel,
     policy: CompanyPolicy | None,
 ):
-    # Scan ../AudioData/nexalink for files
+    # Scan ../storage/audio/nexalink for files
     backend_dir = Path(__file__).resolve().parents[1]
-    audio_dir = backend_dir.parent / "AudioData" / "nexalink"
+    audio_dir = backend_dir.parent / "storage" / "audio" / "nexalink"
     if not audio_dir.exists():
         print(f"Audio directory not found: {audio_dir}")
         return
@@ -290,15 +290,15 @@ async def seed_interactions(
         readme_agent_to_user[agent_name] = agents[idx % len(agents)]
 
     assigned_counts = {agent.email: 0 for agent in agents}
-    
+
     if not mp3_files:
-        print("No audio files found in ../AudioData/nexalink")
+        print("No audio files found in storage/audio/nexalink")
         return
-        
+
     print(f"Found {len(mp3_files)} audio files. Creating interactions...")
-    
+
     for path in mp3_files:
-        filename = str(Path("..") / "AudioData" / "nexalink" / path.name)
+        filename = str(Path("..") / "storage" / "audio" / "nexalink" / path.name)
         # Check if already exists
         result = await session.exec(
             select(Interaction).where(

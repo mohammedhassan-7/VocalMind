@@ -8,27 +8,29 @@ Implementation: `services/rag/ingest.py`
 
 ## Inputs
 
-Expected source structure under `DOCS_DIR`:
+Expected source structure under `DOCS_DIR` (`storage/docs`):
 
-1. `sop-standards/{org}/policy-docs/*.pdf`
-2. `sop-standards/{org}/sop-procedures/*.pdf`
+1. `storage/docs/{org}/policy-docs/*.pdf`
+2. `storage/docs/{org}/sop-procedures/*.pdf`
+3. `storage/docs/{org}/knowledge-base/*.pdf`
 
 Legacy fallback:
-1. `sop-standards/{org}/*.pdf`
+1. `storage/docs/{org}/*.pdf`
 
 ## Outputs
 
 For each processed file (per org):
-1. Raw markdown: `sop-standards/{org}/parsed-docs/{file}_raw.md`
-2. Clean markdown: `sop-standards/{org}/parsed-docs/{file}.md`
-3. Chunk debug file: `sop-standards/{org}/parsed-docs/{file}_chunks.md`
-4. Validation report: `sop-standards/{org}/parsed-docs/{file}_validation.json`
-5. Qdrant Vectors: 
+1. Raw markdown: `storage/docs/{org}/parsed-docs/{file}_raw.md`
+2. Clean markdown: `storage/docs/{org}/parsed-docs/{file}.md`
+3. Chunk debug file: `storage/docs/{org}/parsed-docs/{file}_chunks.md`
+4. Validation report: `storage/docs/{org}/parsed-docs/{file}_validation.json`
+5. Qdrant Vectors:
    - `policy-docs` go to `vocalmind_parents` / `vocalmind_children`
    - `sop-procedures` go to `vocalmind_sop_parents` / `vocalmind_sop_children`
+   - `knowledge-base` go to `vocalmind_sop_parents` (KB type)
 
 Global run report:
-1. `sop-standards/_pipeline_report.json`
+1. `storage/docs/_pipeline_report.json`
 
 ## 8-Stage Pipeline
 
@@ -82,8 +84,8 @@ python main.py --ingest --force
 ## Operational Notes
 
 1. Ensure Qdrant and Ollama are up before ingestion
-2. Ensure `DOCS_DIR` points to `sop-standards`
-3. Ensure `PARSED_DIR` points to `sop-standards`
+2. Ensure `DOCS_DIR` points to `storage/docs`
+3. Ensure `PARSED_DIR` points to `storage/docs`
 4. Re-run ingestion whenever PDFs are added or updated
 
 ## Troubleshooting
@@ -93,7 +95,7 @@ python main.py --ingest --force
 - Confirm files are `.pdf`
 
 2. Empty or weak retrieval later
-- Verify markdown artifacts exist in `sop-standards/{org}/parsed-docs`
+- Verify markdown artifacts exist in `storage/docs/{org}/parsed-docs`
 - Confirm Qdrant collections contain points
 
 3. Embedding errors
