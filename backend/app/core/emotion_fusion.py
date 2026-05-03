@@ -149,6 +149,26 @@ def _normalize_text_label(label: str) -> str:
     return TEXT_LABEL_NORMALIZATION.get(base, base)
 
 
+def _aggregate_text_emotion_scores(scores: list[dict]) -> dict[str, float]:
+    aggregated: dict[str, float] = {label: 0.0 for label in TEXT_LEXICON.keys()}
+    for item in scores:
+        label = _normalize_text_label(str(item.get("label", "neutral")))
+        try:
+            score = float(item.get("score", 0.0))
+        except (TypeError, ValueError):
+            score = 0.0
+        aggregated[label] = aggregated.get(label, 0.0) + max(0.0, score)
+    return aggregated
+
+
+def _top_text_emotion_from_scores(scores: dict[str, float]) -> tuple[str, float]:
+    if not scores:
+        return "neutral", 0.3
+    label = max(scores, key=scores.get)
+    confidence = max(0.0, min(1.0, float(scores.get(label, 0.0))))
+    return label, confidence
+
+
 @lru_cache(maxsize=1)
 def _get_hf_text_classifier():
     if find_spec("torch") is None:
@@ -170,10 +190,7 @@ def _infer_text_emotion_hf(text: str) -> tuple[str, float]:
     if not scores:
         return "neutral", 0.3
 
-    top = max(scores, key=lambda item: float(item.get("score", 0.0)))
-    label = _normalize_text_label(str(top.get("label", "neutral")))
-    confidence = float(top.get("score", 0.3))
-    return label, max(0.0, min(1.0, confidence))
+    return _top_text_emotion_from_scores(_aggregate_text_emotion_scores(scores))
 
 
 def infer_text_emotion_with_provider(text: str) -> tuple[str, float]:
