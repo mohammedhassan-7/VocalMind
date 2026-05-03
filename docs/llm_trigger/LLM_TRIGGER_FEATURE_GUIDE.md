@@ -2,11 +2,17 @@
 
 ## Purpose
 
-The LLM Trigger feature evaluates customer-agent interactions and returns coaching/compliance signals in three dimensions:
+The LLM Trigger feature evaluates customer-agent interactions and returns coaching/compliance signals through a three-component pipeline:
+
+1. **RAG Retrieval Layer** — resolves SOP, policy, and knowledge base grounding context from Qdrant vector collections
+2. **Policy Compliance Evaluator** — transcript-level compliance judge that produces a structured compliance report
+3. **NLI Policy Check** — single-claim policy alignment check that validates agent statements against policy context
+
+These components feed three analysis dimensions:
 
 1. Emotion Shift: text vs acoustic mismatch and dissonance analysis
-2. Process Adherence: SOP step coverage and resolution quality
-3. NLI Policy: contradiction/entailment check against policy context
+2. Process Adherence: SOP step coverage and resolution quality (uses SOP retrieval)
+3. NLI Policy: contradiction/entailment check against policy context (uses Policy retrieval)
 
 This guide documents architecture, data flow, folder structure, runtime behavior, and testing so the team can maintain and extend the feature safely.
 
@@ -30,13 +36,20 @@ See `docs/explainability/EVIDENCE_ANCHORED_EXPLAINABILITY_LAYER.md` for the full
 ## High-Level Architecture
 
 1. Backend interaction detail endpoint can request LLM trigger evaluation.
-2. LLM trigger service loads transcript + context and runs analysis chains.
+2. The three-component pipeline executes:
+   a. **RAG retrieval** resolves SOP/policy/KB grounding context from Qdrant.
+   b. **Policy Compliance Evaluator** assesses transcript-level compliance and produces a structured report.
+   c. **NLI Policy Check** validates individual agent claims against policy context.
 3. SOP context is resolved with priority order:
-   - Manual SOP standards (organization-specific)
-   - Qdrant retrieval fallback
-4. Results are mapped into a frontend-friendly payload.
-5. Manager and Agent views render diagnostics and coaching insights.
-6. Manager detail view renders evidence cards that connect claim -> evidence -> verdict.
+   - Manual SOP standards (organization-specific parsed markdown)
+   - Qdrant retrieval fallback (`vocalmind_sop_parents`, doc_type="sop")
+4. Policy context is resolved via:
+   - Active organization policies from database
+   - Qdrant retrieval fallback (`vocalmind_parents`, doc_type="policy")
+5. KB context is available on-demand via `KBRetriever` for claim validation lookups.
+6. Results are mapped into a frontend-friendly payload.
+7. Manager and Agent views render diagnostics and coaching insights.
+8. Manager detail view renders evidence cards that connect claim -> evidence -> verdict.
 
 ## Core Backend Files
 
@@ -179,18 +192,30 @@ The interaction detail response now exposes:
 
 ## Retrieval Priority
 
-When process adherence analysis needs SOP context:
+### SOP Context (for process adherence analysis)
 
 1. If supplied `retrieved_sop_from_pinecone` is non-empty, use it.
 2. Else attempt manual SOP context from `storage/docs/{org}/sop-procedures` via parsed markdown.
-3. Else query dedicated SOP Qdrant fallback (`SOPRetriever` pointing to `vocalmind_sop_parents`).
+3. Else query dedicated SOP Qdrant fallback (`SOPRetriever` pointing to `vocalmind_sop_parents`, doc_type="sop").
+
+### Policy Context (for NLI policy check)
+
+1. If `ground_truth_policy` is supplied, use it.
+2. Else load active organization policies from the database.
+3. Else query `PolicyRetriever` (`vocalmind_parents`, doc_type="policy").
+
+### Knowledge Base Context (for claim validation)
+
+1. `KBRetriever` queries `vocalmind_sop_parents` with doc_type="kb".
+2. Available on-demand for verifying agent factual claims against reference material.
 
 ## Ingestion Behavior for PDF Discovery
 
-RAG ingestion now scans per org for both folders:
+RAG ingestion scans per org for three document type folders:
 
-1. `policy-docs`
-2. `sop-procedures`
+1. `policy-docs` → indexed as doc_type="policy" into `vocalmind_parents` / `vocalmind_children`
+2. `sop-procedures` → indexed as doc_type="sop" into `vocalmind_sop_parents` / `vocalmind_sop_children`
+3. `knowledge-base` → indexed as doc_type="kb" into `vocalmind_sop_parents` / `vocalmind_sop_children`
 
 Legacy fallback remains for org root PDFs.
 

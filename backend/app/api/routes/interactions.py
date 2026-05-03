@@ -90,10 +90,10 @@ class ExplainabilitySpanResponse(APIModel):
 
 
 class ExplainabilityPolicyReferenceResponse(APIModel):
-    source: Literal["policy", "sop"]
+    source: Literal["policy", "sop", "kb"]
     reference: str
     clause: str
-    docType: Literal["policy", "sop"] | None = None
+    docType: Literal["policy", "sop", "kb"] | None = None
     policyRef: list[str] = Field(default_factory=list)
     version: str | None = None
     category: str | None = None

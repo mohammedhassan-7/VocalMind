@@ -12,7 +12,7 @@ Instead of only returning a session-level verdict like:
 the system now surfaces:
 
 1. The exact transcript span that triggered review
-2. The SOP or policy clause used as the reference point
+2. The SOP, policy, or knowledge base clause used as the reference point
 3. The verdict produced from that comparison
 4. A short reasoning chain a supervisor can act on
 
@@ -39,7 +39,8 @@ This layer currently covers:
 1. Emotion-trigger reasoning
 2. SOP/process-adherence reasoning
 3. Policy/NLI reasoning
-4. Claim-level retrieval provenance for policy-grounded compliance review
+4. Knowledge Base claim validation (KB references surfaced with distinct styling)
+5. Claim-level retrieval provenance for policy-grounded compliance review
 
 It is surfaced in:
 
@@ -55,10 +56,10 @@ Call transcript + acoustic metadata
     -> process adherence / NLI policy analysis
     -> explainability mapper
 
-Policy + SOP documents
+Policy + SOP + Knowledge Base documents
     -> Docling parsing
-    -> chunking + Qdrant retrieval
-    -> compliance / answer checks
+    -> chunking + Qdrant retrieval (policy -> vocalmind_parents, SOP/KB -> vocalmind_sop_parents)
+    -> compliance / answer / claim validation checks
     -> explainability mapper
 
 Both paths feed one manager-facing contract:
@@ -70,7 +71,7 @@ Both paths feed one manager-facing contract:
 ```mermaid
 flowchart TD
     A["Call Transcript + Acoustic Metadata"] --> B["LLM Trigger Chains"]
-    P["Policy + SOP Documents"] --> Q["Parsing + Chunking + Qdrant Retrieval"]
+    P["Policy + SOP + KB Documents"] --> Q["Parsing + Chunking + Qdrant Retrieval"]
 
     B --> C["Emotion / SOP / Policy Analysis"]
     Q --> D["Compliance / Answer Evaluation"]
@@ -334,8 +335,12 @@ The manager Evidence Card UI currently:
 1. Groups trigger cards under `Span-Level Trigger Attribution`
 2. Groups claim cards under `Retrieval Provenance Scoring`
 3. Shows confidence and verdict badges
-4. Displays the evidence quote and policy/SOP clause side by side
-5. Lets the user jump from a card timestamp back into audio playback
+4. Displays the evidence quote and policy/SOP/KB clause side by side
+5. Renders document type labels with distinct styling:
+   - Policy clauses: orange theme
+   - SOP clauses: orange theme
+   - Knowledge Base references: indigo theme
+6. Lets the user jump from a card timestamp back into audio playback
 
 The page also counts evidence cards in the session hero so supervisors can immediately see whether a call has traceable findings.
 
