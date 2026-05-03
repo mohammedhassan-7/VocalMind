@@ -8,27 +8,29 @@ Implementation: `services/rag/ingest.py`
 
 ## Inputs
 
-Expected source structure under `DOCS_DIR`:
+Expected source structure under `DOCS_DIR` (`storage/docs`):
 
-1. `data/sop-standards/{org}/policy-docs/*.pdf`
-2. `data/sop-standards/{org}/sop-procedures/*.pdf`
+1. `storage/docs/{org}/policy-docs/*.pdf`
+2. `storage/docs/{org}/sop-procedures/*.pdf`
+3. `storage/docs/{org}/knowledge-base/*.pdf`
 
 Legacy fallback:
-1. `data/sop-standards/{org}/*.pdf`
+1. `storage/docs/{org}/*.pdf`
 
 ## Outputs
 
 For each processed file (per org):
-1. Raw markdown: `data/sop-standards/{org}/parsed-docs/{file}_raw.md`
-2. Clean markdown: `data/sop-standards/{org}/parsed-docs/{file}.md`
-3. Chunk debug file: `data/sop-standards/{org}/parsed-docs/{file}_chunks.md`
-4. Validation report: `data/sop-standards/{org}/parsed-docs/{file}_validation.json`
-5. Qdrant Vectors: 
-   - `policy-docs` go to `vocalmind_parents` / `vocalmind_children`
-   - `sop-procedures` go to `vocalmind_sop_parents` / `vocalmind_sop_children`
+1. Raw markdown: `storage/docs/{org}/parsed-docs/{file}_raw.md`
+2. Clean markdown: `storage/docs/{org}/parsed-docs/{file}.md`
+3. Chunk debug file: `storage/docs/{org}/parsed-docs/{file}_chunks.md`
+4. Validation report: `storage/docs/{org}/parsed-docs/{file}_validation.json`
+5. Qdrant Vectors (routed by document type):
+   - `policy-docs` → `vocalmind_parents` / `vocalmind_children` (doc_type="policy")
+   - `sop-procedures` → `vocalmind_sop_parents` / `vocalmind_sop_children` (doc_type="sop")
+   - `knowledge-base` → `vocalmind_sop_parents` / `vocalmind_sop_children` (doc_type="kb")
 
 Global run report:
-1. `data/sop-standards/_pipeline_report.json`
+1. `storage/docs/_pipeline_report.json`
 
 ## 8-Stage Pipeline
 
@@ -57,8 +59,9 @@ Global run report:
 
 8. Upload to Qdrant
 - Embeds each chunk via Ollama
-- Routes to `vocalmind_parents` if it is a policy document
-- Routes to `vocalmind_sop_parents` if it is an SOP document
+- Routes to `vocalmind_parents` / `vocalmind_children` if it is a policy document
+- Routes to `vocalmind_sop_parents` / `vocalmind_sop_children` if it is an SOP or KB document
+- Document type metadata (policy/sop/kb) is stored with each vector for filtered retrieval
 
 ## Qdrant Behavior
 
@@ -82,8 +85,8 @@ python main.py --ingest --force
 ## Operational Notes
 
 1. Ensure Qdrant and Ollama are up before ingestion
-2. Ensure `DOCS_DIR` points to `data/sop-standards`
-3. Ensure `PARSED_DIR` points to `data/sop-standards`
+2. Ensure `DOCS_DIR` points to `storage/docs`
+3. Ensure `PARSED_DIR` points to `storage/docs`
 4. Re-run ingestion whenever PDFs are added or updated
 
 ## Troubleshooting
@@ -93,7 +96,7 @@ python main.py --ingest --force
 - Confirm files are `.pdf`
 
 2. Empty or weak retrieval later
-- Verify markdown artifacts exist in `data/sop-standards/{org}/parsed-docs`
+- Verify markdown artifacts exist in `storage/docs/{org}/parsed-docs`
 - Confirm Qdrant collections contain points
 
 3. Embedding errors

@@ -161,24 +161,34 @@ function TriggerCard({
             </div>
           )}
 
-          {attribution.policyReference && (
-            <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
-              <p className="text-[11px] font-extrabold uppercase tracking-wider text-orange-700">
-                {attribution.policyReference.source === "sop" ? "SOP Clause" : "Policy Clause"}
-              </p>
-              <p className="mt-1 text-[12px] font-bold text-orange-900">
-                {cleanEvidenceText(attribution.policyReference.reference)}
-              </p>
-              <p className="mt-2 text-[13px] leading-relaxed text-orange-900/80">
-                {cleanEvidenceText(attribution.policyReference.clause)}
-              </p>
-              {attribution.policyReference.provenance && (
-                <p className="mt-2 text-[11px] font-medium text-orange-800/70">
-                  {cleanEvidenceText(attribution.policyReference.provenance)}
+          {attribution.policyReference && (() => {
+            const src = attribution.policyReference.source;
+            const label = src === "kb" ? "Knowledge Base Reference" : src === "sop" ? "SOP Clause" : "Policy Clause";
+            const border = src === "kb" ? "border-indigo-200" : "border-orange-200";
+            const bg = src === "kb" ? "bg-indigo-50" : "bg-orange-50";
+            const labelColor = src === "kb" ? "text-indigo-700" : "text-orange-700";
+            const titleColor = src === "kb" ? "text-indigo-900" : "text-orange-900";
+            const bodyColor = src === "kb" ? "text-indigo-900/80" : "text-orange-900/80";
+            const metaColor = src === "kb" ? "text-indigo-800/70" : "text-orange-800/70";
+            return (
+              <div className={`rounded-xl border ${border} ${bg} p-3`}>
+                <p className={`text-[11px] font-extrabold uppercase tracking-wider ${labelColor}`}>
+                  {label}
                 </p>
-              )}
-            </div>
-          )}
+                <p className={`mt-1 text-[12px] font-bold ${titleColor}`}>
+                  {cleanEvidenceText(attribution.policyReference.reference)}
+                </p>
+                <p className={`mt-2 text-[13px] leading-relaxed ${bodyColor}`}>
+                  {cleanEvidenceText(attribution.policyReference.clause)}
+                </p>
+                {attribution.policyReference.provenance && (
+                  <p className={`mt-2 text-[11px] font-medium ${metaColor}`}>
+                    {cleanEvidenceText(attribution.policyReference.provenance)}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="space-y-3">

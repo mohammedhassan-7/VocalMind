@@ -40,7 +40,7 @@ def main() -> int:
     parser.add_argument("--password", default="password")
     parser.add_argument(
         "--storage-path",
-        default="/AudioData/easy_no_overlap.mp3",
+        default="/app/storage/audio/easy_no_overlap.mp3",
         help="Path as stored in interaction (mounted in backend container)",
     )
     parser.add_argument("--poll-interval", type=float, default=2.0)

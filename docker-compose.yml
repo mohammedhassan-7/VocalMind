@@ -71,9 +71,7 @@ services:
     volumes:
       - ./backend/app:/app/app
       - ./backend/scripts:/app/scripts
-      - ./backend/storage:/app/storage
-      - ./data/sop-standards:/app/sop-standards
-      - ./infra/fixtures/audio:/AudioData
+      - ./storage:/app/storage
       - ./services/whisperx/models/speaker_role/distilbert:/app/models/speaker_role/distilbert:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
@@ -151,16 +149,14 @@ services:
       qdrant:
         condition: service_healthy
     volumes:
-      - ./data/sop-standards:/app/sop-standards
-      - ./storage/guidelines:/app/storage/guidelines
-      - ./storage/knowledge:/app/storage/knowledge
+      - ./storage:/app/storage
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - QDRANT_URL=http://qdrant:6333
       - EMBEDDING_MODEL=snowflake-arctic-embed2
-      - DOCS_DIR=/app/sop-standards
-      - POLICY_DOCS_DIR=/app/storage/guidelines
-      - KNOWLEDGE_DOCS_DIR=/app/storage/knowledge
+      - DOCS_DIR=/app/storage/docs
+      - POLICY_DOCS_DIR=/app/storage/docs
+      - KNOWLEDGE_DOCS_DIR=/app/storage/docs
     restart: unless-stopped
 
   # ── VAD Preprocessing ──────────────────────────────────────────────────────

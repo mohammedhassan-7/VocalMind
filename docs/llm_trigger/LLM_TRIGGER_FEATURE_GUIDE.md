@@ -2,11 +2,17 @@
 
 ## Purpose
 
-The LLM Trigger feature evaluates customer-agent interactions and returns coaching/compliance signals in three dimensions:
+The LLM Trigger feature evaluates customer-agent interactions and returns coaching/compliance signals through a three-component pipeline:
+
+1. **RAG Retrieval Layer** — resolves SOP, policy, and knowledge base grounding context from Qdrant vector collections
+2. **Policy Compliance Evaluator** — transcript-level compliance judge that produces a structured compliance report
+3. **NLI Policy Check** — single-claim policy alignment check that validates agent statements against policy context
+
+These components feed three analysis dimensions:
 
 1. Emotion Shift: text vs acoustic mismatch and dissonance analysis
-2. Process Adherence: SOP step coverage and resolution quality
-3. NLI Policy: contradiction/entailment check against policy context
+2. Process Adherence: SOP step coverage and resolution quality (uses SOP retrieval)
+3. NLI Policy: contradiction/entailment check against policy context (uses Policy retrieval)
 
 This guide documents architecture, data flow, folder structure, runtime behavior, and testing so the team can maintain and extend the feature safely.
 
@@ -30,13 +36,20 @@ See `docs/explainability/EVIDENCE_ANCHORED_EXPLAINABILITY_LAYER.md` for the full
 ## High-Level Architecture
 
 1. Backend interaction detail endpoint can request LLM trigger evaluation.
-2. LLM trigger service loads transcript + context and runs analysis chains.
+2. The three-component pipeline executes:
+   a. **RAG retrieval** resolves SOP/policy/KB grounding context from Qdrant.
+   b. **Policy Compliance Evaluator** assesses transcript-level compliance and produces a structured report.
+   c. **NLI Policy Check** validates individual agent claims against policy context.
 3. SOP context is resolved with priority order:
-   - Manual SOP standards (organization-specific)
-   - Qdrant retrieval fallback
-4. Results are mapped into a frontend-friendly payload.
-5. Manager and Agent views render diagnostics and coaching insights.
-6. Manager detail view renders evidence cards that connect claim -> evidence -> verdict.
+   - Manual SOP standards (organization-specific parsed markdown)
+   - Qdrant retrieval fallback (`vocalmind_sop_parents`, doc_type="sop")
+4. Policy context is resolved via:
+   - Active organization policies from database
+   - Qdrant retrieval fallback (`vocalmind_parents`, doc_type="policy")
+5. KB context is available on-demand via `KBRetriever` for claim validation lookups.
+6. Results are mapped into a frontend-friendly payload.
+7. Manager and Agent views render diagnostics and coaching insights.
+8. Manager detail view renders evidence cards that connect claim -> evidence -> verdict.
 
 ## Core Backend Files
 
@@ -87,28 +100,32 @@ See `docs/explainability/EVIDENCE_ANCHORED_EXPLAINABILITY_LAYER.md` for the full
 
 Canonical root:
 
-`data/sop-standards/`
+`storage/docs/`
 
 Per organization:
 
-1. `data/sop-standards/{org}/policy-docs/*.pdf`
+1. `storage/docs/{org}/policy-docs/*.pdf`
 - Source policy PDFs.
 - Consumed by RAG ingestion (Docling converts PDF -> markdown).
 
-2. `data/sop-standards/{org}/sop-procedures/*.pdf`
+2. `storage/docs/{org}/sop-procedures/*.pdf`
 - Source SOP PDFs from organizations.
 - Also ingested and converted by Docling.
+
+3. `storage/docs/{org}/knowledge-base/*.pdf`
+- Knowledge base reference documents.
+- Indexed as `kb` doc type for claim validation lookups.
 
 ## Parsed Markdown and Runtime Consumption
 
 1. RAG ingestion writes converted markdown into:
-- `data/sop-standards/{org}/parsed-docs/*.md`
+- `storage/docs/{org}/parsed-docs/*.md`
 
 2. Backend SOP retrieval reads SOP context from parsed markdown:
 - For each SOP PDF in `sop-procedures`, backend looks up matching stem in `parsed_docs`.
 - Example:
-  - source: `data/sop-standards/nexalink/sop-procedures/01-refund.pdf`
-  - parsed: `data/sop-standards/nexalink/parsed-docs/01-refund.md`
+  - source: `storage/docs/nexalink/sop-procedures/SOP_01_refund_request_processing.pdf`
+  - parsed: `storage/docs/nexalink/parsed-docs/sops/SOP_01_refund_request_processing.md`
 
 3. If no parsed markdown exists, retrieval has backward compatibility fallback for direct text files in `sop-procedures` (`.md` / `.txt`).
 
@@ -117,21 +134,24 @@ Per organization:
 ### Backend (`backend/app/core/config.py`)
 
 1. `SOP_DOCS_ROOT`
-- Default: `sop-standards` (container path; host path is `data/sop-standards`)
+- Default: `storage/docs`
 
 2. `SOP_PARSED_DOCS_ROOT`
-- Default: `sop-standards` (container path; resolved as `sop-standards/{org}/parsed-docs`)
+- Default: `storage/docs` (resolved as `storage/docs/{org}/parsed-docs`)
 
-3. `SOP_RETRIEVAL_TOP_K`
+3. `POLICY_DOCS_ROOT` / `KNOWLEDGE_DOCS_ROOT`
+- Default: `storage/docs` (all three doc types share one root; type is determined by subfolder name)
+
+4. `SOP_RETRIEVAL_TOP_K`
 - Used for Qdrant fallback retrieval.
 
-4. `QDRANT_COLLECTION_SOP_PARENTS` and `QDRANT_COLLECTION_SOP_CHILDREN`
+5. `QDRANT_COLLECTION_SOP_PARENTS` and `QDRANT_COLLECTION_SOP_CHILDREN`
 - Stores specialized SOP vectors separately from Policies to eliminate RAG cross-pollution.
 
 ### RAG (`services/rag/config.py`, `.env`)
 
 1. `DOCS_DIR`
-- Expected to point to `data/sop-standards`
+- Expected to point to `storage/docs`
 
 2. `PARSED_DIR`
 - Base output root for parsed markdown and pipeline report.
@@ -172,18 +192,30 @@ The interaction detail response now exposes:
 
 ## Retrieval Priority
 
-When process adherence analysis needs SOP context:
+### SOP Context (for process adherence analysis)
 
 1. If supplied `retrieved_sop_from_pinecone` is non-empty, use it.
-2. Else attempt manual SOP context from `data/sop-standards/{org}/sop-procedures` via parsed markdown.
-3. Else query dedicated SOP Qdrant fallback (`SOPRetriever` pointing to `vocalmind_sop_parents`).
+2. Else attempt manual SOP context from `storage/docs/{org}/sop-procedures` via parsed markdown.
+3. Else query dedicated SOP Qdrant fallback (`SOPRetriever` pointing to `vocalmind_sop_parents`, doc_type="sop").
+
+### Policy Context (for NLI policy check)
+
+1. If `ground_truth_policy` is supplied, use it.
+2. Else load active organization policies from the database.
+3. Else query `PolicyRetriever` (`vocalmind_parents`, doc_type="policy").
+
+### Knowledge Base Context (for claim validation)
+
+1. `KBRetriever` queries `vocalmind_sop_parents` with doc_type="kb".
+2. Available on-demand for verifying agent factual claims against reference material.
 
 ## Ingestion Behavior for PDF Discovery
 
-RAG ingestion now scans per org for both folders:
+RAG ingestion scans per org for three document type folders:
 
-1. `policy-docs`
-2. `sop-procedures`
+1. `policy-docs` → indexed as doc_type="policy" into `vocalmind_parents` / `vocalmind_children`
+2. `sop-procedures` → indexed as doc_type="sop" into `vocalmind_sop_parents` / `vocalmind_sop_children`
+3. `knowledge-base` → indexed as doc_type="kb" into `vocalmind_sop_parents` / `vocalmind_sop_children`
 
 Legacy fallback remains for org root PDFs.
 
@@ -256,11 +288,11 @@ When adding or updating organization docs:
 
 2. SOP steps missing unexpectedly
 - Ensure SOP PDFs exist in `sop-procedures`.
-- Ensure parsed markdown exists in `data/sop-standards/{org}/parsed-docs` after ingestion.
+- Ensure parsed markdown exists in `storage/docs/{org}/parsed-docs` after ingestion.
 - Ensure file stems match expected names.
 
 3. No policy context
-- Verify `DOCS_DIR` points to `data/sop-standards`.
+- Verify `DOCS_DIR` points to `storage/docs`.
 - Re-run ingestion and confirm Qdrant collections are populated.
 
 4. Wrong organization SOP used

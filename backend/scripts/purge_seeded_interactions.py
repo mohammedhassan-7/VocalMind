@@ -29,7 +29,7 @@ async def purge_seeded_interactions(org_slug: str = "nexalink") -> None:
                 select(Interaction.id).where(
                     Interaction.organization_id == org.id,
                     (
-                        Interaction.audio_file_path.like("%%AudioData%%nexalink%%")
+                        Interaction.audio_file_path.like("%%storage%%audio%%nexalink%%")
                     ),
                 )
             )

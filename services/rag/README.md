@@ -52,17 +52,19 @@ Team-facing RAG documentation is maintained in:
 		 - `OLLAMA_BASE_URL` (Ollama embeddings, default: `http://localhost:11434`)
 
 3. **Prepare Policy/SOP Documents**
-	 - Place PDFs under `data/sop-standards/`:
+	 - Place PDFs under `storage/docs/`:
 		 ```
-		 data/sop-standards/
-		 └── org1/
+		 storage/docs/
+		 └── nexalink/
 			 ├── policy-docs/
-			 │   ├── policy_a.pdf
-			 │   └── policy_b.pdf
-			 └── sop-procedures/
-				 └── sop_a.pdf
+			 │   ├── POLICY_01_call_conduct.pdf
+			 │   └── POLICY_02_data_privacy.pdf
+			 ├── sop-procedures/
+			 │   └── SOP_01_refund_request_processing.pdf
+			 └── knowledge-base/
+				 └── KB_01_product_technical_reference.pdf
 		 ```
-	 - Parsed markdown outputs are written to `data/sop-standards/{org}/parsed-docs/`.
+	 - Parsed markdown outputs are written to `storage/docs/{org}/parsed-docs/`.
 
 4. **Start Services**
 	 - Ensure Qdrant and Ollama are running (see their docs for Docker or local start).
@@ -122,7 +124,7 @@ python main.py --check-answer --question "Refund window?" --answer "30 days" --o
 
 ## Notes
 
-- The ingestion pipeline discovers PDFs in `data/sop-standards/{org}/policy-docs` and `data/sop-standards/{org}/sop-procedures`.
+- The ingestion pipeline discovers PDFs in `storage/docs/{org}/policy-docs`, `storage/docs/{org}/sop-procedures`, and `storage/docs/{org}/knowledge-base`.
 - Per-organization filtering is enabled via the `--org` flag.
 - For compliance and answer checks, replace the quoted text with your own queries or transcripts.
 

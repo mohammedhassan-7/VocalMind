@@ -74,8 +74,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--root",
-        default="data/sop-standards",
-        help="Repository path that contains org folders (default: data/sop-standards).",
+        default="storage/docs",
+        help="Repository path that contains org folders (default: storage/docs).",
     )
     parser.add_argument(
         "--org",
