@@ -164,3 +164,9 @@ uv.lock
 # ── Local CLI binaries (download separately; do not commit) ─────────────
 tools/supabase-cli/supabase.exe
 tools/supabase_windows_amd64.tar.gz
+
+# ── Claude Code (local tooling) ─────────────────────────────────────────
+.claude/
+CLAUDE.md
+code-health-report.md
+data/

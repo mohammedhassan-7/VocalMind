@@ -25,7 +25,7 @@ VocalMind is a modular AI ecosystem integrating speech processing (ASR, Diarizat
 ### Prerequisites
 
 - **Python 3.12+** (via [uv](https://github.com/astral-sh/uv))
-- **Node.js 20+**
+- **Node.js 20+** (via [pnpm v10+](https://pnpm.io/))
 - **Docker & Docker Compose**
 
 ### Configuration
@@ -118,9 +118,10 @@ make be-lint          # Run Ruff linter
 
 ### Frontend
 ```bash
-make fe-install       # Install dependencies
+make fe-install       # Install dependencies (pnpm)
 make fe-test          # Run Cypress E2E tests
-make fe-lint          # Run ESLint validation
+make fe-e2e-cov       # Run E2E tests with Istanbul code coverage
+make fe-lint          # Run ESLint/Type-check validation
 make fe-build         # Build production bundle
 ```
 

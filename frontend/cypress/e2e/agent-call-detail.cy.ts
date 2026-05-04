@@ -56,4 +56,50 @@ describe('Agent Call Detail', () => {
     cy.wait('@getInteractionDetail');
     cy.contains('Failed to load call details').should('be.visible');
   });
+
+  it('renders emotion comparison panel with charts and alerts', () => {
+    cy.visitAs('agent', '/agent/calls/int-003', {
+      interactionDetails: {
+        'int-003': {
+          body: buildInteractionDetail(buildInteractionSummary(), {
+            emotionComparison: {
+              totalUtterances: 42,
+              distributions: {
+                acoustic: [
+                  { emotion: 'neutral', count: 20, pct: 48 },
+                  { emotion: 'angry', count: 12, pct: 28 },
+                ],
+                text: [
+                  { emotion: 'neutral', count: 25, pct: 59 },
+                  { emotion: 'frustrated', count: 5, pct: 12 },
+                ],
+                fused: [
+                  { emotion: 'neutral', count: 22, pct: 52 },
+                  { emotion: 'angry', count: 8, pct: 19 },
+                ],
+              },
+              quality: {
+                acousticTextAgreementRate: 45, // Poor, should trigger alert
+                fusedMatchesAcousticRate: 85,
+                fusedMatchesTextRate: 75,
+                disagreementCount: 5,
+              },
+            },
+          }),
+        },
+      },
+    });
+
+    cy.wait('@getInteractionDetail');
+    
+    // Check metric gauges
+    cy.contains('Acoustic ↔ Text').scrollIntoView().should('be.visible');
+    
+    // Check charts section
+    cy.contains('Emotion Distribution').should('be.visible');
+
+    // Check alert section
+    cy.contains('Cross-Modal Disagreement').should('be.visible');
+    cy.contains('5 utterances show mismatch between acoustic and text emotions').should('be.visible');
+  });
 });

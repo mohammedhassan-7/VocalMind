@@ -14,6 +14,7 @@ import { LandingPage } from "./components/LandingPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SettingsPage } from "./components/SettingsPage";
+import { ManagerSettings } from "./components/manager/ManagerSettings";
 import { UnderDevelopment } from "./components/ui/UnderDevelopment";
 import RouteErrorBoundary from "./components/ui/RouteErrorBoundary";
 import Login from "./pages/Login";
@@ -43,7 +44,7 @@ export const router = createBrowserRouter([
           { path: "inspector/:id", element: <SessionDetail /> },
           { path: "assistant", element: <ManagerAssistant /> },
           { path: "knowledge", element: <KnowledgeBase /> },
-          { path: "settings", element: <SettingsPage /> },
+          { path: "settings", element: <ManagerSettings /> },
           { path: "*", element: <UnderDevelopment /> },
         ],
       },
