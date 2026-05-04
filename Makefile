@@ -63,9 +63,9 @@ fe-e2e-summary: ## Run frontend E2E tests with concise summary
 	cd frontend && npx -y concurrently -k -s first "npm run preview" "npx -y wait-on http-get://localhost:3000/ && npx cypress run --reporter list"
 
 fe-e2e-cov: ## Run frontend E2E tests and generate code coverage report
-	powershell -NoProfile -Command "$$paths = 'frontend/.nyc_output','frontend/coverage','frontend/dist'; foreach ($$path in $$paths) { if (Test-Path $$path) { Remove-Item -Recurse -Force $$path } }"
-	powershell -NoProfile -Command "Set-Location frontend; $$env:CYPRESS_COVERAGE='true'; npm run build"
-	cd frontend && npx -y concurrently -k -s first "npm run preview" "npx -y wait-on http-get://localhost:3000/ && npx cypress run --env coverage=true" && npx nyc report --reporter=html --reporter=text-summary
+	npx -y rimraf frontend/.nyc_output frontend/coverage frontend/dist
+	cd frontend && npx -y cross-env CYPRESS_COVERAGE=true pnpm run build
+	cd frontend && npx -y concurrently -k -s first "pnpm exec vite preview --port 3005 --strictPort" "npx -y wait-on http-get://localhost:3005/ && npx -y cross-env CYPRESS_COVERAGE=true CYPRESS_baseUrl=http://localhost:3005 npx cypress run --env coverage=true" && npx nyc report --reporter=html --reporter=text-summary
 
 fe-test-cov: ## Run frontend unit tests with coverage report
 	cd frontend && npx vitest run --coverage.enabled --coverage.reporter=text --coverage.reporter=html

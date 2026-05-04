@@ -1,6 +1,9 @@
 import { User, Bell, Shield, Key } from "lucide-react";
+import { useState } from "react";
 
 export function ManagerSettings() {
+  const [activeTab, setActiveTab] = useState<string>("profile");
+
   return (
     <div className="p-4 md:p-8 bg-[#F8FAFC] min-h-screen">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -12,23 +15,37 @@ export function ManagerSettings() {
         <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm overflow-hidden flex">
           {/* Sidebar Tabs */}
           <div className="w-64 border-r border-[#E2E8F0] bg-[#F8FAFC]/50 p-4 space-y-1">
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 bg-[#EFF6FF] text-[#3B82F6] font-semibold rounded-xl text-sm transition-colors">
+            <button 
+              onClick={() => setActiveTab("profile")}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 font-semibold rounded-xl text-sm transition-colors ${activeTab === "profile" ? "bg-[#EFF6FF] text-[#3B82F6]" : "text-[#64748B] hover:bg-[#F1F5F9]"}`}
+            >
               <User className="w-4 h-4" /> Profile
             </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 text-[#64748B] hover:bg-[#F1F5F9] font-medium rounded-xl text-sm transition-colors">
+            <button 
+              onClick={() => setActiveTab("notifications")}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 font-medium rounded-xl text-sm transition-colors ${activeTab === "notifications" ? "bg-[#EFF6FF] text-[#3B82F6]" : "text-[#64748B] hover:bg-[#F1F5F9]"}`}
+            >
               <Bell className="w-4 h-4" /> Notifications
             </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 text-[#64748B] hover:bg-[#F1F5F9] font-medium rounded-xl text-sm transition-colors">
+            <button 
+              onClick={() => setActiveTab("security")}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 font-medium rounded-xl text-sm transition-colors ${activeTab === "security" ? "bg-[#EFF6FF] text-[#3B82F6]" : "text-[#64748B] hover:bg-[#F1F5F9]"}`}
+            >
               <Shield className="w-4 h-4" /> Privacy & Security
             </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2.5 text-[#64748B] hover:bg-[#F1F5F9] font-medium rounded-xl text-sm transition-colors">
+            <button 
+              onClick={() => setActiveTab("api")}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 font-medium rounded-xl text-sm transition-colors ${activeTab === "api" ? "bg-[#EFF6FF] text-[#3B82F6]" : "text-[#64748B] hover:bg-[#F1F5F9]"}`}
+            >
               <Key className="w-4 h-4" /> API Keys
             </button>
           </div>
 
           {/* Content Area */}
           <div className="flex-1 p-8">
-            <h3 className="text-lg font-bold text-[#0F172A] border-b border-[#E2E8F0] pb-4 mb-6">Profile Information</h3>
+            {activeTab === "profile" && (
+              <>
+                <h3 className="text-lg font-bold text-[#0F172A] border-b border-[#E2E8F0] pb-4 mb-6">Profile Information</h3>
             
             <div className="space-y-6 max-w-lg">
               <div className="flex items-center gap-6">
@@ -64,7 +81,27 @@ export function ManagerSettings() {
                   Save Changes
                 </button>
               </div>
-            </div>
+              </div>
+              </>
+            )}
+            {activeTab === "notifications" && (
+              <div>
+                <h3 className="text-lg font-bold text-[#0F172A] border-b border-[#E2E8F0] pb-4 mb-6">Notification Preferences</h3>
+                <p className="text-[#64748B] text-sm">Configure how you receive alerts and updates.</p>
+              </div>
+            )}
+            {activeTab === "security" && (
+              <div>
+                <h3 className="text-lg font-bold text-[#0F172A] border-b border-[#E2E8F0] pb-4 mb-6">Privacy & Security</h3>
+                <p className="text-[#64748B] text-sm">Manage passwords and active sessions.</p>
+              </div>
+            )}
+            {activeTab === "api" && (
+              <div>
+                <h3 className="text-lg font-bold text-[#0F172A] border-b border-[#E2E8F0] pb-4 mb-6">API Keys</h3>
+                <p className="text-[#64748B] text-sm">Generate and revoke integration tokens.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

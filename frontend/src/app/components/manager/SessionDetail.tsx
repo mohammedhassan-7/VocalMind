@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router";
 import { ArrowLeft, Play, Flag, Loader2, AlertTriangle as AlertTriangleIcon, RefreshCw, ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { getInteractionDetail, getAudioUrl, reprocessInteraction, type InteractionDetail } from "../../services/api";
+import { EvidenceAnchoredExplainabilityPanel } from "./EvidenceAnchoredExplainabilityPanel";
 
 export function SessionDetail() {
   const { id } = useParams();
@@ -458,50 +459,11 @@ export function SessionDetail() {
           )}
 
           {data.llmTriggers.explainability && (
-            <div className="rounded-xl border border-border p-4 space-y-4">
-              <h4 className="text-[14px] font-semibold text-foreground">Evidence-Anchored Explainability</h4>
-              <div className="space-y-3">
-                {data.llmTriggers.explainability.triggerAttributions.map((attr) => (
-                  <div key={attr.attributionId} className="rounded-lg border border-border/50 p-3 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] font-semibold text-foreground">{attr.title}</span>
-                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-muted text-muted-foreground">{attr.verdict}</span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">{attr.triggerType} — {attr.reasoning}</p>
-                    {attr.evidenceSpan && (
-                      <p className="text-[11px] italic text-foreground/80">"{attr.evidenceSpan.quote}"</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <p className="text-[11px] text-muted-foreground mb-2">Claim to evidence to verdict</p>
-                <button
-                  type="button"
-                  onClick={() => setShowProvenance((v) => !v)}
-                  className="flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
-                >
-                  {showProvenance ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  Retrieval Provenance Scoring
-                </button>
-                {showProvenance && (
-                  <div className="mt-2 space-y-3">
-                    {data.llmTriggers!.explainability!.claimProvenance.map((claim) => (
-                      <div key={claim.claimId} className="rounded-lg border border-border/50 p-3 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[12px] font-semibold text-foreground">{claim.claimText}</span>
-                          <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-muted text-muted-foreground">{claim.nliVerdict}</span>
-                        </div>
-                        {claim.retrievedPolicy && (
-                          <p className="text-[11px] text-muted-foreground">Policy: {claim.retrievedPolicy.clause}</p>
-                        )}
-                        <p className="text-[11px] italic text-foreground/80">{claim.reasoning}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="mt-6">
+              <EvidenceAnchoredExplainabilityPanel 
+                explainability={data.llmTriggers.explainability} 
+                onJumpTo={handleJumpTo} 
+              />
             </div>
           )}
         </div>
