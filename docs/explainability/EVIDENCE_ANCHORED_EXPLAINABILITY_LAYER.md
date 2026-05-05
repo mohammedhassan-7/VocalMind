@@ -39,7 +39,7 @@ This layer currently covers:
 1. Emotion-trigger reasoning
 2. SOP/process-adherence reasoning
 3. Policy/NLI reasoning
-4. Knowledge Base claim validation (KB references surfaced with distinct styling)
+4. Knowledge Base claim validation (KB references surfaced with indigo styling distinct from the orange policy/SOP theme)
 5. Claim-level retrieval provenance for policy-grounded compliance review
 
 It is surfaced in:
@@ -98,11 +98,11 @@ This diagram shows the key idea behind the feature:
 
 1. `backend/app/llm_trigger/schemas.py`
 - Defines the internal explainability models:
-  - `EvidenceSpan`
-  - `PolicyReference`
-  - `TriggerAttribution`
-  - `ClaimProvenance`
-  - `EvidenceAnchoredExplainability`
+  - **Top-level**: `EvidenceAnchoredExplainability`
+  - **Trigger Attribution**: `TriggerAttribution`
+  - **Claim Provenance**: `ClaimProvenance`
+  - **Supporting types**: `EvidenceSpan`, `PolicyReference`, `EvidenceCitation`
+  - **Evaluation internals** (not surfaced in the UI payload): `CitationSource`, `CitationSpeaker`, `ExplainabilityFamily`, `ExplainabilityVerdict`, `EmotionShiftAnalysis`, `ProcessAdherenceReport`, `NLIEvaluation`, `InteractionLLMTriggerReport`
 
 2. `backend/app/llm_trigger/service.py`
 - Builds explainability output during trigger evaluation
@@ -259,7 +259,13 @@ This payload view highlights the important implementation detail:
     "clause": "Agent must ask for full name and date of birth before account lookup.",
     "version": "v2.3",
     "category": "Verification",
-    "provenance": "parsed-docs/identity.md > Verification Steps"
+    "provenance": "parsed-docs/identity.md > Verification Steps",
+    "docType": "sop",
+    "docId": "SOP_01",
+    "ruleId": "verification-step-1",
+    "stepNumber": 1,
+    "severity": "high",
+    "policyRef": ["POLICY_03_refund_compensation > Refund Timelines"]
   },
   "reasoning": "The agent proceeded to account lookup before collecting the required credentials.",
   "evidenceChain": [
@@ -325,6 +331,8 @@ Each item contains:
 5. `reference`
 6. `excerpt`
 7. `provenance`
+8. `docType`
+9. `policyRef`
 
 This route is simpler than the interaction-detail explainability contract, but it exposes the same core idea: retrieved evidence should be visible, not hidden behind a score.
 
@@ -336,10 +344,9 @@ The manager Evidence Card UI currently:
 2. Groups claim cards under `Retrieval Provenance Scoring`
 3. Shows confidence and verdict badges
 4. Displays the evidence quote and policy/SOP/KB clause side by side
-5. Renders document type labels with distinct styling:
-   - Policy clauses: orange theme
-   - SOP clauses: orange theme
-   - Knowledge Base references: indigo theme
+5. Renders document type labels with grouping-specific styling:
+   - Policy and SOP clauses: both use an orange theme (`border-orange-200 bg-orange-50`)
+   - Knowledge Base references: indigo theme (`border-indigo-200 bg-indigo-50`)
 6. Lets the user jump from a card timestamp back into audio playback
 
 The page also counts evidence cards in the session hero so supervisors can immediately see whether a call has traceable findings.

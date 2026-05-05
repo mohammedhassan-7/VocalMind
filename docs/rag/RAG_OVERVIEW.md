@@ -23,17 +23,17 @@ It also feeds the Evidence-Anchored Explainability Layer used in manager call re
 - **SOP** (`sop-procedures/`): step-by-step operational procedures
 - **Knowledge Base** (`knowledge-base/`): factual reference material for claim validation
 
-2. Dual-granularity indexing
-- Parents collection: full policy sections for compliance context
-- Children collection: compact snippets for answer fact-checking
+2. Mixed-granularity indexing
+- Policy documents: both parent (full sections) and child (compact snippets) collections
+- SOP and KB documents: parent collection only (header-level sections, no child splitting)
 
 3. Per-organization isolation
 - Documents are discovered by org folder under `storage/docs/{org}`
 - Retrieval can be filtered by org metadata
 
 4. Query modes
-- Compliance mode queries parent chunks
-- Answer mode queries child chunks
+- Compliance mode queries parent chunks (policy parents or SOP/KB parents)
+- Answer mode queries child chunks (policy children only)
 
 5. Retrieval provenance
 - Retrieved chunks can be surfaced with similarity, reference path, and lightweight verdict metadata.
@@ -43,10 +43,9 @@ It also feeds the Evidence-Anchored Explainability Layer used in manager call re
 ## Main Runtime Components
 
 1. `services/rag/query_engine.py`
-- Embeds query text via Ollama
+- Embeds query text via Ollama (with `/api/embed` and `/api/embeddings` fallback)
 - Queries Qdrant with optional org filter
-- Converts results to LlamaIndex nodes
-- Synthesizes final response using Groq
+- Synthesizes final response using Groq via LlamaIndex
 - Logs query traces in `services/rag/logs`
 
 2. `services/rag/evaluator.py`
@@ -62,23 +61,21 @@ It also feeds the Evidence-Anchored Explainability Layer used in manager call re
 ## Collections
 
 1. Policy Parents
-- Name: `vocalmind_parents` (default)
-- Content: larger policy sections
+- Name: `vocalmind_parents` (default, config: `QDRANT_COLLECTION_PARENTS`)
+- Content: larger policy sections (H1/H2/H3 header splits)
 - Usage: policy-level interpretation and consistency checks
 
 2. Policy Children
-- Name: `vocalmind_children` (default)
-- Content: shorter precision snippets
+- Name: `vocalmind_children` (default, config: `collection_children`)
+- Content: shorter precision snippets (recursive 400-char splits)
 - Usage: pinpoint factual grounding for answer checks
 
 3. SOP + KB Parents
-- Name: `vocalmind_sop_parents` (default)
-- Content: SOP procedure sections and Knowledge Base reference chunks
+- Name: `vocalmind_sop_parents` (default, config: `QDRANT_COLLECTION_SOP_PARENTS` / `collection_sop_parents`)
+- Content: SOP procedure sections and Knowledge Base reference chunks (header-level splits only, no child collection)
 - Usage: process-adherence checks (doc_type="sop") and claim validation lookups (doc_type="kb")
 
-4. SOP + KB Children
-- Name: `vocalmind_sop_children` (default)
-- Content: fine-grained SOP and KB snippets
+> **Note:** SOP and KB documents are NOT split into a separate children collection. Only policy documents have both parent and child granularity.
 
 ## Directory Layout (Current)
 
@@ -88,7 +85,9 @@ It also feeds the Evidence-Anchored Explainability Layer used in manager call re
 - `storage/docs/{org}/knowledge-base/*.pdf`
 
 2. Parsed markdown outputs
-- `storage/docs/{org}/parsed-docs/*.md`
+- `storage/docs/{org}/parsed-docs/policies/*.md` (policy docs)
+- `storage/docs/{org}/parsed-docs/sops/*.md` (SOP docs)
+- `storage/docs/{org}/parsed-docs/kb/*.md` (knowledge base docs)
 
 3. Pipeline report
 - `storage/docs/_pipeline_report.json`

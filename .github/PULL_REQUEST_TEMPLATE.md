@@ -14,6 +14,6 @@
 ## Checklist
 
 - [ ] My code follows the project coding standards
-- [ ] I have run `make backend-lint` and `make frontend-build`
+- [ ] I have run `make be-lint` and `make fe-lint`
 - [ ] I have added/updated tests if applicable
 - [ ] I have updated documentation if applicable

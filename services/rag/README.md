@@ -13,9 +13,10 @@ A robust Retrieval-Augmented Generation (RAG) system for policy document analysi
 
 ## Features
 
-- **Dual Collection RAG**: Ingests policy PDFs into two Qdrant collections:
-	- **Parents**: Full policy sections (for compliance checks)
-	- **Children**: Fine-grained snippets (for answer fact-checking)
+- **Mixed Collection RAG**: Ingests policy PDFs into two Qdrant collections (parents + children), while SOP and KB documents are indexed only into a parent collection:
+	- **Policy Parents**: Full policy sections (for compliance checks)
+	- **Policy Children**: Fine-grained snippets (for answer fact-checking)
+	- **SOP + KB Parents**: Procedure and reference sections (no child collection)
 - **AI-powered PDF Parsing**: Uses Docling for accurate PDF-to-Markdown conversion
 - **Local Embeddings**: Embeddings generated via Ollama (snowflake-arctic-embed2)
 - **Fast LLM Synthesis**: Uses Groq for rapid, high-quality LLM responses
@@ -41,9 +42,8 @@ Team-facing RAG documentation is maintained in:
 	 - Requires Python 3.11+
 	 - Install with:
 		 ```bash
-		 pip install -r requirements.txt
+		 uv sync
 		 ```
-		 (Or use `uv sync` if using uv)
 
 2. **Environment Configuration**
 	 - Copy `.env.example` to `.env` and fill in:
@@ -64,7 +64,10 @@ Team-facing RAG documentation is maintained in:
 			 └── knowledge-base/
 				 └── KB_01_product_technical_reference.pdf
 		 ```
-	 - Parsed markdown outputs are written to `storage/docs/{org}/parsed-docs/`.
+	 - Parsed markdown outputs are written to type-specific subdirectories under `storage/docs/{org}/parsed-docs/`:
+		 - `storage/docs/{org}/parsed-docs/policies/*.md` (policy docs)
+		 - `storage/docs/{org}/parsed-docs/sops/*.md` (SOP docs)
+		 - `storage/docs/{org}/parsed-docs/kb/*.md` (knowledge base docs)
 
 4. **Start Services**
 	 - Ensure Qdrant and Ollama are running (see their docs for Docker or local start).

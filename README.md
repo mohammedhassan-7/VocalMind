@@ -153,17 +153,9 @@ python infra/fixtures/kaggle/scripts/kaggle_api_smoke_test.py --audio-file stora
 Run `make prepare-speaker-model` to extract only the `distilbert/` model into
 `services/whisperx/models/speaker_role/distilbert`, then remove the zip.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
-
 ## Key Docs
 
 - [Documentation Index](docs/README.md)
 - [Evidence-Anchored Explainability Layer](docs/explainability/EVIDENCE_ANCHORED_EXPLAINABILITY_LAYER.md)
 - [LLM Trigger Feature Guide](docs/llm_trigger/LLM_TRIGGER_FEATURE_GUIDE.md)
 - [RAG Overview](docs/rag/RAG_OVERVIEW.md)
-
----
-
-## License
-
-[MIT](LICENSE)

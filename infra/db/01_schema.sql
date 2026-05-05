@@ -1,6 +1,6 @@
 -- ============================================================
 -- VocalMind Schema v5.2 (PostgreSQL / Supabase)
--- 16 Domain Tables + 1 Audit Table
+-- 17 DDL Tables (+ 1 runtime-table created by SQLModel)
 -- Feature: Agent-Initiated Dispute Workflow
 -- ============================================================
 
@@ -38,6 +38,7 @@ CREATE TYPE period_type_enum   AS ENUM ('daily', 'weekly', 'monthly');
 -- 2. TABLES
 -- ============================================================
 
+DROP TABLE IF EXISTS interaction_llm_trigger_cache CASCADE;
 DROP TABLE IF EXISTS assistant_queries CASCADE;
 DROP TABLE IF EXISTS agent_performance_snapshots CASCADE;
 DROP TABLE IF EXISTS organization_faq_articles CASCADE;
@@ -283,6 +284,16 @@ CREATE TABLE assistant_queries (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 18. interaction_llm_trigger_cache (runtime table, created by SQLModel; DDL provided for completeness)
+CREATE TABLE interaction_llm_trigger_cache (
+    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    interaction_id    UUID        NOT NULL REFERENCES interactions(id) ON DELETE CASCADE,
+    org_filter        VARCHAR(120) NULL,
+    report_payload    JSONB       NOT NULL,
+    computed_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_interaction_llm_trigger_cache_interaction UNIQUE (interaction_id)
+);
+
 -- ============================================================
 -- 3. INDEXES
 -- ============================================================
@@ -299,6 +310,7 @@ CREATE INDEX idx_organization_policies_org_id      ON organization_policies(orga
 CREATE INDEX idx_policy_compliance_interaction_id  ON policy_compliance(interaction_id);
 CREATE INDEX idx_agent_snapshots_agent_id          ON agent_performance_snapshots(agent_id);
 CREATE INDEX idx_assistant_queries_user_id         ON assistant_queries(user_id);
+CREATE INDEX idx_interaction_llm_trigger_cache_interaction_id ON interaction_llm_trigger_cache(interaction_id);
 
 -- ============================================================
 -- 4. AUTO-UPDATE TRIGGER
