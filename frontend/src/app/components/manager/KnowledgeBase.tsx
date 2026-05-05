@@ -3,8 +3,9 @@ import {
   BookOpen, 
   HelpCircle, 
   Search, 
-  Loader2, 
-  Plus, 
+  Loader2,
+  X,
+  Plus,
   BarChart3, 
   ArrowRight,
   ShieldCheck,
@@ -898,7 +899,7 @@ export function KnowledgeBase() {
               </h3>
             </div>
             <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 -mr-2 shadow-none border-none hover:bg-muted" onClick={() => setIsDetailOpen(false)}>
-              <Loader2 className="w-5 h-5" />
+              <X className="w-5 h-5" />
             </Button>
           </div>
 

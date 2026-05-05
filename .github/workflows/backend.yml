@@ -50,7 +50,7 @@ jobs:
         run: uv run pytest tests/ -v --tb=short
 
       - name: Quality Benchmarks
-        run: python ../infra/scripts/eval_all.py
+        run: python ../infra/scripts/eval/eval_all.py
 
       - name: Upload Quality Reports
         if: always()

@@ -80,6 +80,9 @@ frontend/cypress/videos/
 backend/.env
 backend/.env.*
 !backend/.env.example
+services/rag/.env
+services/rag/.env.*
+!services/rag/.env.example
 
 # ── IDE & Editors ────────────────────────────────────────────────────────
 .vscode/

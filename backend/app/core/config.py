@@ -90,9 +90,25 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-if settings.SECRET_KEY == "CHANGE_THIS_TO_A_STRONG_SECRET_KEY_32B":
+_DEFAULT_SECRET = "CHANGE_THIS_TO_A_STRONG_SECRET_KEY_32B"
+
+if settings.SECRET_KEY == _DEFAULT_SECRET:
+    import os
+
+    if os.getenv("IS_LOCAL", "true").lower() != "true":
+        raise RuntimeError(
+            "SECRET_KEY is still the default value. "
+            "Set a strong secret via .env (openssl rand -hex 32) before running in production."
+        )
     warnings.warn(
         "SECRET_KEY is using the default value! Set a strong secret via .env "
         "(openssl rand -hex 32). This is insecure for production.",
+        stacklevel=1,
+    )
+
+if settings.GROQ_API_KEY == "":
+    warnings.warn(
+        "GROQ_API_KEY is empty. LLM trigger analysis will fail at runtime. "
+        "Set it via .env or environment variable.",
         stacklevel=1,
     )

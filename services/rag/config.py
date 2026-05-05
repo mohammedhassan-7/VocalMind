@@ -99,6 +99,22 @@ class Settings(BaseSettings):
         default_factory=lambda: REPO_ROOT / "storage" / "docs",
         alias="PARSED_DIR",
     )
+    POLICY_DOCS_DIR: Path = Field(
+        default_factory=lambda: REPO_ROOT / "storage" / "docs",
+        alias="POLICY_DOCS_DIR",
+    )
+    KNOWLEDGE_DOCS_DIR: Path = Field(
+        default_factory=lambda: REPO_ROOT / "storage" / "docs",
+        alias="KNOWLEDGE_DOCS_DIR",
+    )
+    PARSED_POLICY_DIR: Path = Field(
+        default_factory=lambda: REPO_ROOT / "storage" / "docs",
+        alias="PARSED_POLICY_DIR",
+    )
+    PARSED_SOP_DIR: Path = Field(
+        default_factory=lambda: REPO_ROOT / "storage" / "docs",
+        alias="PARSED_SOP_DIR",
+    )
 
     # Sub-configs
     groq: GroqConfig = Field(default_factory=GroqConfig)
@@ -115,6 +131,10 @@ class Settings(BaseSettings):
         """Resolve relative env paths from the RAG service directory."""
         self.DOCS_DIR = self._resolve_path(self.DOCS_DIR)
         self.PARSED_DIR = self._resolve_path(self.PARSED_DIR)
+        self.POLICY_DOCS_DIR = self._resolve_path(self.POLICY_DOCS_DIR)
+        self.KNOWLEDGE_DOCS_DIR = self._resolve_path(self.KNOWLEDGE_DOCS_DIR)
+        self.PARSED_POLICY_DIR = self._resolve_path(self.PARSED_POLICY_DIR)
+        self.PARSED_SOP_DIR = self._resolve_path(self.PARSED_SOP_DIR)
 
     @staticmethod
     def _resolve_path(path: Path) -> Path:
