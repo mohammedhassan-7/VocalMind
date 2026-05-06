@@ -93,9 +93,7 @@ settings = Settings()
 _DEFAULT_SECRET = "CHANGE_THIS_TO_A_STRONG_SECRET_KEY_32B"
 
 if settings.SECRET_KEY == _DEFAULT_SECRET:
-    import os
-
-    if os.getenv("IS_LOCAL", "true").lower() != "true":
+    if not settings.IS_LOCAL:
         raise RuntimeError(
             "SECRET_KEY is still the default value. "
             "Set a strong secret via .env (openssl rand -hex 32) before running in production."

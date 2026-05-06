@@ -6,8 +6,8 @@ describe('Manager Settings', () => {
   it('renders the manager settings page with default profile tab', () => {
     cy.contains('h2', 'Settings & Preferences').should('be.visible');
     cy.contains('h3', 'Profile Information').should('be.visible');
-    cy.get('input[type="email"]').should('have.value', 'manager@vocalmind.io');
-    cy.get('input[type="text"]').first().should('have.value', 'Manager User');
+    cy.get('input[type="email"]').should('have.value', 'manager@vocalmind.ai');
+    cy.get('input[type="text"]').first().should('have.value', 'Manager King');
   });
 
   it('switches between tabs and displays the correct content', () => {

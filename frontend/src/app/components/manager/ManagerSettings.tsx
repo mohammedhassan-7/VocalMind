@@ -1,8 +1,19 @@
 import { User, Bell, Shield, Key } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 
 export function ManagerSettings() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("profile");
+  const displayName = user?.name || "Manager User";
+  const displayEmail = user?.email || "manager@vocalmind.io";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || "MU";
 
   return (
     <div className="p-4 md:p-8 bg-[#F8FAFC] min-h-screen">
@@ -50,7 +61,7 @@ export function ManagerSettings() {
             <div className="space-y-6 max-w-lg">
               <div className="flex items-center gap-6">
                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#1D4ED8] flex items-center justify-center text-white text-2xl font-bold shadow-sm">
-                  MK
+                  {initials}
                 </div>
                 <div>
                   <button className="px-4 py-2 bg-white border border-[#E2E8F0] rounded-lg text-sm font-semibold text-[#334155] hover:bg-[#F8FAFC] shadow-sm transition-colors">
@@ -62,12 +73,12 @@ export function ManagerSettings() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-[#334155] mb-1.5">Full Name</label>
-                  <input type="text" defaultValue="Manager User" className="w-full h-11 px-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-colors" />
+                  <input type="text" value={displayName} readOnly className="w-full h-11 px-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-colors" />
                 </div>
                 
                 <div>
                   <label className="block text-sm font-semibold text-[#334155] mb-1.5">Email Address</label>
-                  <input type="email" defaultValue="manager@vocalmind.io" className="w-full h-11 px-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-colors" />
+                  <input type="email" value={displayEmail} readOnly className="w-full h-11 px-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 focus:border-[#3B82F6] transition-colors" />
                 </div>
 
                 <div>
