@@ -229,8 +229,10 @@ describe('SessionDetail', () => {
         getInteractionDetailMock.mockResolvedValue(detail)
         renderWithId()
 
-        const confidenceElements = await screen.findAllByText('80', { exact: false })
-        expect(confidenceElements.length).toBeGreaterThan(0)
-        expect(screen.getByText('74', { exact: false })).toBeInTheDocument()
+        const confidence80Elements = await screen.findAllByText('80', { exact: false })
+        expect(confidence80Elements.length).toBeGreaterThan(0)
+
+        const confidence74Elements = await screen.findAllByText('74', { exact: false })
+        expect(confidence74Elements.length).toBeGreaterThan(0)
     })
 })

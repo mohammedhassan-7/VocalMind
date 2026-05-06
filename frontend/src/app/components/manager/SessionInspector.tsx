@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { parse, isValid } from "date-fns";
-import { Search, ArrowDown, ArrowUp, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
+import { Search, ArrowDown, ArrowUp, Loader2, AlertTriangle, RefreshCw, Upload } from "lucide-react";
 import {
+  createInteraction,
+  getAgents,
   getInteractionDetail,
   getInteractions,
   reprocessInteraction,
+  type AgentSummary,
   type InteractionSummary,
 } from "../../services/api";
 
@@ -63,10 +66,14 @@ function interactionDateMs(row: InteractionSummary): number {
 
 export function SessionInspector() {
   const [interactions, setInteractions] = useState<InteractionSummary[]>([]);
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reprocessingIds, setReprocessingIds] = useState<Set<string>>(new Set());
+  const [uploading, setUploading] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -76,8 +83,12 @@ export function SessionInspector() {
   const itemsPerPage = 10;
 
   useEffect(() => {
-    getInteractions()
-      .then(setInteractions)
+    Promise.all([getInteractions(), getAgents()])
+      .then(([interactionRows, agentRows]) => {
+        setInteractions(interactionRows);
+        setAgents(agentRows);
+        setSelectedAgentId((current) => current || agentRows[0]?.id || "");
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
@@ -119,6 +130,30 @@ export function SessionInspector() {
         next.delete(interactionId);
         return next;
       });
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!uploadFile) {
+      setActionError("Choose an audio file before uploading.");
+      return;
+    }
+    if (!selectedAgentId) {
+      setActionError("Choose the agent who handled this call.");
+      return;
+    }
+
+    setActionError(null);
+    setUploading(true);
+    try {
+      await createInteraction(uploadFile, selectedAgentId);
+      setUploadFile(null);
+      const refreshed = await getInteractions();
+      setInteractions(refreshed);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to upload interaction");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -248,6 +283,49 @@ export function SessionInspector() {
         </div>
       </div>
 
+      <div className="mb-6 rounded-[14px] border border-border bg-card p-4">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_220px_auto] lg:items-end">
+          <div>
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Call audio
+            </label>
+            <input
+              type="file"
+              accept="audio/*"
+              onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+              className="h-10 w-full rounded-[10px] border border-border bg-muted/20 px-3 py-2 text-[12px] file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-[11px] file:font-bold file:text-primary-foreground"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Agent
+            </label>
+            <select
+              value={selectedAgentId}
+              onChange={(event) => setSelectedAgentId(event.target.value)}
+              className="h-10 w-full rounded-[10px] border border-border bg-muted/20 px-3 text-[12px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+            >
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleUpload()}
+            disabled={uploading || !uploadFile || !selectedAgentId}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-primary px-4 text-[12px] font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploading ? "Uploading..." : "Upload Call"}
+          </button>
+        </div>
+      </div>
+
       {/* Table: horizontal scroll + sticky Actions so Inspect stays visible with a narrow main column */}
       <div className="bg-card rounded-[14px] border border-border">
         <div className="overflow-x-auto rounded-t-[14px]">
@@ -295,7 +373,7 @@ export function SessionInspector() {
                     className="text-[18px] font-bold"
                     style={{
                       fontFamily: "var(--font-serif)",
-                      color: row.overallScore >= 85 ? "var(--success)" : row.overallScore >= 75 ? "var(--primary)" : "var(--destructive)",
+                      color: row.overallScore >= 85 ? "var(--success)" : row.overallScore >= 70 ? "var(--primary)" : row.overallScore >= 50 ? "var(--warning)" : "var(--destructive)",
                     }}
                   >
                     {row.overallScore}%
