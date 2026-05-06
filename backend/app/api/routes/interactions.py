@@ -41,6 +41,8 @@ from app.models.emotion_event import EmotionEvent
 from app.models.policy import CompanyPolicy, PolicyCompliance
 from app.models.user import User as UserModel
 from app.models.enums import JobStatus, ProcessingStatus, UserRole
+from app.models.feedback import ComplianceFeedback, EmotionFeedback
+from app.models.llm_trigger_cache import InteractionLLMTriggerCache
 
 router = APIRouter()
 
@@ -570,6 +572,81 @@ async def reprocess_interaction(
         "queued": True,
         "forced": force,
     }
+
+
+@router.delete("/{interaction_id}", status_code=204)
+async def delete_interaction(
+    interaction_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+):
+    """
+    Permanently delete an interaction and all dependent rows.
+
+    The order matters: foreign-key tables (utterances, emotion_events,
+    transcripts, scores, processing_jobs, policy_compliance, llm_trigger_cache,
+    emotion_feedback, compliance_feedback) are cleared before the parent
+    Interaction so we don't rely on database-level cascade configuration.
+
+    Refuses to run while the interaction is actively processing — caller must
+    wait or call /reprocess?force=true to reset state first.
+    """
+    interaction_result = await session.exec(
+        select(Interaction).where(
+            Interaction.id == interaction_id,
+            *_interaction_scope_filters(current_user),
+        )
+    )
+    interaction = interaction_result.first()
+    if not interaction:
+        raise HTTPException(status_code=404, detail="Interaction not found")
+
+    if await interaction_has_active_jobs(session, interaction_id):
+        raise HTTPException(
+            status_code=409,
+            detail="Interaction is currently processing; wait for completion before deleting.",
+        )
+
+    # Collect utterance ids first so we can clear EmotionEvent rows that link to them.
+    utt_ids_result = await session.exec(
+        select(Utterance.id).where(Utterance.interaction_id == interaction_id)
+    )
+    utt_ids = [row for row in utt_ids_result.all()]
+
+    # Order: feedback tables -> derived analytics -> raw signals -> processing jobs -> parent.
+    if utt_ids:
+        await session.exec(
+            EmotionFeedback.__table__.delete().where(EmotionFeedback.utterance_id.in_(utt_ids))
+        )
+    await session.exec(
+        ComplianceFeedback.__table__.delete().where(ComplianceFeedback.interaction_id == interaction_id)
+    )
+    await session.exec(
+        InteractionLLMTriggerCache.__table__.delete().where(
+            InteractionLLMTriggerCache.interaction_id == interaction_id
+        )
+    )
+    await session.exec(
+        PolicyCompliance.__table__.delete().where(PolicyCompliance.interaction_id == interaction_id)
+    )
+    await session.exec(
+        InteractionScore.__table__.delete().where(InteractionScore.interaction_id == interaction_id)
+    )
+    await session.exec(
+        EmotionEvent.__table__.delete().where(EmotionEvent.interaction_id == interaction_id)
+    )
+    await session.exec(
+        Utterance.__table__.delete().where(Utterance.interaction_id == interaction_id)
+    )
+    await session.exec(
+        Transcript.__table__.delete().where(Transcript.interaction_id == interaction_id)
+    )
+    await session.exec(
+        ProcessingJob.__table__.delete().where(ProcessingJob.interaction_id == interaction_id)
+    )
+    await session.delete(interaction)
+    await session.commit()
+    return None
 
 
 def _compact_distribution(labels: list[str]) -> list[dict[str, float | int | str]]:
