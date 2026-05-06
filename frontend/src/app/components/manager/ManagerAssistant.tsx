@@ -58,7 +58,6 @@ export function ManagerAssistant() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const [menuState, setMenuState] = useState<ChatMenuState | null>(null);
@@ -376,7 +375,7 @@ export function ManagerAssistant() {
 
           <div className="bg-card border-t border-border px-5 py-4 shrink-0">
             <div className="flex items-center gap-2 bg-input border border-border rounded-full p-1 shadow-inner focus-within:ring-1 focus-within:ring-primary/40 transition-all">
-              <button type="button" onClick={() => setIsRecording((v) => !v)} className={`w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl transition-all ${isRecording ? "bg-destructive/10 text-destructive" : "text-muted-foreground hover:text-foreground"}`}><Mic className="w-5 h-5" /></button>
+              <button type="button" disabled title="Voice input coming soon" className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl transition-all text-muted-foreground opacity-50 cursor-not-allowed"><Mic className="w-5 h-5" /></button>
               <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder="Ask about scores, violations, agent trends..." disabled={isLoading} className="flex-1 h-10 px-2 bg-transparent text-foreground placeholder-muted-foreground text-sm focus:outline-none disabled:opacity-50" />
               <button type="button" aria-label="Send message" onClick={() => handleSend()} disabled={isLoading || !input.trim()} className={`w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full transition-all ${input.trim() ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground opacity-50"}`}><Send className="w-4 h-4" /></button>
             </div>
