@@ -26,8 +26,8 @@ For each processed file (per org):
 4. Validation report: `storage/docs/{org}/parsed-docs/{file}_validation.json`
 5. Qdrant Vectors (routed by document type):
    - `policy-docs` → `vocalmind_parents` / `vocalmind_children` (doc_type="policy")
-   - `sop-procedures` → `vocalmind_sop_parents` / `vocalmind_sop_children` (doc_type="sop")
-   - `knowledge-base` → `vocalmind_sop_parents` / `vocalmind_sop_children` (doc_type="kb")
+   - `sop-procedures` → `vocalmind_sop_parents` only (doc_type="sop", no children collection)
+   - `knowledge-base` → `vocalmind_sop_parents` only (doc_type="kb", no children collection)
 
 Global run report:
 1. `storage/docs/_pipeline_report.json`
@@ -38,7 +38,7 @@ Global run report:
 - `DocumentConverter` loads PDF and exports markdown
 
 2. Clean markdown
-- Encoding repair and table row repair
+- Encoding repair via `ftfy` library and table row repair
 
 3. Extract metadata
 - org, department, doc_id, version, effective_date
@@ -58,9 +58,9 @@ Global run report:
 - Writes chunk and validation diagnostics
 
 8. Upload to Qdrant
-- Embeds each chunk via Ollama
+- Embeds each chunk via Ollama (with `/api/embed` and `/api/embeddings` fallback)
 - Routes to `vocalmind_parents` / `vocalmind_children` if it is a policy document
-- Routes to `vocalmind_sop_parents` / `vocalmind_sop_children` if it is an SOP or KB document
+- Routes to `vocalmind_sop_parents` only if it is an SOP or KB document (no children collection for SOP/KB)
 - Document type metadata (policy/sop/kb) is stored with each vector for filtered retrieval
 
 ## Qdrant Behavior

@@ -1,6 +1,6 @@
 VOCALMIND — FULL FIGMA MAKE DESIGN PROMPT
 AI-Powered Call Centre Evaluation Platform
-Schema v5.1 · Dual-Role Dashboard (Manager + Agent)
+Schema v5.2 · Dual-Role Dashboard (Manager + Agent)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 

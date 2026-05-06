@@ -145,8 +145,9 @@ Per organization:
 4. `SOP_RETRIEVAL_TOP_K`
 - Used for Qdrant fallback retrieval.
 
-5. `QDRANT_COLLECTION_SOP_PARENTS` and `QDRANT_COLLECTION_SOP_CHILDREN`
-- Stores specialized SOP vectors separately from Policies to eliminate RAG cross-pollution.
+5. `QDRANT_COLLECTION_SOP_PARENTS`
+- Stores SOP/KB vectors separately from Policies to eliminate RAG cross-pollution.
+- Note: there is no `QDRANT_COLLECTION_SOP_CHILDREN` config. SOP and KB documents are only indexed as parent (header-level) chunks in `vocalmind_sop_parents`; they are not split into child chunks.
 
 ### RAG (`services/rag/config.py`, `.env`)
 
@@ -194,7 +195,7 @@ The interaction detail response now exposes:
 
 ### SOP Context (for process adherence analysis)
 
-1. If supplied `retrieved_sop_from_pinecone` is non-empty, use it.
+1. If a caller-supplied SOP context override (parameter `retrieved_sop_from_pinecone`) is non-empty, use it. Note: despite the legacy parameter name referencing "Pinecone," the system uses Qdrant; this parameter accepts any pre-resolved SOP text.
 2. Else attempt manual SOP context from `storage/docs/{org}/sop-procedures` via parsed markdown.
 3. Else query dedicated SOP Qdrant fallback (`SOPRetriever` pointing to `vocalmind_sop_parents`, doc_type="sop").
 
@@ -214,8 +215,8 @@ The interaction detail response now exposes:
 RAG ingestion scans per org for three document type folders:
 
 1. `policy-docs` → indexed as doc_type="policy" into `vocalmind_parents` / `vocalmind_children`
-2. `sop-procedures` → indexed as doc_type="sop" into `vocalmind_sop_parents` / `vocalmind_sop_children`
-3. `knowledge-base` → indexed as doc_type="kb" into `vocalmind_sop_parents` / `vocalmind_sop_children`
+2. `sop-procedures` → indexed as doc_type="sop" into `vocalmind_sop_parents` only (no children collection)
+3. `knowledge-base` → indexed as doc_type="kb" into `vocalmind_sop_parents` only (no children collection)
 
 Legacy fallback remains for org root PDFs.
 

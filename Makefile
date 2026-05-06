@@ -46,21 +46,21 @@ be-install: ## Install backend dependencies
 # ── Frontend ──────────────────────────────────────────────────────────────
 
 fe-dev: ## Run frontend in dev mode
-	cd frontend && npm run dev
+	cd frontend && pnpm run dev
 
 fe-build: ## Build frontend
-	cd frontend && npm run build
+	cd frontend && pnpm run build
 
 fe-lint: ## Lint frontend code
-	cd frontend && npm run lint
+	cd frontend && pnpm run lint
 
 fe-test: ## Run frontend E2E tests (Cypress)
-	cd frontend && npm run build
-	cd frontend && npx -y concurrently -k -s first "npm run preview" "npx -y wait-on http-get://localhost:3000/ && npm run cy:run"
+	cd frontend && pnpm run build
+	cd frontend && npx -y concurrently -k -s first "pnpm run preview" "npx -y wait-on http-get://localhost:3000/ && pnpm run cy:run"
 
 fe-e2e-summary: ## Run frontend E2E tests with concise summary
-	cd frontend && npm run build
-	cd frontend && npx -y concurrently -k -s first "npm run preview" "npx -y wait-on http-get://localhost:3000/ && npx cypress run --reporter list"
+	cd frontend && pnpm run build
+	cd frontend && npx -y concurrently -k -s first "pnpm run preview" "npx -y wait-on http-get://localhost:3000/ && npx cypress run --reporter list"
 
 fe-e2e-cov: ## Run frontend E2E tests and generate code coverage report
 	npx -y rimraf frontend/.nyc_output frontend/coverage frontend/dist
@@ -71,7 +71,7 @@ fe-test-cov: ## Run frontend unit tests with coverage report
 	cd frontend && npx vitest run --coverage.enabled --coverage.reporter=text --coverage.reporter=html
 
 fe-install: ## Install frontend dependencies
-	cd frontend && npm ci
+	cd frontend && pnpm install
 
 # ── RAG ───────────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ rag-install: ## Install RAG dependencies
 llm-trigger-test: ## Run full LLM-trigger validation (backend + RAG + frontend)
 	cd backend && uv run pytest tests/test_llm_trigger_service.py tests/test_interactions_llm_triggers.py tests/test_sop_retrieval.py -q
 	cd services/rag && uv run pytest tests/test_ingest.py -q
-	cd frontend && npm run test -- --run src/tests/AgentCallDetail.test.tsx
+	cd frontend && pnpm run test -- --run src/tests/AgentCallDetail.test.tsx
 
 quality-eval-transcript: ## Run transcript quality benchmark
 	python infra/scripts/eval/eval_transcript.py

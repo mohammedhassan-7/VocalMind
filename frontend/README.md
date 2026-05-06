@@ -26,26 +26,40 @@ See `docs/explainability/EVIDENCE_ANCHORED_EXPLAINABILITY_LAYER.md` for the full
 Install dependencies:
 
 ```bash
-npm install
+pnpm install
 ```
 
 Start the dev server:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Type-check:
 
 ```bash
-npm run lint
+pnpm run lint
 ```
 
 Run tests:
 
 ```bash
-npm run test
+pnpm run test
 ```
+
+## Testing & Coverage
+
+VocalMind uses **Cypress** for E2E testing and **Vitest** for unit testing. 
+
+### E2E Code Coverage
+Instrumentation is handled via `babel-plugin-istanbul` during the production build. To run E2E tests with coverage reporting:
+
+```bash
+# From the repository root
+make fe-e2e-cov
+```
+
+This generates an HTML report in `frontend/coverage/index.html`.
 
 ## Relevant Files
 

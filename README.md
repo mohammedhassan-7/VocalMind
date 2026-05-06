@@ -25,7 +25,7 @@ VocalMind is a modular AI ecosystem integrating speech processing (ASR, Diarizat
 ### Prerequisites
 
 - **Python 3.12+** (via [uv](https://github.com/astral-sh/uv))
-- **Node.js 20+**
+- **Node.js 20+** (via [pnpm v10+](https://pnpm.io/))
 - **Docker & Docker Compose**
 
 ### Configuration
@@ -118,9 +118,10 @@ make be-lint          # Run Ruff linter
 
 ### Frontend
 ```bash
-make fe-install       # Install dependencies
+make fe-install       # Install dependencies (pnpm)
 make fe-test          # Run Cypress E2E tests
-make fe-lint          # Run ESLint validation
+make fe-e2e-cov       # Run E2E tests with Istanbul code coverage
+make fe-lint          # Run ESLint/Type-check validation
 make fe-build         # Build production bundle
 ```
 
@@ -152,17 +153,9 @@ python infra/fixtures/kaggle/scripts/kaggle_api_smoke_test.py --audio-file stora
 Run `make prepare-speaker-model` to extract only the `distilbert/` model into
 `services/whisperx/models/speaker_role/distilbert`, then remove the zip.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
-
 ## Key Docs
 
 - [Documentation Index](docs/README.md)
 - [Evidence-Anchored Explainability Layer](docs/explainability/EVIDENCE_ANCHORED_EXPLAINABILITY_LAYER.md)
 - [LLM Trigger Feature Guide](docs/llm_trigger/LLM_TRIGGER_FEATURE_GUIDE.md)
 - [RAG Overview](docs/rag/RAG_OVERVIEW.md)
-
----
-
-## License
-
-[MIT](LICENSE)
