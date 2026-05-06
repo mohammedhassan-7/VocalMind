@@ -2,9 +2,11 @@ fastapi
 uvicorn
 python-multipart
 torch
+torchaudio
 funasr
 modelscope
-torch
-torchaudio
 soundfile
 numpy
+# Pin transformers to a range the j-hartmann/emotion-english-distilroberta
+# pipeline is known to load on; mirrors the backend pin.
+transformers>=4.38.0,<4.40.0
