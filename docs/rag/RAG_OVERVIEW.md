@@ -27,13 +27,31 @@ It also feeds the Evidence-Anchored Explainability Layer used in manager call re
 - Policy documents: both parent (full sections) and child (compact snippets) collections
 - SOP and KB documents: parent collection only (header-level sections, no child splitting)
 
+> **Design rationale.** Parents are large H1/H2/H3 sections — the whole rule, fee
+> table, or escalation step. Children are 400-char recursive splits with 80-char
+> overlap — narrow, semantically targeted spans. Granularity is chosen by the
+> *consumer's* need, not by document type:
+>
+> | Consumer | Needs | Collection used |
+> |---|---|---|
+> | Policy compliance evaluator (transcript-level) | The full rule with all conditions, exceptions, and obligations | **policy parents** (`QDRANT_COLLECTION_PARENTS`) |
+> | NLI policy check (single claim → policy) | A focused policy clause, self-contained, to NLI against | **policy parents** |
+> | Process adherence (SOP) | Full procedure step block | **SOP parents** (`QDRANT_COLLECTION_SOP_PARENTS`) |
+> | KB lookup (claim validation) | Reference fact passage | **SOP parents** (KB shares the parents-only collection) |
+> | Manager-assistant Q&A / answer synthesis | Precise span to quote in the answer | **policy children** (`collection_children`) |
+>
+> Only policy documents need dual granularity: judge with the wide section, answer
+> with the narrow span. SOP and KB are never used for free-form Q&A — they're
+> always retrieved as a whole procedure or fact card — so we skip the child split
+> for them entirely.
+
 3. Per-organization isolation
 - Documents are discovered by org folder under `storage/docs/{org}`
 - Retrieval can be filtered by org metadata
 
 4. Query modes
-- Compliance mode queries parent chunks (policy parents or SOP/KB parents)
-- Answer mode queries child chunks (policy children only)
+- Compliance / NLI / SOP / KB → **parent** collections (broader context the judge needs to reason against the whole rule).
+- Answer synthesis (manager-assistant) → **policy children** (precise span to quote back to the user).
 
 5. Retrieval provenance
 - Retrieved chunks can be surfaced with similarity, reference path, and lightweight verdict metadata.
