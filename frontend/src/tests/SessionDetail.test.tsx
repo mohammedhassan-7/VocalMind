@@ -193,18 +193,23 @@ describe('SessionDetail', () => {
         expect(screen.getByText('Transcript')).toBeInTheDocument()
     })
 
-    it('renders evaluation section with emotion, process and policy cards', async () => {
+    it('renders tabbed analysis with emotion, process and policy data', async () => {
         getInteractionDetailMock.mockResolvedValue(detail)
         renderWithId()
 
-        // Emotion Analysis card (rendered from emotionShift via llmTriggers)
+        // Default tab: Emotion Analysis content visible
         expect(await screen.findByText('Emotion Analysis')).toBeInTheDocument()
-        // Process Adherence card
-        expect(screen.getByText(/Process Adherence/)).toBeInTheDocument()
-        // Policy Inference card
-        expect(screen.getByText(/Policy Inference/)).toBeInTheDocument()
-        // Data from the mock
+
+        // Click Process tab to see process adherence
+        const processTab = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'Process')
+        fireEvent.click(processTab!)
+        expect(await screen.findByText(/Process Adherence/)).toBeInTheDocument()
         expect(screen.getByText(/billing_issue/)).toBeInTheDocument()
+
+        // Click Policy tab to see policy inference
+        const policyTab = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'Policy')
+        fireEvent.click(policyTab!)
+        expect(await screen.findByText(/Policy Inference/)).toBeInTheDocument()
         expect(screen.getAllByText(/Contradiction/).length).toBeGreaterThan(0)
     })
 
