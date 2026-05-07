@@ -189,6 +189,7 @@ services:
       - "8001:8000"
     volumes:
       - ./services/emotion/app.py:/app/app.py
+      - emotion_cache:/root/.cache
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
       interval: 10s
@@ -216,6 +217,10 @@ services:
       - ./services/whisperx/app.py:/app/app.py
       - ./services/whisperx/speaker_role_classifier.py:/app/speaker_role_classifier.py
       - ./services/whisperx/models/speaker_role/distilbert:/app/models/speaker_role/distilbert:ro
+      # Persist HF + torch hub model caches across container recreations.
+      # Without this, every recreate re-downloads faster-whisper-large-v3
+      # (~3GB), wav2vec2 alignment (~360MB), and pyannote diarization (~100MB).
+      - whisperx_cache:/root/.cache
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
       interval: 10s
@@ -229,3 +234,5 @@ volumes:
   ollama_data:
   qdrant_data:
   vocalmind_frontend_node_modules:
+  whisperx_cache:
+  emotion_cache:
