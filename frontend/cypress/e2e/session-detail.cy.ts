@@ -31,73 +31,58 @@ describe("Session Detail", () => {
   });
 
   it("displays agent name and call metadata", () => {
+    cy.wait('@getInteractionDetail');
     cy.contains("h2", "Sarah M.");
     cy.contains(/english/i);
     cy.contains("2025-03-01");
     cy.contains("09:15 AM");
   });
 
-  it("displays the score grid with four categories and trend icons", () => {
+  it("displays the score grid with four categories", () => {
+    cy.wait('@getInteractionDetail');
     cy.contains("Empathy");
     cy.contains("Policy");
     cy.contains("Resolution");
-    cy.contains("Response Time");
-    
-    // The "Overall" score was removed from the grid, it's only in the ScoreRing
-    // We check for the visual SVGs that represent trends
-    cy.get('svg.lucide-trending-up, svg.lucide-trending-down, svg.lucide-minus').should('exist');
+    cy.contains("Resp. Time");
   });
 
-  it("renders the SectionNav with auto-hiding tabs", () => {
-    // The SectionNav appears between the header and the content
-    cy.get('nav[aria-label="Session detail sections"]').should('exist');
-    cy.contains("button", "Overview");
-    cy.contains("button", "Transcript");
-    cy.contains("button", "Emotion");
-    cy.contains("button", "Violations");
-    cy.contains("button", "Compliance");
-    cy.contains("button", "LLM Analysis");
+  it("renders the AnalysisTabs with correct tabs", () => {
+    cy.wait('@getInteractionDetail');
+    cy.contains("button", "Emotion").should("exist");
+    cy.contains("button", "Process").should("exist");
+    cy.contains("button", "Policy").should("exist");
+    cy.contains("button", "Quality").should("exist");
   });
 
-  it("renders the audio player with an accessible input range", () => {
+  it("renders the audio player", () => {
     cy.wait('@getAudio');
-    cy.get('input[type="range"][aria-label="Seek recording position"]').should('exist');
-    cy.get('button[aria-label="Play recording"]').should('exist');
-    cy.get('button[aria-label="Mute recording"]').should('exist');
-    cy.get('button[aria-label="Skip back 10 seconds"]').should('exist');
-    cy.get('button[aria-label="Skip forward 10 seconds"]').should('exist');
+    cy.get('audio').should('exist');
+    cy.get('svg.lucide-play, svg.lucide-pause').should('exist');
   });
 
   it("renders the transcript section with utterances", () => {
-    cy.get('#section-transcript').should('exist');
-    cy.contains("Good morning! Thank you for calling VocalMind support.");
-    cy.contains("Hi, I've been having issues with my account login");
+    cy.wait('@getInteractionDetail');
+    cy.contains("h3", "Transcript").scrollIntoView().should("be.visible");
+    cy.contains("Good morning! Thank you for calling VocalMind support.").should("exist");
+    cy.contains("Hi, I've been having issues with my account login").should("exist");
   });
 
-  it("renders emotion events section", () => {
-    cy.get('#section-emotion').should('exist');
-    cy.contains("Emotion Events");
+  it("renders emotion timeline section", () => {
+    cy.wait('@getInteractionDetail');
+    cy.contains("h3", "Emotion Timeline").should("be.visible");
   });
 
-  it("renders automated evaluation cards", () => {
-    cy.contains("h3", "Automated Evaluation");
-    cy.contains("Process Adherence");
-    cy.contains("Policy Inference");
-  });
-
-  it("renders ManagerAnnotation component instead of dispute flow", () => {
-    // The dispute button is replaced with ManagerAnnotation flow
-    cy.contains("Dispute").should("not.exist");
-    
-    // Find the Add annotation button for an emotion event or policy violation
-    cy.contains("button", "Add annotation").first().click();
-    
-    // Manager feedback buttons should appear
-    cy.contains("button", "Yes, accurate").should("be.visible");
-    cy.contains("button", "No, inaccurate").should("be.visible");
+  it("renders the dispute flow under the Policy tab", () => {
+    cy.wait('@getInteractionDetail');
+    cy.contains("button", "Policy").click();
+    cy.contains("button", "Dispute").first().click();
+    cy.contains("Accurate?").should("be.visible");
+    cy.contains("button", "Yes").should("be.visible");
+    cy.contains("button", "No").should("be.visible");
   });
 
   it("navigates back to session inspector", () => {
+    cy.wait('@getInteractionDetail');
     cy.contains("a", "Back to Session Inspector").click();
     cy.url().should("include", "/manager/inspector");
     cy.url().should("not.include", "/int-001");

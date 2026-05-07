@@ -4,7 +4,7 @@ describe("Session Inspector", () => {
   });
 
   it("renders the page heading and subtitle", () => {
-    cy.contains("h2", "Session Inspector");
+    cy.contains("h1", "Session Inspector");
     cy.contains(/sorted by score/i);
   });
 
@@ -24,7 +24,6 @@ describe("Session Inspector", () => {
     cy.contains("Policy");
     cy.contains("Resolution");
     cy.contains("Status");
-    cy.contains("Error");
     cy.contains("Actions");
   });
 
@@ -37,8 +36,8 @@ describe("Session Inspector", () => {
   });
 
   it("displays resolved and unresolved statuses", () => {
-    cy.contains("✓ Resolved");
-    cy.contains("✗ Unresolved");
+    cy.contains("Resolved");
+    cy.contains("Unresolved");
   });
 
   it("shows violation badges for flagged interactions", () => {

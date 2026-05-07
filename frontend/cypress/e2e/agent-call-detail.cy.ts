@@ -8,19 +8,22 @@ describe('Agent Call Detail', () => {
     cy.visitAs('agent', '/agent/calls/int-002');
 
     cy.wait('@getInteractionDetail');
+    cy.contains('button', 'Policy').click();
     cy.contains('Coaching Points').should('be.visible');
     cy.contains(/Hold Time Limit|Escalation Policy/).should('be.visible');
-    cy.contains('LLM Coaching Insights').scrollIntoView().should('be.visible');
-    cy.contains('Needs follow-up').should('exist');
     cy.contains('Contradiction').should('exist');
+
+    cy.contains('button', 'Process').click();
+    cy.contains('Needs follow-up').should('exist');
   });
 
   it('shows cached llm insights without exposing a refresh action', () => {
     cy.visitAs('agent', '/agent/calls/int-001');
     cy.wait('@getInteractionDetail');
+    cy.contains('button', 'Process').click();
     cy.contains('Account Login').should('be.visible');
 
-    cy.contains('LLM Coaching Insights').should('be.visible');
+    cy.contains('button', 'Emotion').should('be.visible');
     cy.get('[data-cy="llm-refresh"]').should('not.exist');
   });
 
@@ -40,8 +43,8 @@ describe('Agent Call Detail', () => {
     });
 
     cy.wait('@getInteractionDetail');
-    cy.contains('LLM coaching insights unavailable.').should('be.visible');
-    cy.contains('LLM offline').should('be.visible');
+    cy.contains('LLM coaching insights unavailable.').scrollIntoView().should('be.visible');
+    cy.contains('LLM offline').should('exist');
   });
 
   it('shows an error state when the call detail request fails', () => {

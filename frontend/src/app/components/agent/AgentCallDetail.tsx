@@ -324,7 +324,14 @@ export function AgentCallDetail() {
 
         {/* ── Analysis Sidebar (right) ─────────────────────────────────── */}
         <div className="lg:col-span-5 space-y-3 lg:sticky lg:top-6 self-start">
-          {hasAnalysisData ? (
+          {!hasAnalysisData && emotionTrigger && !emotionTrigger.available ? (
+            <div className="bg-card rounded-2xl border border-border p-5 text-center space-y-3">
+              <p className="text-[13px] font-semibold text-foreground">LLM coaching insights unavailable.</p>
+              {emotionTrigger.error && (
+                <p className="text-[11px] text-muted-foreground">{emotionTrigger.error}</p>
+              )}
+            </div>
+          ) : hasAnalysisData ? (
             <AnalysisTabs
               emotionTrigger={emotionTrigger}
               ragProcess={ragProcess}

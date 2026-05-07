@@ -18,6 +18,6 @@ describe('Agent Dashboard', () => {
 
     cy.wait('@getInteractionDetail');
     cy.location('pathname').should('match', /\/agent\/calls\/.+/);
-    cy.contains('CALL DETAIL').should('exist');
+    cy.contains('Call Detail').should('exist');
   });
 });

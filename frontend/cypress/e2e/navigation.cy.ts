@@ -54,7 +54,7 @@ describe('Sidebar and cross-page navigation', () => {
     cy.get('nav[aria-label="Manager navigation"]')
       .contains('Session Inspector').click();
     cy.location('pathname').should('eq', '/manager/inspector');
-    cy.contains('h2', 'Session Inspector').should('be.visible');
+    cy.contains('h1', 'Session Inspector').should('be.visible');
 
     cy.get('nav[aria-label="Manager navigation"]')
       .contains('Manager Assistant').click();
