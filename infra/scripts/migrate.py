@@ -24,9 +24,9 @@ except ImportError:
     print("ERROR: asyncpg not found. Please install it.")
     sys.exit(1)
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env"
-SCHEMA_FILE = ROOT / "db" / "01_schema.sql"
+SCHEMA_FILE = ROOT / "infra" / "db" / "01_schema.sql"
 
 def load_config() -> str:
     """Load DATABASE_URL from environment or .env."""

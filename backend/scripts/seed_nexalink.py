@@ -358,7 +358,7 @@ async def seed_policies_and_faqs(session: AsyncSession, org_id):
             faq_result = await session.exec(select(FAQArticle).where(FAQArticle.question == legacy_question))
             faq = faq_result.first()
         if not faq:
-            faq = FAQArticle(question=question, answer=content, category=category)
+            faq = FAQArticle(organization_id=org_id, question=question, answer=content, category=category)
             session.add(faq)
             await session.commit()
             await session.refresh(faq)
