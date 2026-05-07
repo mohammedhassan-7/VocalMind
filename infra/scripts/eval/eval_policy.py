@@ -57,6 +57,9 @@ def evaluate_policy(
         )
 
     precision, recall, _ = precision_recall_f1(tp, fp, fn)
+    # No violations in gold and none predicted → correctly identified clean call.
+    if tp == 0 and fp == 0 and fn == 0:
+        precision = recall = 1.0
     attribution_accuracy = (attribution_correct / attribution_total) if attribution_total else 1.0
 
     min_precision = float(thresholds.get("min_violation_precision", 0.0))

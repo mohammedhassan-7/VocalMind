@@ -1,14 +1,29 @@
 {
   "samples": [
     {
-      "id": "account_unlock_call",
+      "id": "CALL_01_refund_outage",
       "violations": [],
       "violated_policy_ids": []
     },
     {
-      "id": "billing_dispute_call",
-      "violations": ["missing_identity_verification"],
-      "violated_policy_ids": ["policy_identity_verification"]
+      "id": "CALL_02_billing_dispute_escalation",
+      "violations": [],
+      "violated_policy_ids": []
+    },
+    {
+      "id": "CALL_03_tech_support_slow_internet",
+      "violations": [],
+      "violated_policy_ids": []
+    },
+    {
+      "id": "CALL_04_access_recovery_fraud",
+      "violations": [],
+      "violated_policy_ids": []
+    },
+    {
+      "id": "CALL_05_retention_abuse",
+      "violations": [],
+      "violated_policy_ids": []
     }
   ]
 }

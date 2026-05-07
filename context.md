@@ -193,10 +193,13 @@ All prompts include `_INJECTION_GUARD` — treats every piece of user data as un
 
 | Collection | Granularity | Used for |
 |---|---|---|
-| `sop_parents` | H1/H2/H3 header splits | Compliance evaluation, LLM trigger policy context |
-| `policy_children` | 400-char recursive, 80 overlap | Answer synthesis, query engine |
+| `policy_parents` (`QDRANT_COLLECTION_PARENTS`) | H1/H2/H3 header splits of policy docs | Policy compliance evaluator, NLI policy check (LLM trigger) |
+| `policy_children` (`collection_children`) | 400-char recursive, 80 overlap | Manager-assistant answer synthesis (Q&A only) |
+| `sop_parents` (`QDRANT_COLLECTION_SOP_PARENTS`) | H1/H2/H3 header splits of SOP + KB docs | Process adherence (SOP) and KB claim-validation lookups |
 
 > Policy documents are indexed at both parent and child granularity. SOP and KB documents are indexed at parent granularity only (no separate children collection).
+>
+> Selection rule: **parents = compliance / SOP / KB** (the consumer needs the whole rule, with all conditions and exceptions), **children = Q&A answer synthesis** (the consumer needs a precise span to quote). See `docs/rag/RAG_OVERVIEW.md` for the full matrix.
 
 **Ingestion flow**: `storage/docs/{org}/` PDFs → Docling parse → ftfy clean → extract org/doc_type/category metadata → parent+child chunks → validate → Ollama embed (snowflake-arctic-embed2) → Qdrant upload with deterministic content-hash UUIDs (re-ingesting same doc = same points)
 

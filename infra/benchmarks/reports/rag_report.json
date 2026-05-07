@@ -11,15 +11,33 @@
   "passed": true,
   "samples": [
     {
-      "id": "account_unlock_call",
+      "id": "CALL_01_refund_outage",
       "gold_is_correct": true,
       "pred_is_correct": true,
       "evidence_coverage": 1.0
     },
     {
-      "id": "billing_dispute_call",
-      "gold_is_correct": false,
-      "pred_is_correct": false,
+      "id": "CALL_02_billing_dispute_escalation",
+      "gold_is_correct": true,
+      "pred_is_correct": true,
+      "evidence_coverage": 1.0
+    },
+    {
+      "id": "CALL_03_tech_support_slow_internet",
+      "gold_is_correct": true,
+      "pred_is_correct": true,
+      "evidence_coverage": 1.0
+    },
+    {
+      "id": "CALL_04_access_recovery_fraud",
+      "gold_is_correct": true,
+      "pred_is_correct": true,
+      "evidence_coverage": 1.0
+    },
+    {
+      "id": "CALL_05_retention_abuse",
+      "gold_is_correct": true,
+      "pred_is_correct": true,
       "evidence_coverage": 1.0
     }
   ]

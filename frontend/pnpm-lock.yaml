@@ -101,6 +101,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: 1.1.8
         version: 1.1.8(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@rollup/rollup-linux-x64-musl':
+        specifier: ^4.60.3
+        version: 4.60.3
       '@tailwindcss/typography':
         specifier: ^0.5.19
         version: 0.5.19(tailwindcss@4.1.12)
@@ -1965,6 +1968,11 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [musl]
+
+  '@rollup/rollup-linux-x64-musl@4.60.3':
+    resolution: {integrity: sha512-cRxsE8c13mZOh3vP+wLDxpQBRrOHDIGOWyDL93Sy0Ga8y515fBcC2pjUfFwUe5T7tqvTvWbCpg1URM/AXdWIXA==}
+    cpu: [x64]
+    os: [linux]
 
   '@rollup/rollup-openbsd-x64@4.59.0':
     resolution: {integrity: sha512-M3bLRAVk6GOwFlPTIxVBSYKUaqfLrn8l0psKinkCFxl4lQvOSz8ZrKDz2gxcBwHFpci0B6rttydI4IpS4IS/jQ==}
@@ -6842,6 +6850,8 @@ snapshots:
 
   '@rollup/rollup-linux-x64-musl@4.59.0':
     optional: true
+
+  '@rollup/rollup-linux-x64-musl@4.60.3': {}
 
   '@rollup/rollup-openbsd-x64@4.59.0':
     optional: true

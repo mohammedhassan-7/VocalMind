@@ -2,7 +2,27 @@ import { buildInteractionDetail, buildInteractionSummary } from '../support/mock
 
 describe("Session Detail", () => {
   beforeEach(() => {
-    cy.visitAs("manager", "/manager/inspector/int-001");
+    // Intercept audio fetch to resolve instantly so the player renders
+    cy.intercept('GET', '**/api/v1/interactions/*/audio', {
+      statusCode: 200,
+      body: new Blob([''], { type: 'audio/wav' }),
+    }).as('getAudio');
+
+    cy.visitAs("manager", "/manager/inspector/int-001", {
+      interactionDetails: {
+        'int-001': {
+          body: buildInteractionDetail(buildInteractionSummary(), {
+            emotionComparison: { 
+              totalUtterances: 5,
+              distributions: { acoustic: [], text: [], fused: [] },
+              quality: { acousticTextAgreementRate: 0, fusedMatchesAcousticRate: 0, fusedMatchesTextRate: 0, disagreementCount: 0 }
+            } as any, // Triggers hasEmotion
+            policyViolations: [{ id: '1', policyName: 'Test' } as any], // Triggers hasViolations
+            ragCompliance: { available: true } as any, // Triggers hasRag
+          })
+        }
+      }
+    });
   });
 
   it("renders the back navigation link", () => {
@@ -17,24 +37,46 @@ describe("Session Detail", () => {
     cy.contains("09:15 AM");
   });
 
-  it("displays the score grid with four categories", () => {
+  it("displays the score grid with four categories and trend icons", () => {
     cy.contains("Empathy");
     cy.contains("Policy");
     cy.contains("Resolution");
-    cy.contains("Resp. Time");
+    cy.contains("Response Time");
+    
+    // The "Overall" score was removed from the grid, it's only in the ScoreRing
+    // We check for the visual SVGs that represent trends
+    cy.get('svg.lucide-trending-up, svg.lucide-trending-down, svg.lucide-minus').should('exist');
+  });
+
+  it("renders the SectionNav with auto-hiding tabs", () => {
+    // The SectionNav appears between the header and the content
+    cy.get('nav[aria-label="Session detail sections"]').should('exist');
+    cy.contains("button", "Overview");
+    cy.contains("button", "Transcript");
+    cy.contains("button", "Emotion");
+    cy.contains("button", "Violations");
+    cy.contains("button", "Compliance");
+    cy.contains("button", "LLM Analysis");
+  });
+
+  it("renders the audio player with an accessible input range", () => {
+    cy.wait('@getAudio');
+    cy.get('input[type="range"][aria-label="Seek recording position"]').should('exist');
+    cy.get('button[aria-label="Play recording"]').should('exist');
+    cy.get('button[aria-label="Mute recording"]').should('exist');
+    cy.get('button[aria-label="Skip back 10 seconds"]').should('exist');
+    cy.get('button[aria-label="Skip forward 10 seconds"]').should('exist');
   });
 
   it("renders the transcript section with utterances", () => {
-    cy.contains("h3", "Transcript");
+    cy.get('#section-transcript').should('exist');
     cy.contains("Good morning! Thank you for calling VocalMind support.");
     cy.contains("Hi, I've been having issues with my account login");
   });
 
   it("renders emotion events section", () => {
+    cy.get('#section-emotion').should('exist');
     cy.contains("Emotion Events");
-    cy.contains("Agent");
-    cy.contains("Customer");
-    cy.contains("Jump to");
   });
 
   it("renders automated evaluation cards", () => {
@@ -43,10 +85,16 @@ describe("Session Detail", () => {
     cy.contains("Policy Inference");
   });
 
-  it("renders emotion trigger reasoning card", () => {
-    cy.contains("h4", "Emotion Trigger Reasoning");
-    cy.contains("Dissonance:");
-    cy.contains("Counterfactual:");
+  it("renders ManagerAnnotation component instead of dispute flow", () => {
+    // The dispute button is replaced with ManagerAnnotation flow
+    cy.contains("Dispute").should("not.exist");
+    
+    // Find the Add annotation button for an emotion event or policy violation
+    cy.contains("button", "Add annotation").first().click();
+    
+    // Manager feedback buttons should appear
+    cy.contains("button", "Yes, accurate").should("be.visible");
+    cy.contains("button", "No, inaccurate").should("be.visible");
   });
 
   it("navigates back to session inspector", () => {
@@ -61,6 +109,11 @@ describe("Session Detail", () => {
       interactionDetails: {
         'int-002': {
           body: buildInteractionDetail(buildInteractionSummary(), {
+            emotionComparison: { 
+              totalUtterances: 5,
+              distributions: { acoustic: [], text: [], fused: [] },
+              quality: { acousticTextAgreementRate: 0, fusedMatchesAcousticRate: 0, fusedMatchesTextRate: 0, disagreementCount: 0 }
+            } as any, // Triggers hasEmotion
             llmTriggers: {
               available: true,
               explainability: {
@@ -100,7 +153,7 @@ describe("Session Detail", () => {
     cy.contains("Evidence-Anchored Explainability").scrollIntoView().should("be.visible");
     cy.contains("h3", "Claim to evidence to verdict").should("be.visible");
 
-    // Check tabs (they are based on family types defined in mock)
+    // Check tabs
     cy.contains("button", "Policy Findings").should("be.visible");
     cy.contains("button", "Span-Level Trigger Attribution").should("be.visible");
 

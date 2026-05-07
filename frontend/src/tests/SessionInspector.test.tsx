@@ -12,6 +12,9 @@ const { getInteractionsMock, getAgentsMock } = vi.hoisted(() => ({
 vi.mock('../app/services/api', () => ({
     getInteractions: getInteractionsMock,
     getAgents: getAgentsMock,
+    getInteractionDetail: vi.fn().mockResolvedValue({}),
+    deleteInteraction: vi.fn().mockResolvedValue(undefined),
+    reprocessInteraction: vi.fn().mockResolvedValue({}),
 }))
 
 describe('SessionInspector Component', () => {
@@ -53,13 +56,13 @@ describe('SessionInspector Component', () => {
         ])
     })
 
-    it('renders session inspector title', async () => {
+    it('renders session inspector controls', async () => {
         render(
             <MemoryRouter>
                 <SessionInspector />
             </MemoryRouter>
         )
-        expect(await screen.findByText('Session Inspector')).toBeInTheDocument()
+        expect(await screen.findByPlaceholderText(/Search agent, date, ID/)).toBeInTheDocument()
     })
 
     it('renders interaction list items', async () => {

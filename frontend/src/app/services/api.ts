@@ -48,6 +48,11 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(`API error ${res.status}: ${res.statusText}`);
   }
 
+  // 204 No Content (e.g. DELETE) — no body to parse.
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   return res.json();
 }
 
@@ -481,6 +486,12 @@ export function reprocessInteraction(id: string, options?: { force?: boolean }):
   const suffix = options?.force ? "?force=true" : "";
   return apiFetch<ReprocessResult>(`/interactions/${id}/reprocess${suffix}`, {
     method: "POST",
+  });
+}
+
+export function deleteInteraction(id: string): Promise<void> {
+  return apiFetch<void>(`/interactions/${id}`, {
+    method: "DELETE",
   });
 }
 

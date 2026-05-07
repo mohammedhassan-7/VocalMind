@@ -17,6 +17,20 @@ vi.mock('../app/services/api', () => ({
     getAudioUrl: getAudioUrlMock,
 }))
 
+vi.mock('recharts', () => ({
+    ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
+    CartesianGrid: () => null,
+    Tooltip: () => null,
+    Legend: () => null,
+    XAxis: () => null,
+    YAxis: () => null,
+    ReferenceLine: () => null,
+    Line: () => null,
+    LineChart: ({ children }: any) => <div data-testid="emotion-chart">{children}</div>,
+    Bar: ({ name }: any) => <div>{name}</div>,
+    BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
+}))
+
 const makeDetail = ({
     id,
     policyTitle,
@@ -125,35 +139,23 @@ describe('AgentCallDetail', () => {
         expect(screen.getByText('backend offline')).toBeInTheDocument()
     })
 
-    it('renders coaching points when policy violations exist', async () => {
+    it('renders policy violations in the Policy tab when violations exist', async () => {
         getInteractionDetailMock.mockResolvedValue(makeDetail({ id: 'int-002', policyTitle: 'Hold Time Limit' }))
 
         renderWithId('int-002')
 
-        expect(await screen.findByText('Coaching Points')).toBeInTheDocument()
-        expect(screen.getByText('Hold Time Limit')).toBeInTheDocument()
+        // Wait for render, then click Policy tab
+        const policyTab = await waitFor(() =>
+            screen.getAllByRole('button').find(b => b.textContent?.trim() === 'Policy')
+        )
+        expect(policyTab).toBeTruthy()
+        fireEvent.click(policyTab!)
+        expect(await screen.findByText('Hold Time Limit')).toBeInTheDocument()
         expect(screen.getByText('1.2s')).toBeInTheDocument()
         expect(screen.queryByText('1.2ss')).not.toBeInTheDocument()
     })
 
-    it('shows the llm unavailable state when trigger evaluation fails', async () => {
-        getInteractionDetailMock.mockResolvedValue(
-            makeDetail({
-                id: 'int-004',
-                llmTriggers: {
-                    available: false,
-                    error: 'Trigger timeout',
-                },
-            })
-        )
-
-        renderWithId('int-004')
-
-        expect(await screen.findByText(/LLM coaching insights unavailable/i)).toBeInTheDocument()
-        expect(screen.getByText(/Trigger timeout/i)).toBeInTheDocument()
-    })
-
-    it('renders llm coaching insights when llm trigger data is available', async () => {
+    it('renders tabbed analysis with process and policy data when llm triggers available', async () => {
         getInteractionDetailMock.mockResolvedValue(
             makeDetail({
                 id: 'int-003',
@@ -176,12 +178,23 @@ describe('AgentCallDetail', () => {
 
         renderWithId('int-003')
 
-        expect(await screen.findByText('LLM Coaching Insights')).toBeInTheDocument()
+        // Should show tabbed analysis — click Process tab
+        const processTab = await waitFor(() =>
+            screen.getAllByRole('button').find(b => b.textContent?.trim() === 'Process')
+        )
+        expect(processTab).toBeTruthy()
+        fireEvent.click(processTab!)
+        expect(await screen.findByText(/Call Flow Check/)).toBeInTheDocument()
         expect(screen.getByText('billing_issue')).toBeInTheDocument()
+
+        // Click Policy tab
+        const policyTab = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'Policy')
+        fireEvent.click(policyTab!)
+        expect(await screen.findByText(/Policy Consistency/)).toBeInTheDocument()
         expect(screen.getByText('Contradiction')).toBeInTheDocument()
     })
 
-    it('renders the session recording and seeks to the selected emotion event', async () => {
+    it('renders the audio player and seeks to the selected emotion event', async () => {
         getInteractionDetailMock.mockResolvedValue(
             makeDetail({
                 id: 'int-005',
@@ -202,7 +215,8 @@ describe('AgentCallDetail', () => {
 
         renderWithId('int-005')
 
-        expect(await screen.findByText('Session Recording')).toBeInTheDocument()
+        // Wait for component to render fully
+        expect(await screen.findByText('Emotion Timeline')).toBeInTheDocument()
         const audio = document.querySelector('audio') as HTMLAudioElement | null
         expect(audio).not.toBeNull()
         Object.defineProperty(audio!, 'currentTime', {
@@ -214,7 +228,11 @@ describe('AgentCallDetail', () => {
         expect(audio).toHaveAttribute('src', '/audio/int-005.mp3')
         expect(getAudioUrlMock).toHaveBeenCalledWith('int-005')
 
-        fireEvent.click(screen.getByRole('button', { name: 'Jump to 00:05' }))
+        // Find and click the play button for the emotion event
+        const playButtons = await screen.findAllByRole('button')
+        const jumpBtn = playButtons.find(b => b.textContent?.includes('00:05'))
+        expect(jumpBtn).toBeTruthy()
+        fireEvent.click(jumpBtn!)
 
         expect(audio!.currentTime).toBe(5)
         expect(mockPlay).toHaveBeenCalledTimes(1)
@@ -255,11 +273,11 @@ describe('AgentCallDetail', () => {
 
         expect(await screen.findByText('Transcript')).toBeInTheDocument()
         expect(screen.getByText('Me')).toBeInTheDocument()
-        expect(screen.getByText('Customer')).toBeInTheDocument()
+        expect(screen.getAllByText('Customer').length).toBeGreaterThan(0)
         expect(screen.getByText('Neutral 53%')).toBeInTheDocument()
     })
 
-    it('uses cached llm insights without offering a force refresh action', async () => {
+    it('fetches llm-enriched data with includeLLMTriggers flag', async () => {
         getInteractionDetailMock.mockResolvedValue(
             makeDetail({
                 id: 'int-007',
@@ -278,14 +296,13 @@ describe('AgentCallDetail', () => {
 
         renderWithId('int-007')
 
-        expect(await screen.findByText('LLM Coaching Insights')).toBeInTheDocument()
-
         await waitFor(() => {
             expect(getInteractionDetailMock).toHaveBeenCalledWith('int-007', {
                 includeLLMTriggers: true,
                 skipCache: true,
             })
         })
-        expect(screen.queryByRole('button', { name: /Refresh LLM/i })).not.toBeInTheDocument()
+        // Agent view should not have a Reprocess button
+        expect(screen.queryByRole('button', { name: /Reprocess/i })).not.toBeInTheDocument()
     })
 })
