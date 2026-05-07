@@ -31,6 +31,10 @@ _AGENT_LABEL_ALIASES = {
     "s1",
 }
 _AGENT_TEXT_CUES = (
+    "thank you for calling",
+    "thanks for calling",
+    "welcome to support",
+    "my name is",
     "how can i help",
     "let me check",
     "can you provide",
@@ -78,6 +82,8 @@ class SpeakerRoleClassifier:
         if not self._enabled or self._failed:
             return
         if self._model is not None and self._tokenizer is not None:
+            return
+        if self._model_dir is None or str(self._model_dir).strip() in {".", ""}:
             return
         if not self._model_dir.exists():
             logger.info("Speaker role model not found at %s; using diarization labels only.", self._model_dir)

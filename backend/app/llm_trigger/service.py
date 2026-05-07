@@ -1827,6 +1827,8 @@ async def _load_cached_trigger_report(
     interaction_id: UUID,
     org_filter: str | None,
 ) -> InteractionLLMTriggerReport | None:
+    if org_filter is not None:
+        org_filter = str(org_filter)
     cached_result = await session.exec(
         select(InteractionLLMTriggerCache).where(InteractionLLMTriggerCache.interaction_id == interaction_id)
     )
@@ -1858,6 +1860,8 @@ async def _persist_trigger_report(
     *,
     commit: bool,
 ) -> None:
+    if org_filter is not None:
+        org_filter = str(org_filter)
     cached_result = await session.exec(
         select(InteractionLLMTriggerCache).where(InteractionLLMTriggerCache.interaction_id == report.interaction_id)
     )
@@ -1876,6 +1880,8 @@ async def invalidate_llm_trigger_cache(
     session: AsyncSession,
     org_filter: str | None = None,
 ) -> int:
+    if org_filter is not None:
+        org_filter = str(org_filter)
     from sqlalchemy import delete
     stmt = delete(InteractionLLMTriggerCache)
     if org_filter:
