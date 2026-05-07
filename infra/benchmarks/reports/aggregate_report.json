@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-05-07T07:36:11.644986+00:00",
-  "predictions_file": "infra\\benchmarks\\fixtures\\oracle_predictions.json",
+  "generated_at_utc": "2026-05-07T14:41:21.777048+00:00",
+  "predictions_file": "infra/benchmarks/fixtures/baseline_predictions.json",
   "all_passed": true,
   "components": {
     "transcript": {

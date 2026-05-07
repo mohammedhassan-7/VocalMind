@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from eval_common import BASELINE_PREDICTIONS_PATH, REPORTS_DIR, write_json
+from eval_common import BASELINE_PREDICTIONS_PATH, REPORTS_DIR, ROOT, write_json
 from eval_emotion import evaluate_emotion
 from eval_policy import evaluate_policy
 from eval_rag import evaluate_rag
@@ -28,9 +28,15 @@ def main() -> None:
         evaluate_resolution(predictions_path=predictions_path),
     ]
 
+    # Use relative path if the predictions_path is absolute or contains ROOT
+    try:
+        rel_predictions = predictions_path.relative_to(ROOT)
+    except ValueError:
+        rel_predictions = predictions_path
+
     aggregate = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "predictions_file": str(predictions_path),
+        "predictions_file": str(rel_predictions).replace("\\", "/"),
         "all_passed": all(report.get("passed") for report in reports),
         "components": {
             report["component"]: {
