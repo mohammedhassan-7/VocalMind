@@ -193,14 +193,17 @@ describe('SessionDetail', () => {
         expect(screen.getByText('Transcript')).toBeInTheDocument()
     })
 
-    it('renders automated evaluation section with process and policy cards', async () => {
+    it('renders evaluation section with emotion, process and policy cards', async () => {
         getInteractionDetailMock.mockResolvedValue(detail)
         renderWithId()
 
-        expect(await screen.findByText('Emotion Trigger Reasoning')).toBeInTheDocument()
-        expect(screen.getByText('Automated Evaluation')).toBeInTheDocument()
+        // Emotion Analysis card (rendered from emotionShift via llmTriggers)
+        expect(await screen.findByText('Emotion Analysis')).toBeInTheDocument()
+        // Process Adherence card
         expect(screen.getByText(/Process Adherence/)).toBeInTheDocument()
+        // Policy Inference card
         expect(screen.getByText(/Policy Inference/)).toBeInTheDocument()
+        // Data from the mock
         expect(screen.getByText(/billing_issue/)).toBeInTheDocument()
         expect(screen.getAllByText(/Contradiction/).length).toBeGreaterThan(0)
     })

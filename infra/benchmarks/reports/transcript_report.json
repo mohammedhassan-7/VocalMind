@@ -5,12 +5,12 @@
     "speaker_accuracy": 1.0,
     "confusion": {
       "agent": {
-        "agent": 5,
+        "agent": 111,
         "customer": 0
       },
       "customer": {
         "agent": 0,
-        "customer": 4
+        "customer": 148
       }
     }
   },
@@ -21,12 +21,27 @@
   "passed": true,
   "samples": [
     {
-      "id": "account_unlock_call",
+      "id": "CALL_01_refund_outage",
       "wer": 0.0,
       "speaker_accuracy": 1.0
     },
     {
-      "id": "billing_dispute_call",
+      "id": "CALL_02_billing_dispute_escalation",
+      "wer": 0.0,
+      "speaker_accuracy": 1.0
+    },
+    {
+      "id": "CALL_03_tech_support_slow_internet",
+      "wer": 0.0,
+      "speaker_accuracy": 1.0
+    },
+    {
+      "id": "CALL_04_access_recovery_fraud",
+      "wer": 0.0,
+      "speaker_accuracy": 1.0
+    },
+    {
+      "id": "CALL_05_retention_abuse",
       "wer": 0.0,
       "speaker_accuracy": 1.0
     }

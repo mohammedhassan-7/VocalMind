@@ -1,14 +1,99 @@
 {
   "samples": [
     {
-      "id": "account_unlock_call",
+      "id": "CALL_01_refund_outage",
       "is_correct": true,
-      "evidence_ids": ["kb_reset_flow", "policy_password_reset"]
+      "evidence_ids": [
+        "SOP-01",
+        "CS-RULE-001",
+        "CS-RULE-002",
+        "CS-RULE-004",
+        "CS-RULE-011",
+        "CS-RULE-018",
+        "CS-RULE-019",
+        "CS-RULE-021",
+        "FIN-RULE-001",
+        "FIN-RULE-004",
+        "FIN-RULE-005",
+        "FIN-RULE-010",
+        "Section 5 - Escalation Triggers",
+        "Section 3.1 - Billing Concepts"
+      ]
     },
     {
-      "id": "billing_dispute_call",
-      "is_correct": false,
-      "evidence_ids": ["policy_billing_disclosure"]
+      "id": "CALL_02_billing_dispute_escalation",
+      "is_correct": true,
+      "evidence_ids": [
+        "SOP-02",
+        "CS-RULE-001",
+        "CS-RULE-002",
+        "CS-RULE-004",
+        "CS-RULE-009",
+        "CS-RULE-011",
+        "CS-RULE-012",
+        "CS-RULE-013",
+        "CS-RULE-014",
+        "FIN-RULE-001",
+        "FIN-RULE-005",
+        "Section 3.1 - Billing Concepts",
+        "Section 5 - Escalation Triggers"
+      ]
+    },
+    {
+      "id": "CALL_03_tech_support_slow_internet",
+      "is_correct": true,
+      "evidence_ids": [
+        "SOP-03",
+        "CS-RULE-001",
+        "CS-RULE-002",
+        "CS-RULE-004",
+        "CS-RULE-009",
+        "CS-RULE-011",
+        "CS-RULE-018",
+        "CS-RULE-019",
+        "CS-RULE-021",
+        "FIN-RULE-003",
+        "Section 2.1 - Technology Tiers",
+        "Section 2.2 - Router & WiFi",
+        "Section 5 - Escalation Triggers"
+      ]
+    },
+    {
+      "id": "CALL_04_access_recovery_fraud",
+      "is_correct": true,
+      "evidence_ids": [
+        "SOP-04",
+        "CS-RULE-001",
+        "CS-RULE-002",
+        "CS-RULE-004",
+        "CS-RULE-006",
+        "CS-RULE-011",
+        "CS-RULE-013",
+        "CS-RULE-014",
+        "SEC-RULE-001",
+        "SEC-RULE-006",
+        "SEC-RULE-007",
+        "SEC-RULE-008",
+        "FIN-RULE-008",
+        "Section 4 - Account Management"
+      ]
+    },
+    {
+      "id": "CALL_05_retention_abuse",
+      "is_correct": true,
+      "evidence_ids": [
+        "SOP-05",
+        "CS-RULE-001",
+        "CS-RULE-002",
+        "CS-RULE-004",
+        "CS-RULE-011",
+        "CS-RULE-012",
+        "CS-RULE-013",
+        "CS-RULE-014",
+        "CS-RULE-016",
+        "CS-RULE-021",
+        "Section 4.2 - Cancellations & ETF"
+      ]
     }
   ]
 }

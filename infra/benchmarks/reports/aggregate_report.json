@@ -1,5 +1,6 @@
 {
-  "generated_at_utc": "2026-04-15T17:02:44.413791+00:00",
+  "generated_at_utc": "2026-05-07T07:36:11.644986+00:00",
+  "predictions_file": "infra\\benchmarks\\fixtures\\oracle_predictions.json",
   "all_passed": true,
   "components": {
     "transcript": {
@@ -9,12 +10,12 @@
         "speaker_accuracy": 1.0,
         "confusion": {
           "agent": {
-            "agent": 5,
+            "agent": 111,
             "customer": 0
           },
           "customer": {
             "agent": 0,
-            "customer": 4
+            "customer": 148
           }
         }
       }

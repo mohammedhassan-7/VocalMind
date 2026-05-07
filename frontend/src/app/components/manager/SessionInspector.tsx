@@ -1,28 +1,18 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Link } from "react-router";
 import { parse, isValid } from "date-fns";
 import {
-  Search,
-  ArrowDown,
-  ArrowUp,
-  Loader2,
-  AlertTriangle,
-  RefreshCw,
-  UploadCloud,
-  MoreHorizontal,
-  Trash2,
-  ChevronRight,
-  X,
+  Search, ArrowDown, ArrowUp, Loader2, AlertTriangle,
+  RefreshCw, Upload, MoreHorizontal, Eye, RotateCcw,
 } from "lucide-react";
 import {
-  createInteraction,
-  deleteInteraction,
-  getAgents,
   getInteractionDetail,
   getInteractions,
+  getAgents,
+  createInteraction,
   reprocessInteraction,
-  type AgentSummary,
   type InteractionSummary,
+  type AgentSummary,
 } from "../../services/api";
 
 function getFailurePreview(row: InteractionSummary): string {
@@ -59,14 +49,11 @@ function isFailedStatus(row: InteractionSummary): boolean {
   return String(row.status || "").toLowerCase() === "failed";
 }
 
-function formatBytes(bytes: number): string {
-  if (!bytes) return "0 B";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+function isProcessingStatus(row: InteractionSummary): boolean {
+  const s = String(row.status || "").toLowerCase();
+  return s === "processing" || s === "pending";
 }
 
-/** Backend sends `date` as YYYY-MM-DD and `time` as 12h (e.g. strftime "%I:%M %p"). */
 function interactionDateMs(row: InteractionSummary): number {
   const datePart = (row.date || "").trim();
   const timePart = (row.time || "").trim();
@@ -84,47 +71,69 @@ function interactionDateMs(row: InteractionSummary): number {
   return isValid(dateOnly) ? dateOnly.getTime() : 0;
 }
 
+const POLL_INTERVAL = 8000;
+
 export function SessionInspector() {
-  const navigate = useNavigate();
   const [interactions, setInteractions] = useState<InteractionSummary[]>([]);
-  const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reprocessingIds, setReprocessingIds] = useState<Set<string>>(new Set());
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
-  const [uploading, setUploading] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [selectedAgentId, setSelectedAgentId] = useState("");
-
-  // Upload modal + drag-and-drop state.
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Row 3-dots menu open state (interaction id of currently-open row, or null).
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-
-  // Confirm-delete modal state.
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
-
   const [sortField, setSortField] = useState<"score" | "date" | "duration">("score");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Upload state
+  const [showUpload, setShowUpload] = useState(false);
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Action menu
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click
   useEffect(() => {
-    Promise.all([getInteractions(), getAgents()])
-      .then(([interactionRows, agentRows]) => {
-        setInteractions(interactionRows);
-        setAgents(agentRows);
-        setSelectedAgentId((current) => current || agentRows[0]?.id || "");
-      })
+    if (!openMenuId) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
+
+  // Initial fetch
+  useEffect(() => {
+    getInteractions()
+      .then(setInteractions)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Poll for processing rows
+  const hasProcessing = interactions.some(isProcessingStatus);
+  useEffect(() => {
+    if (!hasProcessing) return;
+    const timer = setInterval(() => {
+      getInteractions()
+        .then(setInteractions)
+        .catch(() => {});
+    }, POLL_INTERVAL);
+    return () => clearInterval(timer);
+  }, [hasProcessing]);
+
+  // Fetch agents when upload dialog opens
+  useEffect(() => {
+    if (!showUpload) return;
+    getAgents().then(setAgents).catch(() => {});
+  }, [showUpload]);
 
   const handleSort = (field: "score" | "date" | "duration") => {
     if (sortField === field) {
@@ -136,19 +145,9 @@ export function SessionInspector() {
     setCurrentPage(1);
   };
 
-  const closeMenu = useCallback(() => setOpenMenuId(null), []);
-
-  // Click-outside to close the row menu.
-  useEffect(() => {
-    if (!openMenuId) return;
-    const handler = () => closeMenu();
-    window.addEventListener("click", handler);
-    return () => window.removeEventListener("click", handler);
-  }, [openMenuId, closeMenu]);
-
   const handleReprocess = async (interactionId: string) => {
-    closeMenu();
     setActionError(null);
+    setOpenMenuId(null);
     setReprocessingIds((prev) => new Set(prev).add(interactionId));
     try {
       await reprocessInteraction(interactionId);
@@ -177,74 +176,21 @@ export function SessionInspector() {
     }
   };
 
-  const handleDelete = async (interactionId: string) => {
-    setActionError(null);
-    setDeletingIds((prev) => new Set(prev).add(interactionId));
-    try {
-      await deleteInteraction(interactionId);
-      setInteractions((current) => current.filter((row) => row.id !== interactionId));
-      setConfirmDeleteId(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to delete interaction";
-      setActionError(message);
-    } finally {
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(interactionId);
-        return next;
-      });
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!uploadFile) {
-      setActionError("Choose an audio file before uploading.");
-      return;
-    }
-    if (!selectedAgentId) {
-      setActionError("Choose the agent who handled this call.");
-      return;
-    }
-
-    setActionError(null);
+  const handleUpload = useCallback(async (file: File) => {
     setUploading(true);
+    setActionError(null);
     try {
-      await createInteraction(uploadFile, selectedAgentId);
-      setUploadFile(null);
-      setUploadOpen(false);
+      await createInteraction(file, selectedAgent || undefined);
+      setShowUpload(false);
+      setSelectedAgent("");
       const refreshed = await getInteractions();
       setInteractions(refreshed);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to upload interaction");
+      setActionError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
     }
-  };
-
-  const handleFileSelect = (file: File | null) => {
-    if (!file) {
-      setUploadFile(null);
-      return;
-    }
-    if (!file.type.startsWith("audio/") && !/\.(wav|mp3|m4a|ogg|flac)$/i.test(file.name)) {
-      setActionError("Please select an audio file (.wav, .mp3, .m4a, .ogg, .flac).");
-      return;
-    }
-    setActionError(null);
-    setUploadFile(file);
-  };
-
-  const onDrop = (event: React.DragEvent<HTMLLabelElement>) => {
-    event.preventDefault();
-    setDragActive(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file) handleFileSelect(file);
-  };
-
-  const confirmDeleteRow = useMemo(
-    () => interactions.find((r) => r.id === confirmDeleteId) || null,
-    [interactions, confirmDeleteId],
-  );
+  }, [selectedAgent]);
 
   const filteredInteractions = interactions.filter((interaction) => {
     const searchLower = searchQuery.toLowerCase();
@@ -263,15 +209,11 @@ export function SessionInspector() {
       const dateA = interactionDateMs(a);
       const dateB = interactionDateMs(b);
       comparison = dateA - dateB;
-      if (comparison === 0) {
-        comparison = a.id.localeCompare(b.id);
-      }
+      if (comparison === 0) comparison = a.id.localeCompare(b.id);
     } else if (sortField === "duration") {
       const [mA, sA] = a.duration.split(":").map(Number);
       const [mB, sB] = b.duration.split(":").map(Number);
-      const durA = (mA || 0) * 60 + (sA || 0);
-      const durB = (mB || 0) * 60 + (sB || 0);
-      comparison = durA - durB;
+      comparison = ((mA || 0) * 60 + (sA || 0)) - ((mB || 0) * 60 + (sB || 0));
     }
     return sortOrder === "asc" ? -comparison : comparison;
   });
@@ -314,29 +256,19 @@ export function SessionInspector() {
   return (
     <div className="p-6 min-w-0 max-w-full">
       {actionError && (
-        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[12px] font-medium text-destructive dark:bg-destructive/15">
-          <span className="flex-1">{actionError}</span>
-          <button
-            type="button"
-            onClick={() => setActionError(null)}
-            className="text-destructive/70 hover:text-destructive"
-            aria-label="Dismiss error"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[12px] font-medium text-destructive">
+          {actionError}
         </div>
       )}
 
-      {/* Page header */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[22px] font-bold text-foreground mb-1">Session Inspector</h2>
-          <p className="text-[13px] text-muted-foreground">
-            {totalItems} interaction{totalItems !== 1 ? "s" : ""} · sorted by {sortField} ({sortOrder === "asc" ? "descending" : "ascending"})
-          </p>
-        </div>
+      {/* Controls row — no duplicate heading */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13px] text-muted-foreground">
+          {totalItems} interaction{totalItems !== 1 ? "s" : ""} · sorted by {sortField} (
+          {sortOrder === "asc" ? "descending" : "ascending"})
+        </p>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
@@ -347,20 +279,20 @@ export function SessionInspector() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-[220px] h-10 pl-9 pr-3 bg-background border border-border rounded-lg text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+              className="w-[200px] h-10 pl-9 pr-3 bg-muted/20 border border-border rounded-[10px] text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
             />
           </div>
 
-          <div className="flex items-center border border-border rounded-lg overflow-hidden bg-background">
+          <div className="flex items-center border border-border rounded-[10px] overflow-hidden bg-card">
             {(["score", "date", "duration"] as const).map((field) => (
               <button
                 key={field}
                 type="button"
                 onClick={() => handleSort(field)}
-                className={`flex items-center px-3 h-10 text-[12px] font-semibold transition-colors capitalize ${
+                className={`flex items-center px-3 h-10 text-[11px] font-semibold transition-colors capitalize ${
                   sortField === field
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {field}
@@ -371,163 +303,189 @@ export function SessionInspector() {
 
           <button
             type="button"
-            onClick={() => {
-              setActionError(null);
-              setUploadOpen(true);
-            }}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90 shadow-sm"
+            onClick={() => setShowUpload(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            <UploadCloud className="h-4 w-4" />
+            <Upload className="w-4 h-4" />
             Upload call
           </button>
         </div>
       </div>
 
+      {/* Upload Dialog */}
+      {showUpload && (
+        <div className="mb-5 bg-card rounded-xl border border-border p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[14px] font-bold text-foreground">Upload Call Recording</h3>
+            <button type="button" onClick={() => setShowUpload(false)}
+              className="text-muted-foreground hover:text-foreground text-[18px] leading-none">&times;</button>
+          </div>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Agent (optional)</label>
+              <select
+                value={selectedAgent}
+                onChange={(e) => setSelectedAgent(e.target.value)}
+                className="w-full h-10 rounded-lg border border-border bg-background px-3 text-[13px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              >
+                <option value="">Auto-detect</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <input ref={fileInputRef} type="file" accept="audio/*" className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleUpload(file);
+                }} />
+              <button type="button" disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-5 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {uploading ? "Uploading..." : "Choose file"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
-      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[52rem] border-collapse">
+      <div className="bg-card rounded-[14px] border border-border">
+        <div className="overflow-x-auto rounded-t-[14px]">
+          <table className="w-full min-w-[56rem] border-collapse">
             <thead>
-              <tr className="bg-muted/40 border-b border-border">
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Agent</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date &amp; Time</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Duration</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Score</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Empathy</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Policy</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Resolution</th>
-                <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-44 sticky right-0 bg-muted/40 border-l border-border">Actions</th>
+              <tr className="bg-muted/10 border-b border-border">
+                <th className="px-4 py-4 text-left text-label">Agent</th>
+                <th className="px-4 py-4 text-left text-label">Date & Time</th>
+                <th className="px-4 py-4 text-left text-label">Duration</th>
+                <th className="px-4 py-4 text-left text-label">Score</th>
+                <th className="px-4 py-4 text-left text-label">Empathy</th>
+                <th className="px-4 py-4 text-left text-label">Policy</th>
+                <th className="px-4 py-4 text-left text-label">Resolution</th>
+                <th className="px-4 py-4 text-center text-label">Status</th>
+                <th className="px-3 py-4 text-center text-label sticky right-0 z-30 w-32 min-w-[8rem] border-l border-border bg-muted/10 shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.12)]">
+                  Actions
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
-              {paginatedInteractions.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground text-[13px]">
-                    No interactions match your filters.
-                  </td>
-                </tr>
-              )}
+            <tbody className="divide-y divide-border/50">
               {paginatedInteractions.map((row) => {
                 const failed = isFailedStatus(row);
-                const processing = ["processing", "pending"].includes(String(row.status || "").toLowerCase());
+                const processing = isProcessingStatus(row);
                 const isReprocessing = reprocessingIds.has(row.id);
-                const isDeleting = deletingIds.has(row.id);
-                const failurePreview = getFailurePreview(row);
+
                 return (
                   <tr
                     key={row.id}
-                    className={`group transition-colors hover:bg-muted/30 ${failed ? "bg-destructive/[0.03]" : ""}`}
+                    className={`group hover:bg-muted/5 transition-colors ${failed ? "bg-destructive/[0.04]" : ""}`}
                   >
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[14px] font-semibold text-foreground">{row.agentName}</span>
-                        {row.hasViolation && (
-                          <span className="px-2 py-0.5 bg-destructive/10 text-destructive rounded-full text-[10px] font-semibold">
-                            Violation
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px] font-semibold text-foreground">{row.agentName}</span>
+                          {row.hasViolation && (
+                            <span className="px-2 py-0.5 bg-destructive/10 text-destructive rounded-full text-[10px] font-medium">
+                              Violation
+                            </span>
+                          )}
+                        </div>
+                        {failed && row.processingFailures && row.processingFailures.length > 0 && (
+                          <span className="text-[11px] text-destructive/70 line-clamp-1" title={getFailurePreview(row)}>
+                            {getFailurePreview(row)}
                           </span>
                         )}
                       </div>
-                      {failed && failurePreview && (
-                        <div
-                          className="mt-1 max-w-[28rem] truncate text-[11px] text-destructive/80"
-                          title={failurePreview}
-                        >
-                          {failurePreview}
-                        </div>
-                      )}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-[13px] text-muted-foreground">
-                      <div className="text-foreground">{row.date}</div>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="text-[13px] font-medium text-foreground">{row.date}</div>
                       <div className="text-[11px] text-muted-foreground">{row.time}</div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-[13px] text-foreground tabular-nums">
+                    <td className="px-4 py-4 whitespace-nowrap text-[13px] text-muted-foreground">
                       {row.duration}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div
-                        className="text-[18px] font-bold tabular-nums"
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span
+                        className="text-[18px] font-bold"
                         style={{
-                          color:
-                            row.overallScore >= 85
-                              ? "var(--success)"
-                              : row.overallScore >= 70
-                                ? "var(--primary)"
-                                : row.overallScore >= 50
-                                  ? "var(--warning)"
-                                  : "var(--destructive)",
+                          color: row.overallScore >= 85 ? "var(--success)" : row.overallScore >= 75 ? "var(--primary)" : "var(--destructive)",
                         }}
                       >
-                        {row.overallScore}
-                        <span className="text-[12px] font-medium text-muted-foreground">%</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-[13px] text-foreground tabular-nums">{row.empathyScore}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-[13px] text-foreground tabular-nums">{row.policyScore}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-[13px] text-foreground tabular-nums">{row.resolutionScore}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-center">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${
-                          failed
-                            ? "bg-destructive/10 text-destructive"
-                            : processing
-                              ? "bg-primary/10 text-primary"
-                              : row.resolved
-                                ? "bg-success/15 text-success"
-                                : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {failed ? "Failed" : processing ? "Processing" : row.resolved ? "Resolved" : "Unresolved"}
+                        {row.overallScore}<span className="text-[12px] font-semibold text-muted-foreground">%</span>
                       </span>
                     </td>
-                    <td className="px-3 py-3 whitespace-nowrap text-right sticky right-0 bg-card group-hover:bg-muted/30 border-l border-border">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          disabled={processing}
+                    <td className="px-4 py-4 whitespace-nowrap text-[13px] text-foreground">{row.empathyScore}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-[13px] text-foreground">{row.policyScore}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-[13px] text-foreground">{row.resolutionScore}</td>
+                    <td className="px-4 py-4 whitespace-nowrap text-center align-middle">
+                      <div className="flex justify-center">
+                        {processing || isReprocessing ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-primary/5 text-primary border-primary/20">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Processing
+                          </span>
+                        ) : failed ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold border bg-destructive/5 text-destructive border-destructive/20">
+                            Failed
+                          </span>
+                        ) : row.resolved ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold border bg-success/5 text-success border-success/20">
+                            Resolved
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold border bg-muted text-muted-foreground border-border">
+                            Unresolved
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Actions — sticky */}
+                    <td
+                      className={`sticky right-0 z-20 whitespace-nowrap border-l border-border/80 px-3 py-4 text-center align-middle shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.1)] ${
+                        failed ? "bg-destructive/[0.04] group-hover:bg-muted/5" : "bg-card group-hover:bg-muted/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Link
+                          to={`/manager/inspector/${row.id}`}
                           onMouseEnter={() => {
                             void getInteractionDetail(row.id).catch(() => undefined);
                           }}
-                          onClick={() => navigate(`/manager/inspector/${row.id}`)}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary/10 px-3 text-[12px] font-semibold text-primary hover:bg-primary/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary/10 px-3 text-[12px] font-semibold text-primary hover:bg-primary/20 transition-colors"
                         >
                           Inspect
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
-                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                          <ArrowDown className="w-3 h-3 -rotate-90" />
+                        </Link>
+
+                        {/* More menu */}
+                        <div className="relative" ref={openMenuId === row.id ? menuRef : undefined}>
                           <button
                             type="button"
-                            onClick={() => setOpenMenuId((curr) => (curr === row.id ? null : row.id))}
-                            disabled={isReprocessing || isDeleting}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background hover:bg-muted disabled:opacity-50 transition-colors"
-                            aria-label="More actions"
+                            onClick={() => setOpenMenuId(openMenuId === row.id ? null : row.id)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                           >
-                            {isReprocessing || isDeleting ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                            )}
+                            <MoreHorizontal className="w-4 h-4" />
                           </button>
                           {openMenuId === row.id && (
-                            <div className="absolute right-0 top-9 z-40 w-44 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+                            <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-border bg-card shadow-lg z-50 py-1">
+                              <Link
+                                to={`/manager/inspector/${row.id}`}
+                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-foreground hover:bg-muted transition-colors"
+                                onClick={() => setOpenMenuId(null)}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                View details
+                              </Link>
                               <button
                                 type="button"
                                 onClick={() => void handleReprocess(row.id)}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-foreground hover:bg-muted"
+                                disabled={isReprocessing || processing}
+                                className="flex items-center gap-2 w-full px-3 py-2 text-[12px] text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-                                Reprocess
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  closeMenu();
-                                  setConfirmDeleteId(row.id);
-                                }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Delete
+                                <RotateCcw className={`w-3.5 h-3.5 ${isReprocessing ? "animate-spin" : ""}`} />
+                                {isReprocessing ? "Reprocessing..." : "Reprocess"}
                               </button>
                             </div>
                           )}
@@ -542,183 +500,29 @@ export function SessionInspector() {
         </div>
 
         {/* Pagination */}
-        <div className="px-5 py-3 bg-muted/30 border-t border-border flex items-center justify-between">
-          <div className="text-[12px] text-muted-foreground">
-            Showing {totalItems === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems}
+        <div className="px-6 py-4 bg-muted/5 border-t border-border flex items-center justify-between rounded-b-[14px]">
+          <div className="text-[13px] text-muted-foreground font-medium">
+            Showing {totalItems > 0 ? startIndex + 1 : 0}–{Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="h-9 px-3 rounded-lg border border-border bg-background text-[12px] font-semibold text-foreground hover:bg-muted disabled:opacity-40"
+              className="h-9 px-4 rounded-xl border border-border bg-background text-[13px] font-semibold text-foreground hover:bg-muted disabled:opacity-40 transition-all"
             >
               Previous
             </button>
-            <span className="text-[12px] text-muted-foreground tabular-nums">
-              {currentPage} / {totalPages}
-            </span>
+            <span className="px-3 text-[12px] text-muted-foreground tabular-nums">{currentPage} / {totalPages}</span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages || totalItems === 0}
-              className="h-9 px-3 rounded-lg border border-border bg-background text-[12px] font-semibold text-foreground hover:bg-muted disabled:opacity-40"
+              className="h-9 px-4 rounded-xl border border-border bg-background text-[13px] font-semibold text-foreground hover:bg-muted disabled:opacity-40 transition-all"
             >
               Next
             </button>
           </div>
         </div>
       </div>
-
-      {/* Upload modal */}
-      {uploadOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          onClick={() => !uploading && setUploadOpen(false)}
-        >
-          <div
-            className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h3 className="text-[16px] font-bold text-foreground">Upload call audio</h3>
-              <button
-                type="button"
-                onClick={() => !uploading && setUploadOpen(false)}
-                disabled={uploading}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="mb-1.5 block text-[12px] font-semibold text-foreground">
-                  Agent
-                </label>
-                <select
-                  value={selectedAgentId}
-                  onChange={(event) => setSelectedAgentId(event.target.value)}
-                  disabled={uploading}
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-[13px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-                >
-                  {agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-[12px] font-semibold text-foreground">
-                  Audio file
-                </label>
-                <label
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={onDrop}
-                  className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-8 cursor-pointer transition-colors ${
-                    dragActive
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-muted/30 hover:bg-muted/50 hover:border-primary/40"
-                  }`}
-                >
-                  <UploadCloud className="h-8 w-8 text-muted-foreground" />
-                  {uploadFile ? (
-                    <div className="text-center">
-                      <div className="text-[13px] font-semibold text-foreground">{uploadFile.name}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {formatBytes(uploadFile.size)} · click or drag to replace
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <div className="text-[13px] font-medium text-foreground">
-                        Click to choose or drop a file here
-                      </div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        .wav, .mp3, .m4a, .ogg, .flac
-                      </div>
-                    </div>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac"
-                    className="hidden"
-                    onChange={(event) => handleFileSelect(event.target.files?.[0] ?? null)}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-muted/20">
-              <button
-                type="button"
-                onClick={() => setUploadOpen(false)}
-                disabled={uploading}
-                className="h-10 rounded-lg border border-border bg-background px-4 text-[13px] font-semibold text-foreground hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleUpload()}
-                disabled={uploading || !uploadFile || !selectedAgentId}
-                className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                {uploading ? "Uploading…" : "Upload"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirm-delete modal */}
-      {confirmDeleteRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl p-5">
-            <div className="flex items-start gap-3">
-              <div className="rounded-full bg-destructive/15 p-2">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-[15px] font-bold text-foreground">Delete this interaction?</h3>
-                <p className="mt-1 text-[13px] text-muted-foreground">
-                  Permanently removes <span className="font-semibold text-foreground">{confirmDeleteRow.agentName}</span> · {confirmDeleteRow.date} · {confirmDeleteRow.time}, including transcript, emotion events, scores, policy compliance and trigger cache. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteId(null)}
-                disabled={deletingIds.has(confirmDeleteRow.id)}
-                className="h-10 rounded-lg border border-border bg-background px-4 text-[13px] font-semibold text-foreground hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDelete(confirmDeleteRow.id)}
-                disabled={deletingIds.has(confirmDeleteRow.id)}
-                className="inline-flex h-10 items-center gap-2 rounded-lg bg-destructive px-4 text-[13px] font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-              >
-                {deletingIds.has(confirmDeleteRow.id) ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

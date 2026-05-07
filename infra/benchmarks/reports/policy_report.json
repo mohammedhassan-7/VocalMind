@@ -13,26 +13,39 @@
   "passed": true,
   "samples": [
     {
-      "id": "account_unlock_call",
+      "id": "CALL_01_refund_outage",
       "gold_violations": [],
       "pred_violations": [],
       "gold_policy_ids": [],
       "pred_policy_ids": []
     },
     {
-      "id": "billing_dispute_call",
-      "gold_violations": [
-        "missing_identity_verification"
-      ],
-      "pred_violations": [
-        "missing_identity_verification"
-      ],
-      "gold_policy_ids": [
-        "policy_identity_verification"
-      ],
-      "pred_policy_ids": [
-        "policy_identity_verification"
-      ]
+      "id": "CALL_02_billing_dispute_escalation",
+      "gold_violations": [],
+      "pred_violations": [],
+      "gold_policy_ids": [],
+      "pred_policy_ids": []
+    },
+    {
+      "id": "CALL_03_tech_support_slow_internet",
+      "gold_violations": [],
+      "pred_violations": [],
+      "gold_policy_ids": [],
+      "pred_policy_ids": []
+    },
+    {
+      "id": "CALL_04_access_recovery_fraud",
+      "gold_violations": [],
+      "pred_violations": [],
+      "gold_policy_ids": [],
+      "pred_policy_ids": []
+    },
+    {
+      "id": "CALL_05_retention_abuse",
+      "gold_violations": [],
+      "pred_violations": [],
+      "gold_policy_ids": [],
+      "pred_policy_ids": []
     }
   ]
 }
