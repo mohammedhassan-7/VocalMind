@@ -385,7 +385,7 @@ export function KnowledgeBase() {
 
         <TabsContent value="policies" className="animate-in fade-in slide-in-from-bottom-2 duration-400 outline-none space-y-6">
           <div className="relative w-full md:w-80 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors z-10 pointer-events-none" />
             <Input
               placeholder="Search policies..."
               value={policySearch}
@@ -478,7 +478,7 @@ export function KnowledgeBase() {
 
         <TabsContent value="faqs" className="animate-in fade-in slide-in-from-bottom-2 duration-400 outline-none space-y-6">
           <div className="relative w-full md:w-80 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors z-10 pointer-events-none" />
             <Input
               placeholder="Search SOPs..."
               value={faqSearch}
@@ -570,7 +570,7 @@ export function KnowledgeBase() {
 
         <TabsContent value="kb" className="animate-in fade-in slide-in-from-bottom-2 duration-400 outline-none space-y-6">
           <div className="relative w-full md:w-80 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors z-10 pointer-events-none" />
             <Input
               placeholder="Search knowledge base..."
               value={kbSearch}
@@ -898,9 +898,6 @@ export function KnowledgeBase() {
                 {isPolicyDoc(selectedDoc) ? selectedDoc.title : isKBDoc(selectedDoc) ? selectedDoc.title : (selectedDoc as FAQData | null)?.question}
               </h3>
             </div>
-            <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 -mr-2 shadow-none border-none hover:bg-muted" onClick={() => setIsDetailOpen(false)}>
-              <X className="w-5 h-5" />
-            </Button>
           </div>
 
           <div className="flex-1 overflow-y-auto px-10 py-8 custom-scrollbar bg-background shadow-inner">

@@ -91,7 +91,7 @@ class BaseKaggleClient:
 
     async def _post(self, filename: str, content: bytes, content_type: str) -> dict[str, Any]:
         urls_to_try = [self.url, *self._fallback_urls(self.url)]
-        timeout = httpx.Timeout(300.0, connect=10.0)
+        timeout = httpx.Timeout(900.0, connect=10.0)
         last_error: Exception | None = None
         response: httpx.Response | None = None
 

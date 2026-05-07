@@ -45,6 +45,7 @@
     "@radix-ui/react-toggle": "1.1.2",
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
+    "@rollup/rollup-linux-x64-musl": "^4.60.3",
     "@tailwindcss/typography": "^0.5.19",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -93,6 +94,12 @@
     "vite": "6.3.5",
     "vite-plugin-istanbul": "^7.2.1",
     "vitest": "^4.0.18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@tailwindcss/oxide",
+      "esbuild"
+    ]
   },
   "nyc": {
     "extends": "@istanbuljs/nyc-config-typescript",

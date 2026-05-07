@@ -43,7 +43,7 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
-CACHE_SCHEMA_VERSION = 3
+CACHE_SCHEMA_VERSION = 4
 _evaluator_lock = threading.Lock()
 _policy_compliance_evaluator = None
 
@@ -93,8 +93,28 @@ def _log_step(interaction_id: UUID | str, step: str, **kwargs) -> None:
     logger.info("LLM trigger pipeline step: %s", step, extra=extra)
 
 
-def _services_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "services"
+def _candidate_rag_roots() -> list[Path]:
+    """
+    Return possible parents that contain the ``rag`` package, ordered by preference.
+
+    1) ``/app`` in the Docker container (services/rag is bind-mounted at /app/rag).
+    2) Repo-relative ``services/`` from this source file (local dev / pytest).
+    """
+    here = Path(__file__).resolve()
+    return [
+        Path("/app"),
+        here.parents[3] / "services",
+    ]
+
+
+def _ensure_rag_on_path() -> None:
+    """Append the first parent that actually contains ``rag/evaluator.py`` to sys.path."""
+    for root in _candidate_rag_roots():
+        if (root / "rag" / "evaluator.py").exists():
+            root_str = str(root)
+            if root_str not in sys.path:
+                sys.path.append(root_str)
+            return
 
 
 def _get_policy_compliance_evaluator():
@@ -113,9 +133,7 @@ def _get_policy_compliance_evaluator():
         if _policy_compliance_evaluator is not None:
             return _policy_compliance_evaluator
         try:
-            services_path = str(_services_path())
-            if services_path not in sys.path:
-                sys.path.append(services_path)
+            _ensure_rag_on_path()
             from rag.evaluator import PolicyComplianceEvaluator
             _policy_compliance_evaluator = PolicyComplianceEvaluator()
         except Exception as exc:
@@ -198,19 +216,75 @@ def _detect_cross_modal_dissonance(customer_text: str, acoustic_emotion: str, te
     )
 
 
+_TOPIC_KEYWORDS: dict[str, dict[str, float]] = {
+    "refund_request": {
+        "refund": 3.0,
+        "chargeback": 3.0,
+        "reimburse": 3.0,
+        "money back": 3.0,
+        "credit on": 2.0,
+        "credit my": 2.0,
+        "outage credit": 3.0,
+        "service outage": 2.5,
+        "prorated": 2.5,
+        "compensation": 2.0,
+        "goodwill": 2.0,
+        "return": 1.0,
+    },
+    "billing_issue": {
+        "invoice": 2.5,
+        "double charge": 3.0,
+        "overcharge": 3.0,
+        "billing error": 3.0,
+        "bill": 1.5,
+        "charge": 1.5,
+        "payment": 1.5,
+        "statement": 1.5,
+        "balance": 1.0,
+    },
+    "technical_support": {
+        "outage": 0.5,
+        "no internet": 0.5,
+        "router": 2.0,
+        "modem": 2.0,
+        "wifi": 2.0,
+        "wi-fi": 2.0,
+        "speed test": 2.5,
+        "reboot": 2.0,
+        "firmware": 2.5,
+        "crash": 2.0,
+        "error code": 2.5,
+        "not connecting": 1.5,
+        "troubleshoot": 2.5,
+        "blue screen": 3.0,
+        "ping": 1.5,
+    },
+    "account_access": {
+        "password": 2.5,
+        "login": 2.5,
+        "log in": 2.5,
+        "sign in": 2.5,
+        "locked out": 3.0,
+        "reset my": 2.0,
+        "two-factor": 2.5,
+        "2fa": 2.5,
+        "verification code": 2.5,
+        "username": 2.0,
+    },
+}
+
+
 def _detect_topic(transcript_text: str, retrieved_sop: str) -> str:
     source = f"{transcript_text}\n{retrieved_sop}".lower()
-    keyword_map = {
-        "refund_request": ["refund", "return", "chargeback"],
-        "billing_issue": ["bill", "charge", "invoice", "payment"],
-        "technical_support": ["error", "bug", "not working", "issue", "crash"],
-        "account_access": ["login", "password", "reset", "locked"],
-    }
-    scores: dict[str, int] = {}
-    for topic, keywords in keyword_map.items():
-        scores[topic] = sum(1 for keyword in keywords if keyword in source)
+    scores: dict[str, float] = {}
+    for topic, keyword_weights in _TOPIC_KEYWORDS.items():
+        score = 0.0
+        for keyword, weight in keyword_weights.items():
+            if keyword in source:
+                score += weight * source.count(keyword)
+        scores[topic] = score
     best_topic = max(scores, key=scores.get)
-    return best_topic if scores[best_topic] > 0 else "technical_support"
+    return best_topic if scores[best_topic] > 0 else "billing_issue"
 
 
 def _detect_topic_from_sop_chunks(chunks: list[RetrievedChunk]) -> str | None:
@@ -1023,10 +1097,23 @@ def _build_emotion_trigger_attribution(
     )
 
 
+EMOTION_TRANSITION_MIN_CONFIDENCE = 0.55
+EMOTION_TRANSITION_MAX_CARDS = 3
+
+
 def _build_emotion_transition_attributions(
     utterances: list[Utterance],
 ) -> list[TriggerAttribution]:
-    attributions: list[TriggerAttribution] = []
+    """
+    Emit only polarity-crossing emotion transitions per speaker.
+
+    Rationale: emitting one card for every consecutive emotion label change
+    floods the explainability deck with "No Trigger" / "Neutral" entries that
+    carry no review value. We surface only meaningful arc shifts
+    (positive↔negative) above a confidence threshold, capped at a small number
+    so the deck stays scannable.
+    """
+    candidates: list[tuple[float, Utterance, Utterance, str, str, str]] = []
     previous_by_speaker: dict[str, Utterance] = {}
 
     for utterance in utterances:
@@ -1043,6 +1130,25 @@ def _build_emotion_transition_attributions(
         if before == after:
             continue
 
+        before_polarity = _emotion_polarity(before)
+        after_polarity = _emotion_polarity(after)
+        if before_polarity == after_polarity:
+            continue
+        if "neutral" in (before_polarity, after_polarity):
+            continue
+
+        confidence = _clamp_unit(float(utterance.emotion_confidence or 0.0))
+        if confidence < EMOTION_TRANSITION_MIN_CONFIDENCE:
+            continue
+
+        candidates.append((confidence, previous, utterance, speaker, before, after))
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    selected = candidates[:EMOTION_TRANSITION_MAX_CARDS]
+    selected.sort(key=lambda item: item[2].sequence_index)
+
+    attributions: list[TriggerAttribution] = []
+    for confidence, previous, utterance, speaker, before, after in selected:
         span = EvidenceSpan(
             utterance_index=utterance.sequence_index,
             speaker=speaker,  # type: ignore[arg-type]
@@ -1051,23 +1157,25 @@ def _build_emotion_transition_attributions(
             start_seconds=utterance.start_time_seconds,
             end_seconds=utterance.end_time_seconds,
         )
+        direction = "improved" if _emotion_polarity(after) == "positive" else "deteriorated"
         evidence_chain = [
-            f"{speaker.title()} emotion changed from {before} to {after}.",
+            f"{speaker.title()} emotion {direction}: {before} → {after}.",
             f"Previous span: {(previous.text or '').strip() or 'No prior span available.'}",
             f"Current span: {(utterance.text or '').strip()}",
         ]
         reasoning = (
-            f"{speaker.title()} emotion shifted from {before} to {after} at {span.timestamp} "
-            "based on the detected emotion label for this utterance."
+            f"{speaker.title()} emotion {direction} from {before} to {after} at {span.timestamp}, "
+            "crossing emotional polarity above the noise threshold."
         )
+        verdict = "Cross-Modal Mismatch" if direction == "deteriorated" else "Neutral"
         attributions.append(
             TriggerAttribution(
                 attribution_id=f"emotion-change-{speaker}-{utterance.sequence_index}",
                 family="emotion",
-                trigger_type="Emotion Change",
-                title=f"{speaker.title()} emotion: {before} to {after}",
-                verdict="Neutral",
-                confidence=_clamp_unit(float(utterance.emotion_confidence or 0.5)),
+                trigger_type="Emotion Polarity Shift",
+                title=f"{speaker.title()} emotion: {before} → {after}",
+                verdict=verdict,  # type: ignore[arg-type]
+                confidence=confidence,
                 evidence_span=span,
                 reasoning=reasoning,
                 evidence_chain=evidence_chain,
@@ -1153,6 +1261,13 @@ def _build_claim_provenance_cards(
     policy_chunks: list[RetrievedChunk],
     org_filter: str | None,
 ) -> list[ClaimProvenance]:
+    """
+    Build claim provenance cards.
+
+    Always emits at least one card when an agent statement and any policy
+    context exist, so the UI's "Retrieval Provenance Scoring" deck does not
+    silently render empty.
+    """
     claim_citations = [
         citation
         for citation in nli_policy.citations
@@ -1160,13 +1275,26 @@ def _build_claim_provenance_cards(
     ]
     if not claim_citations:
         claim_citations = _fallback_claim_citations(agent_statement)
+    if not claim_citations and (agent_statement or "").strip():
+        claim_citations = [
+            EvidenceCitation(
+                source="transcript",
+                speaker="agent",
+                quote=_truncate_text(agent_statement, 220),
+            )
+        ]
 
     cards: list[ClaimProvenance] = []
     verdict = _map_nli_verdict(nli_policy.nli_category, nli_policy.insufficient_evidence)
+    policy_citation = _best_citation(nli_policy.citations, "policy")
+    fallback_policy_text = (
+        (policy_citation.quote if policy_citation else None)
+        or policy_context.text
+        or ""
+    )
     for index, citation in enumerate(claim_citations[:2], start=1):
         span = _span_from_citation(citation, utterances)
         claim_text = (citation.quote or "").strip()
-        policy_citation = _best_citation(nli_policy.citations, "policy")
         per_claim_chunks: list[RetrievedChunk] = []
         if claim_text:
             try:
@@ -1185,11 +1313,21 @@ def _build_claim_provenance_cards(
         policy_reference = _build_policy_reference_from_chunk(
             best_policy_chunk,
             source_kind="policy",
-            fallback_text=policy_citation.quote if policy_citation else policy_context.text,
+            fallback_text=fallback_policy_text,
             fallback_reference=f"{policy_context.category or 'Policy'} reference",
             version=policy_context.version,
             category=policy_context.category,
         )
+        if not policy_reference and fallback_policy_text.strip():
+            policy_reference = PolicyReference(
+                source="policy",  # type: ignore[arg-type]
+                reference=f"{policy_context.category or 'Policy'} reference",
+                clause=_truncate_text(_clean_display_text(fallback_policy_text), 260) or "Active policy context",
+                doc_type="policy",  # type: ignore[arg-type]
+                policy_ref=[],
+                version=policy_context.version,
+                category=policy_context.category,
+            )
         if not policy_reference:
             continue
 
@@ -1809,6 +1947,8 @@ async def _load_cached_trigger_report(
     interaction_id: UUID,
     org_filter: str | None,
 ) -> InteractionLLMTriggerReport | None:
+    if org_filter is not None:
+        org_filter = str(org_filter)
     cached_result = await session.exec(
         select(InteractionLLMTriggerCache).where(InteractionLLMTriggerCache.interaction_id == interaction_id)
     )
@@ -1840,6 +1980,8 @@ async def _persist_trigger_report(
     *,
     commit: bool,
 ) -> None:
+    if org_filter is not None:
+        org_filter = str(org_filter)
     cached_result = await session.exec(
         select(InteractionLLMTriggerCache).where(InteractionLLMTriggerCache.interaction_id == report.interaction_id)
     )
@@ -1858,6 +2000,8 @@ async def invalidate_llm_trigger_cache(
     session: AsyncSession,
     org_filter: str | None = None,
 ) -> int:
+    if org_filter is not None:
+        org_filter = str(org_filter)
     from sqlalchemy import delete
     stmt = delete(InteractionLLMTriggerCache)
     if org_filter:
@@ -1949,6 +2093,12 @@ async def evaluate_interaction_triggers(
             f"time {_format_timestamp(selected_emotion_window.start_seconds)}-"
             f"{_format_timestamp(selected_emotion_window.end_seconds)})."
         )
+        focus_block = (
+            "\n\n---\n[Focus window — peak emotional signal]\n"
+            f"{selected_emotion_window.text.strip()}\n---"
+        )
+        if focus_block.strip() and focus_block not in customer_text:
+            customer_text = _truncate_text(customer_text + focus_block, 3600)
 
     try:
         sop_resolution = resolve_retrieved_sop_context(

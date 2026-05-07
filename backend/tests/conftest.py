@@ -22,6 +22,8 @@ app_main.prewarm_dashboard_cache = AsyncMock(return_value=None)
 app_main.seed_nexalink_main = AsyncMock(return_value=None)
 app_main.start_processing_worker = AsyncMock(return_value=None)
 app_main.stop_processing_worker = AsyncMock(return_value=None)
+app_main.start_audio_folder_watcher = AsyncMock(return_value=None)
+app_main.stop_audio_folder_watcher = AsyncMock(return_value=None)
 app = app_main.app
 settings.SECRET_KEY = "test-secret-key-minimum-32-bytes-long"
 

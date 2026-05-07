@@ -139,10 +139,18 @@ describe("LLM trigger sections", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Emotion Trigger Reasoning")).toBeInTheDocument();
-    expect(screen.getByText(/billing_issue/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Contradiction/).length).toBeGreaterThan(0);
-    expect(screen.getByText("Evidence-Anchored Explainability")).toBeInTheDocument();
+    expect(await screen.findByText("Emotion Analysis")).toBeInTheDocument();
+    
+    // Click Process tab to make processAdherence visible
+    const processTab = screen.getByRole("button", { name: /^Process$/i });
+    processTab.click();
+    expect(await screen.findByText(/billing_issue/i)).toBeInTheDocument();
+    
+    // Click Policy tab to make nliPolicy visible
+    const policyTab = screen.getByRole("button", { name: /^Policy$/i });
+    policyTab.click();
+    expect((await screen.findAllByText(/Contradiction/i)).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/Evidence-Anchored Explainability/i)).toBeInTheDocument();
   });
 
   it("renders agent llm coaching section", async () => {
@@ -154,8 +162,16 @@ describe("LLM trigger sections", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("LLM Coaching Insights")).toBeInTheDocument();
-    expect(screen.getByText("billing_issue")).toBeInTheDocument();
-    expect(screen.getAllByText("Contradiction").length).toBeGreaterThan(0);
+    expect(await screen.findByText("Emotion Feedback")).toBeInTheDocument();
+    
+    // Click Process tab to make processAdherence visible
+    const processTab = screen.getByRole("button", { name: /^Process$/i });
+    processTab.click();
+    expect(await screen.findByText(/billing_issue/i)).toBeInTheDocument();
+    
+    // Click Policy tab to make nliPolicy visible
+    const policyTab = screen.getByRole("button", { name: /^Policy$/i });
+    policyTab.click();
+    expect((await screen.findAllByText(/Contradiction/i)).length).toBeGreaterThan(0);
   });
 });

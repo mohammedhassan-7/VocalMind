@@ -220,8 +220,8 @@ def test_build_emotion_transition_attributions_tracks_each_speaker_change():
             sequence_index=2,
             speaker_role=SimpleNamespace(value="agent"),
             text="Let me explain the next step.",
-            emotion="neutral",
-            emotion_confidence=0.55,
+            emotion="frustrated",
+            emotion_confidence=0.75,
             start_time_seconds=22.0,
             end_time_seconds=24.0,
         ),
@@ -229,8 +229,8 @@ def test_build_emotion_transition_attributions_tracks_each_speaker_change():
             sequence_index=3,
             speaker_role=SimpleNamespace(value="agent"),
             text="Great, we have fully resolved it.",
-            emotion="helpful",
-            emotion_confidence=0.74,
+            emotion="happy",
+            emotion_confidence=0.85,
             start_time_seconds=30.0,
             end_time_seconds=33.0,
         ),
@@ -240,7 +240,7 @@ def test_build_emotion_transition_attributions_tracks_each_speaker_change():
 
     assert len(attributions) == 2
     assert attributions[0].family == "emotion"
-    assert attributions[0].trigger_type == "Emotion Change"
+    assert attributions[0].trigger_type == "Emotion Polarity Shift"
     assert "customer" in attributions[0].title.lower()
     assert "agent" in attributions[1].title.lower()
 

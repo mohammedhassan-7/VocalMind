@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from importlib.util import find_spec
 from dataclasses import dataclass
-from functools import lru_cache
 
 from app.core.config import settings
 
@@ -169,30 +167,6 @@ def _top_text_emotion_from_scores(scores: dict[str, float]) -> tuple[str, float]
     return label, confidence
 
 
-@lru_cache(maxsize=1)
-def _get_hf_text_classifier():
-    if find_spec("torch") is None:
-        raise RuntimeError("PyTorch is not installed in backend environment")
-
-    from transformers import pipeline
-
-    return pipeline(
-        "text-classification",
-        model=settings.TEXT_EMOTION_MODEL,
-        top_k=None,
-    )
-
-
-def _infer_text_emotion_hf(text: str) -> tuple[str, float]:
-    classifier = _get_hf_text_classifier()
-    raw = classifier(text)
-    scores = raw[0] if raw and isinstance(raw[0], list) else []
-    if not scores:
-        return "neutral", 0.3
-
-    return _top_text_emotion_from_scores(_aggregate_text_emotion_scores(scores))
-
-
 def infer_text_emotion_with_provider(text: str) -> tuple[str, float]:
     global _HF_PROVIDER_DISABLED_REASON
 
@@ -201,12 +175,20 @@ def infer_text_emotion_with_provider(text: str) -> tuple[str, float]:
         if _HF_PROVIDER_DISABLED_REASON is not None:
             return infer_text_emotion(text)
 
+        import httpx
         try:
-            return _infer_text_emotion_hf(text)
+            url = f"{settings.EMOTION_API_URL}/predict_text"
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(url, json={"text": text})
+                if response.status_code == 200:
+                    data = response.json()
+                    return data["emotion"], data["confidence"]
+                else:
+                    raise RuntimeError(f"GPU Service returned {response.status_code}: {response.text}")
         except Exception as exc:
             _HF_PROVIDER_DISABLED_REASON = str(exc)
             logger.warning(
-                "HF text emotion provider disabled for this process, using rule-based fallback: %s",
+                "GPU text emotion provider disabled for this process, using rule-based fallback: %s",
                 exc,
             )
 

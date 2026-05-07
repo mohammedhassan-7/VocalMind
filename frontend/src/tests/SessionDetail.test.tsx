@@ -193,15 +193,23 @@ describe('SessionDetail', () => {
         expect(screen.getByText('Transcript')).toBeInTheDocument()
     })
 
-    it('renders automated evaluation section with process and policy cards', async () => {
+    it('renders tabbed analysis with emotion, process and policy data', async () => {
         getInteractionDetailMock.mockResolvedValue(detail)
         renderWithId()
 
-        expect(await screen.findByText('Emotion Trigger Reasoning')).toBeInTheDocument()
-        expect(screen.getByText('Automated Evaluation')).toBeInTheDocument()
-        expect(screen.getByText(/Process Adherence/)).toBeInTheDocument()
-        expect(screen.getByText(/Policy Inference/)).toBeInTheDocument()
+        // Default tab: Emotion Analysis content visible
+        expect(await screen.findByText('Emotion Analysis')).toBeInTheDocument()
+
+        // Click Process tab to see process adherence
+        const processTab = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'Process')
+        fireEvent.click(processTab!)
+        expect(await screen.findByText(/Process Adherence/)).toBeInTheDocument()
         expect(screen.getByText(/billing_issue/)).toBeInTheDocument()
+
+        // Click Policy tab to see policy inference
+        const policyTab = screen.getAllByRole('button').find(b => b.textContent?.trim() === 'Policy')
+        fireEvent.click(policyTab!)
+        expect(await screen.findByText(/Policy Inference/)).toBeInTheDocument()
         expect(screen.getAllByText(/Contradiction/).length).toBeGreaterThan(0)
     })
 
@@ -229,8 +237,10 @@ describe('SessionDetail', () => {
         getInteractionDetailMock.mockResolvedValue(detail)
         renderWithId()
 
-        const confidenceElements = await screen.findAllByText('80', { exact: false })
-        expect(confidenceElements.length).toBeGreaterThan(0)
-        expect(screen.getByText('74', { exact: false })).toBeInTheDocument()
+        const confidence80Elements = await screen.findAllByText('80', { exact: false })
+        expect(confidence80Elements.length).toBeGreaterThan(0)
+
+        const confidence74Elements = await screen.findAllByText('74', { exact: false })
+        expect(confidence74Elements.length).toBeGreaterThan(0)
     })
 })

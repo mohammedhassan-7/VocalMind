@@ -172,3 +172,55 @@ async def test_process_interaction_uses_stable_role_mapping(monkeypatch, tmp_pat
     emotion_events = session.exec(select(EmotionEvent).where(EmotionEvent.interaction_id == interaction_id)).all()
     assert len(emotion_events) == 1
     assert emotion_events[0].new_emotion == "frustrated"
+
+
+def test_assign_cluster_roles_handles_agent_speaking_first_as_speaker_00():
+    """Regression: WhisperX assigns SPEAKER_00 to whichever voice it hears first.
+    When the agent answers (speaks first), the agent voice gets SPEAKER_00 — the
+    old endswith("00") heuristic mislabeled the agent as customer.
+    """
+    segments = [
+        {"start": 0.0, "end": 5.0, "speaker": "SPEAKER_00",
+         "text": "Thank you for calling NexaLink Telecommunications. My name is Priya. Who do I have the pleasure of speaking with today?"},
+        {"start": 5.5, "end": 8.0, "speaker": "SPEAKER_01",
+         "text": "Hi, this is Marcus Whitfield."},
+        {"start": 8.5, "end": 14.0, "speaker": "SPEAKER_00",
+         "text": "Hello, Mr. Whitfield. How can I help you today?"},
+        {"start": 14.5, "end": 22.0, "speaker": "SPEAKER_01",
+         "text": "My internet was out for two days. I want a credit on my bill."},
+    ]
+    role_map = ip.assign_cluster_roles_from_text(segments, agent_name="Priya")
+    assert role_map["SPEAKER_00"] == SpeakerRole.agent, "Agent who speaks first must not be mislabeled as customer"
+    assert role_map["SPEAKER_01"] == SpeakerRole.customer
+
+
+def test_assign_cluster_roles_handles_three_clusters_warm_transfer():
+    """Tier 2 warm transfer: 2 agents + 1 customer. The customer must be the
+    cluster with the lowest net agent score, not the lowest cluster ID.
+    """
+    segments = [
+        {"start": 0.0, "end": 4.0, "speaker": "SPEAKER_01",
+         "text": "Thank you for calling. My name is Daniel. How can I help you?"},
+        {"start": 4.5, "end": 12.0, "speaker": "SPEAKER_02",
+         "text": "I was charged $247. My bill is wrong. I cannot believe this."},
+        {"start": 12.5, "end": 20.0, "speaker": "SPEAKER_01",
+         "text": "I understand. Let me pull up your account. I'll need to verify a few details."},
+        {"start": 600.0, "end": 610.0, "speaker": "SPEAKER_00",
+         "text": "Hi Daniel, this is Sarah Chen taking the transfer. I can help."},
+    ]
+    role_map = ip.assign_cluster_roles_from_text(segments, agent_name="Daniel")
+    assert role_map["SPEAKER_02"] == SpeakerRole.customer
+    assert role_map["SPEAKER_01"] == SpeakerRole.agent
+    assert role_map["SPEAKER_00"] == SpeakerRole.agent  # Tier 2 escalation agent
+
+
+def test_assign_cluster_roles_honors_explicit_agent_customer_labels():
+    """If diarization (or DistilBERT relabeler) already labeled segments as
+    'agent'/'customer', cluster scoring must not re-decide them.
+    """
+    segments = [
+        {"start": 0.0, "end": 5.0, "speaker": "agent", "text": "Thank you for calling."},
+        {"start": 5.5, "end": 10.0, "speaker": "customer", "text": "Hi, my account is locked."},
+    ]
+    role_map = ip.assign_cluster_roles_from_text(segments, agent_name="Priya")
+    assert role_map == {}  # explicit labels are passed through unchanged

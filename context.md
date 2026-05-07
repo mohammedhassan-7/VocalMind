@@ -43,7 +43,7 @@ Key capabilities:
 
 ```
 backend/                  FastAPI API gateway
-├── app/main.py            App factory, lifespan (create tables, seed, start worker)
+├── app/main.py            App factory, lifespan (tables → seed → worker → audio watcher)
 ├── app/api/
 │   ├── main.py            Router aggregator — 16 domain routers
 │   ├── deps.py             DI: get_db, get_current_user, get_supabase
@@ -117,11 +117,13 @@ infra/
 ├── scripts/               seed/, eval/ (5 component scripts + eval_all.py),
 │                          e2e_local_audio.py, migrate.py, prepare_speaker_role_model.py
 ├── benchmarks/            thresholds.json, expected/ (gold standards), reports/
-└── fixtures/audio/        Test WAV files + nexalink/ (10 synthetic recordings)
+└── fixtures/audio/        Test fixtures (gitignored — wav/mp3 not committed)
 
-storage/                  Local storage (gitignored at runtime)
+storage/                  Local storage (audio files gitignored)
 ├── docs/nexalink/        SOP procedures (5), policy docs (3), KB (1) — PDF+DOCX
-└── audio/nexalink/       10 synthetic test recordings
+└── audio/nexalink/       5 scripted call recordings, named CALL_<NN>_<agent>_<scenario>.wav
+                          Auto-ingested by audio_folder_watcher on backend startup +
+                          every 15s while running (drop a file → it gets queued)
 
 data/                     Parsed SOP markdown/JSON for fallback retrieval
 research/                 Jupyter notebooks (emotion, ASR, diarization, finetuning, voice-gen)
@@ -193,10 +195,13 @@ All prompts include `_INJECTION_GUARD` — treats every piece of user data as un
 
 | Collection | Granularity | Used for |
 |---|---|---|
-| `sop_parents` | H1/H2/H3 header splits | Compliance evaluation, LLM trigger policy context |
-| `policy_children` | 400-char recursive, 80 overlap | Answer synthesis, query engine |
+| `policy_parents` (`QDRANT_COLLECTION_PARENTS`) | H1/H2/H3 header splits of policy docs | Policy compliance evaluator, NLI policy check (LLM trigger) |
+| `policy_children` (`collection_children`) | 400-char recursive, 80 overlap | Manager-assistant answer synthesis (Q&A only) |
+| `sop_parents` (`QDRANT_COLLECTION_SOP_PARENTS`) | H1/H2/H3 header splits of SOP + KB docs | Process adherence (SOP) and KB claim-validation lookups |
 
 > Policy documents are indexed at both parent and child granularity. SOP and KB documents are indexed at parent granularity only (no separate children collection).
+>
+> Selection rule: **parents = compliance / SOP / KB** (the consumer needs the whole rule, with all conditions and exceptions), **children = Q&A answer synthesis** (the consumer needs a precise span to quote). See `docs/rag/RAG_OVERVIEW.md` for the full matrix.
 
 **Ingestion flow**: `storage/docs/{org}/` PDFs → Docling parse → ftfy clean → extract org/doc_type/category metadata → parent+child chunks → validate → Ollama embed (snowflake-arctic-embed2) → Qdrant upload with deterministic content-hash UUIDs (re-ingesting same doc = same points)
 

@@ -59,6 +59,9 @@ def evaluate_resolution(
 
     resolved_accuracy = safe_div(correct, total)
     _, _, missing_step_f1 = precision_recall_f1(step_tp, step_fp, step_fn)
+    # No missing steps in gold and none predicted → all steps present and correct.
+    if step_tp == 0 and step_fp == 0 and step_fn == 0:
+        missing_step_f1 = 1.0
     min_resolved = float(thresholds.get("min_resolved_accuracy", 0.0))
     min_f1 = float(thresholds.get("min_missing_step_f1", 0.0))
 

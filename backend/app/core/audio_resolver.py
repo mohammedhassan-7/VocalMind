@@ -26,19 +26,25 @@ def audio_filename_from_path(audio_path: str) -> str:
 
 
 def resolve_local_audio_path(audio_path: str) -> Path | None:
-    if "\x00" in audio_path:
-        return None
-    if Path(audio_path).is_absolute():
+    if not audio_path or "\0" in audio_path or "\x00" in audio_path or Path(audio_path).is_absolute():
         return None
     backend_dir = Path(__file__).resolve().parents[2]
     storage_root = Path(settings.LOCAL_AUDIO_STORAGE_DIR).resolve()
+    audio_root = (storage_root.parent / "audio").resolve()
     candidates = [Path(audio_path), backend_dir / audio_path]
-    allowed_roots = [storage_root, (backend_dir / settings.LOCAL_AUDIO_STORAGE_DIR).resolve()]
+    if audio_path.startswith("../storage/"):
+        candidates.append(storage_root.parent / audio_path[len("../storage/"):])
+    allowed_roots = [
+        storage_root,
+        audio_root,
+        (backend_dir / settings.LOCAL_AUDIO_STORAGE_DIR).resolve(),
+        (backend_dir / ".." / "storage" / "audio").resolve(),
+    ]
     for candidate in candidates:
         try:
             resolved = candidate.resolve(strict=False)
         except (ValueError, OSError):
-            return None
+            continue
         if not any(resolved.is_relative_to(root) for root in allowed_roots):
             continue
         if resolved.exists() and resolved.is_file():

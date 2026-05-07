@@ -6,6 +6,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from sqlmodel import delete, select
@@ -33,6 +34,7 @@ from app.models.organization import Organization
 from app.models.policy import CompanyPolicy, OrganizationPolicy, PolicyCompliance
 from app.models.processing import ProcessingJob
 from app.models.transcript import Transcript
+from app.models.user import User
 from app.models.utterance import Utterance
 
 
@@ -145,57 +147,164 @@ async def save_audio_upload(organization_slug: str, interaction_id: UUID, filena
     return target_path.resolve()
 
 
-_AGENT_TEXT_HINTS = (
-    "how can i help",
-    "can you provide",
-    "let me check",
-    "i can help",
-    "i can assist",
-    "please verify",
+# Weighted phrase tables for content-based speaker role inference.
+# Diarization (WhisperX/PyAnnote) clusters voices into arbitrary IDs (SPEAKER_00,
+# SPEAKER_01); the cluster IDs carry no role semantics. We score each cluster's
+# accumulated text against these phrase lists to decide which cluster is the
+# agent and which is the customer.
+_AGENT_PHRASE_WEIGHTS: tuple[tuple[str, int], ...] = (
+    # Strong scripted openings/closings (call-center signature)
+    ("thank you for calling", 10),
+    ("thanks for calling", 10),
+    ("is there anything else i can help", 10),
+    ("welcome to", 8),
+    ("how can i help", 8),
+    ("how may i help", 8),
+    ("how can i assist", 8),
+    ("case reference", 8),
+    # Strong agent phrasing
+    ("i'll need to verify", 6),
+    ("could you please confirm", 6),
+    ("could you please verify", 6),
+    ("let me pull up", 6),
+    ("let me look up", 6),
+    ("my name is", 6),
+    ("i can help you", 6),
+    ("i can assist", 6),
+    ("your case", 6),
+    ("case number", 6),
+    ("i'm sorry to hear", 5),
+    ("please verify", 5),
+    ("for verification", 5),
+    # Possessive flips — agent talks about the CUSTOMER's account
+    ("your account", 4),
+    ("your bill", 4),
+    ("your service", 4),
+    ("your name", 3),
+    ("on file", 4),
+    ("let me check", 3),
+    ("i understand", 3),
+    ("i apologize", 4),
 )
-_CUSTOMER_TEXT_HINTS = (
-    "i need help",
-    "i can't",
-    "cannot access",
-    "my account",
-    "thank you",
+_CUSTOMER_PHRASE_WEIGHTS: tuple[tuple[str, int], ...] = (
+    ("i need help", 8),
+    ("i was charged", 8),
+    ("i want a credit", 8),
+    ("are you serious", 6),
+    ("i'm calling because", 6),
+    ("cannot access", 6),
+    # Possessive flips — customer talks about THEIR OWN things
+    ("my bill", 6),
+    ("my internet", 6),
+    ("my service", 6),
+    ("my account", 4),
+    ("i can't", 5),
+    ("i cannot", 5),
+    ("i want to", 4),
+    ("i need to", 3),
 )
+
+
+def assign_cluster_roles_from_text(
+    segments: list[dict[str, Any]],
+    agent_name: str | None = None,
+) -> dict[str, SpeakerRole]:
+    """Decide which raw diarization clusters are agent vs customer based on content.
+
+    WhisperX/PyAnnote returns cluster labels (SPEAKER_00, SPEAKER_01, ...) that
+    are arbitrary IDs; only what each cluster *says* reveals its role. We
+    aggregate per-cluster text, score it against phrase tables, and assign roles
+    by net agent score.
+
+    Returns a mapping ``{raw_label: SpeakerRole}``. Segments with explicit
+    "agent"/"customer" labels are skipped (they are honored verbatim later).
+    """
+    cluster_texts: dict[str, list[str]] = {}
+    cluster_first_seen: dict[str, float] = {}
+    for segment in segments:
+        raw = (segment.get("speaker") or "").strip()
+        if not raw or raw.lower() in {"agent", "customer"}:
+            continue
+        cluster_texts.setdefault(raw, []).append((segment.get("text") or "").strip().lower())
+        start = float(segment.get("start") or 0.0)
+        if raw not in cluster_first_seen or start < cluster_first_seen[raw]:
+            cluster_first_seen[raw] = start
+
+    if not cluster_texts:
+        return {}
+
+    name_norm = (agent_name or "").strip().lower()
+
+    scores: dict[str, tuple[int, int]] = {}
+    for cluster, texts in cluster_texts.items():
+        joined = " ".join(texts)
+        agent_score = sum(weight for phrase, weight in _AGENT_PHRASE_WEIGHTS if phrase in joined)
+        customer_score = sum(weight for phrase, weight in _CUSTOMER_PHRASE_WEIGHTS if phrase in joined)
+
+        # Self-introduction with the known agent name is a near-decisive signal.
+        if name_norm and name_norm not in {"agent", "customer"}:
+            if f"my name is {name_norm}" in joined or f"this is {name_norm}" in joined:
+                agent_score += 15
+
+        # Whoever opens the call with the scripted greeting is the agent.
+        if cluster_first_seen.get(cluster, float("inf")) < 15.0 and (
+            "thank you for calling" in joined
+            or "thanks for calling" in joined
+            or "welcome to" in joined
+        ):
+            agent_score += 10
+
+        scores[cluster] = (agent_score, customer_score)
+
+    # Single-cluster audio: pick role by sign of (agent − customer).
+    if len(scores) == 1:
+        cluster, (a, c) = next(iter(scores.items()))
+        return {cluster: SpeakerRole.agent if a >= c else SpeakerRole.customer}
+
+    # Multi-cluster: cluster with lowest net agent score is the customer; the
+    # rest are agents. Handles handovers (CALL_02 / CALL_04 Tier 2 transfer)
+    # where there are 2+ agent voices and one customer voice.
+    nets = {cluster: a - c for cluster, (a, c) in scores.items()}
+    # Tie-break: cluster speaking earlier wins agent (call-center convention),
+    # i.e. for the customer label we prefer the *later* speaker on a tie.
+    customer_cluster = min(
+        nets,
+        key=lambda k: (nets[k], -cluster_first_seen.get(k, 0.0)),
+    )
+
+    return {
+        cluster: SpeakerRole.customer if cluster == customer_cluster else SpeakerRole.agent
+        for cluster in cluster_texts
+    }
 
 
 def _speaker_role_from_label(
     label: str | None,
-    index: int,
     *,
-    text: str = "",
-    role_map: dict[str, SpeakerRole] | None = None,
+    cluster_map: dict[str, SpeakerRole],
+    default: SpeakerRole = SpeakerRole.customer,
 ) -> SpeakerRole:
-    normalized = (label or "").strip().lower()
-    if normalized in {"agent", "customer"}:
-        return SpeakerRole.agent if normalized == "agent" else SpeakerRole.customer
-    if "agent" in normalized or normalized in {"speaker_1", "spk1", "s1"}:
-        return SpeakerRole.agent
-    if "customer" in normalized or normalized in {"speaker_0", "spk0", "s0"}:
-        return SpeakerRole.customer
-    if normalized.endswith("00") or normalized.endswith("_0"):
-        return SpeakerRole.customer
-    if normalized.endswith("01") or normalized.endswith("_1"):
-        return SpeakerRole.agent
+    """Resolve a single segment's role.
 
-    text_norm = (text or "").strip().lower()
-    if any(hint in text_norm for hint in _AGENT_TEXT_HINTS):
+    Priority:
+      1. Explicit "agent"/"customer" labels (e.g. set by the DistilBERT
+         relabel pass) win as-is.
+      2. Cluster map decision from ``assign_cluster_roles_from_text``.
+      3. Caller-supplied default.
+    """
+    if not label:
+        return default
+    raw = label.strip()
+    if not raw:
+        return default
+    normalized = raw.lower()
+    if normalized == "agent":
         return SpeakerRole.agent
-    if any(hint in text_norm for hint in _CUSTOMER_TEXT_HINTS):
+    if normalized == "customer":
         return SpeakerRole.customer
-
-    if normalized and role_map is not None and normalized != "unknown":
-        existing = role_map.get(normalized)
-        if existing is not None:
-            return existing
-        assigned = SpeakerRole.customer if SpeakerRole.customer not in role_map.values() else SpeakerRole.agent
-        role_map[normalized] = assigned
-        return assigned
-
-    return SpeakerRole.customer if index == 0 else SpeakerRole.agent
+    if raw in cluster_map:
+        return cluster_map[raw]
+    return cluster_map.get(normalized, default)
 
 
 async def create_processing_jobs(session: AsyncSession, interaction_id: UUID) -> None:
@@ -461,7 +570,9 @@ async def process_interaction(interaction_id: UUID) -> None:
 
         segments = analysis.get("segments", []) or []
         segments = relabel_segments_with_speaker_model([dict(s) for s in segments])
-        diarization_role_map: dict[str, SpeakerRole] = {}
+        agent_user = await session.get(User, interaction.agent_id) if interaction.agent_id else None
+        agent_name = agent_user.name if agent_user else None
+        cluster_role_map = assign_cluster_roles_from_text(segments, agent_name)
         transcript_text = (analysis.get("text") or "").strip()
         if not transcript_text:
             transcript_text = " ".join((segment.get("text") or "").strip() for segment in segments).strip()
@@ -475,9 +586,8 @@ async def process_interaction(interaction_id: UUID) -> None:
         for index, segment in enumerate(segments):
             speaker_role = _speaker_role_from_label(
                 segment.get("speaker"),
-                index,
-                text=(segment.get("text") or ""),
-                role_map=diarization_role_map,
+                cluster_map=cluster_role_map,
+                default=SpeakerRole.agent if index == 0 else SpeakerRole.customer,
             )
             emotion_scores = segment.get("emotion_scores") or []
             emotion_confidence = 0.0

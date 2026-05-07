@@ -94,11 +94,11 @@ _ALIGNMENT_CHECKPOINT = Path("/root/.cache/torch/hub/checkpoints/wav2vec2_fairse
 
 if torch.cuda.is_available():
     DEVICE = "cuda"
-    COMPUTE_TYPE = "float16"
+    COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 else:
     # CPU mode keeps local E2E functional on machines without GPU passthrough.
     DEVICE = "cpu"
-    COMPUTE_TYPE = "int8"
+    COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Overlap detection (from main_v5_final.py)

@@ -1,13 +1,36 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router";
 import { parse, isValid } from "date-fns";
-import { Search, ArrowDown, ArrowUp, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  Search, ArrowDown, ArrowUp, Loader2, AlertTriangle,
+  RefreshCw, MoreHorizontal, Eye, RotateCcw, Trash2,
+} from "lucide-react";
 import {
   getInteractionDetail,
   getInteractions,
   reprocessInteraction,
+  deleteInteraction,
   type InteractionSummary,
 } from "../../services/api";
+
+function scoreColor(score: number): string {
+  if (score >= 85) return "#10B981";
+  if (score >= 70) return "var(--primary)";
+  if (score >= 50) return "#F59E0B";
+  return "#EF4444";
+}
+
+function ScoreChip({ score }: { score: number }) {
+  const color = scoreColor(score);
+  return (
+    <span
+      className="inline-flex items-center justify-center min-w-[2.5rem] rounded-md px-1.5 py-0.5 text-[12px] font-bold tabular-nums"
+      style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}30` }}
+    >
+      {score}
+    </span>
+  );
+}
 
 function getFailurePreview(row: InteractionSummary): string {
   const failures = row.processingFailures || [];
@@ -43,7 +66,11 @@ function isFailedStatus(row: InteractionSummary): boolean {
   return String(row.status || "").toLowerCase() === "failed";
 }
 
-/** Backend sends `date` as YYYY-MM-DD and `time` as 12h (e.g. strftime "%I:%M %p"). */
+function isProcessingStatus(row: InteractionSummary): boolean {
+  const s = String(row.status || "").toLowerCase();
+  return s === "processing" || s === "pending";
+}
+
 function interactionDateMs(row: InteractionSummary): number {
   const datePart = (row.date || "").trim();
   const timePart = (row.time || "").trim();
@@ -61,26 +88,58 @@ function interactionDateMs(row: InteractionSummary): number {
   return isValid(dateOnly) ? dateOnly.getTime() : 0;
 }
 
+const POLL_INTERVAL = 8000;
+
 export function SessionInspector() {
   const [interactions, setInteractions] = useState<InteractionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reprocessingIds, setReprocessingIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
-
   const [sortField, setSortField] = useState<"score" | "date" | "duration">("score");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Action menu
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
+
+  // Initial fetch
   useEffect(() => {
     getInteractions()
       .then(setInteractions)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Poll for processing rows
+  const hasProcessing = interactions.some(isProcessingStatus);
+  useEffect(() => {
+    if (!hasProcessing) return;
+    const timer = setInterval(() => {
+      getInteractions()
+        .then(setInteractions)
+        .catch(() => {});
+    }, POLL_INTERVAL);
+    return () => clearInterval(timer);
+  }, [hasProcessing]);
 
   const handleSort = (field: "score" | "date" | "duration") => {
     if (sortField === field) {
@@ -92,8 +151,24 @@ export function SessionInspector() {
     setCurrentPage(1);
   };
 
+  const handleDelete = async (interactionId: string) => {
+    setConfirmDeleteId(null);
+    setOpenMenuId(null);
+    setActionError(null);
+    setDeletingIds((prev) => new Set(prev).add(interactionId));
+    try {
+      await deleteInteraction(interactionId);
+      setInteractions((prev) => prev.filter((i) => i.id !== interactionId));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to delete interaction");
+    } finally {
+      setDeletingIds((prev) => { const n = new Set(prev); n.delete(interactionId); return n; });
+    }
+  };
+
   const handleReprocess = async (interactionId: string) => {
     setActionError(null);
+    setOpenMenuId(null);
     setReprocessingIds((prev) => new Set(prev).add(interactionId));
     try {
       await reprocessInteraction(interactionId);
@@ -139,15 +214,11 @@ export function SessionInspector() {
       const dateA = interactionDateMs(a);
       const dateB = interactionDateMs(b);
       comparison = dateA - dateB;
-      if (comparison === 0) {
-        comparison = a.id.localeCompare(b.id);
-      }
+      if (comparison === 0) comparison = a.id.localeCompare(b.id);
     } else if (sortField === "duration") {
       const [mA, sA] = a.duration.split(":").map(Number);
       const [mB, sB] = b.duration.split(":").map(Number);
-      const durA = (mA || 0) * 60 + (sA || 0);
-      const durB = (mB || 0) * 60 + (sB || 0);
-      comparison = durA - durB;
+      comparison = ((mA || 0) * 60 + (sA || 0)) - ((mB || 0) * 60 + (sB || 0));
     }
     return sortOrder === "asc" ? -comparison : comparison;
   });
@@ -194,15 +265,13 @@ export function SessionInspector() {
           {actionError}
         </div>
       )}
-      {/* Top Controls */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-[20px] font-bold text-foreground mb-2">Session Inspector</h2>
-          <p className="text-[13px] text-muted-foreground">
-            {totalItems} interaction{totalItems !== 1 ? "s" : ""} · sorted by {sortField} (
-            {sortOrder === "asc" ? "descending" : "ascending"})
-          </p>
-        </div>
+
+      {/* Controls row — no duplicate heading */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13px] text-muted-foreground">
+          {totalItems} interaction{totalItems !== 1 ? "s" : ""} · sorted by {sortField} (
+          {sortOrder === "asc" ? "descending" : "ascending"})
+        </p>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
@@ -215,171 +284,236 @@ export function SessionInspector() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-[200px] h-10 pl-9 pr-3 bg-muted/20 border border-border rounded-[10px] text-[13px] focus:outline-none focus:ring-1 focus:ring-primary/40"
+              className="w-[200px] h-10 pl-9 pr-3 bg-muted/20 border border-border rounded-[10px] text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
             />
           </div>
 
           <div className="flex items-center border border-border rounded-[10px] overflow-hidden bg-card">
-            <button
-              type="button"
-              onClick={() => handleSort("score")}
-              className={`flex items-center px-3 h-10 text-[11px] font-semibold transition-colors ${sortField === "score" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-            >
-              Score
-              {sortIndicator("score")}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSort("date")}
-              className={`flex items-center px-3 h-10 text-[11px] font-semibold transition-colors ${sortField === "date" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-            >
-              Date
-              {sortIndicator("date")}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSort("duration")}
-              className={`flex items-center px-3 h-10 text-[11px] font-semibold transition-colors ${sortField === "duration" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-            >
-              Duration
-              {sortIndicator("duration")}
-            </button>
+            {(["score", "date", "duration"] as const).map((field) => (
+              <button
+                key={field}
+                type="button"
+                onClick={() => handleSort(field)}
+                className={`flex items-center px-3 h-10 text-[11px] font-semibold transition-colors capitalize ${
+                  sortField === field
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {field}
+                {sortIndicator(field)}
+              </button>
+            ))}
           </div>
+
         </div>
       </div>
 
-      {/* Table: horizontal scroll + sticky Actions so Inspect stays visible with a narrow main column */}
+      {/* Table */}
       <div className="bg-card rounded-[14px] border border-border">
         <div className="overflow-x-auto rounded-t-[14px]">
           <table className="w-full min-w-[56rem] border-collapse">
-          <thead>
-            <tr className="bg-muted/10 border-b border-border">
-              <th className="px-4 py-4 text-left text-label">Agent</th>
-              <th className="px-4 py-4 text-left text-label">Date & Time</th>
-              <th className="px-4 py-4 text-left text-label">Duration</th>
-              <th className="px-4 py-4 text-left text-label">Score</th>
-              <th className="px-4 py-4 text-left text-label">Empathy</th>
-              <th className="px-4 py-4 text-left text-label">Policy</th>
-              <th className="px-4 py-4 text-left text-label">Resolution</th>
-              <th className="px-4 py-4 text-center text-label">Status</th>
-              <th className="px-4 py-4 text-left text-label w-48 max-w-[12rem]">Error</th>
-              <th className="px-3 py-4 text-center text-label sticky right-0 z-30 w-28 min-w-[7rem] border-l border-border bg-muted/10 shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.12)]">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {paginatedInteractions.map((row) => (
-              <tr
-                key={row.id}
-                className={`group hover:bg-muted/5 transition-colors ${isFailedStatus(row) ? "bg-destructive/[0.04]" : ""}`}
-              >
-                <td className="px-4 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-semibold text-foreground">{row.agentName}</span>
-                    {row.hasViolation && (
-                      <span className="px-2 py-0.5 bg-destructive/10 text-destructive rounded-full text-[11px] font-medium">
-                        ⚠ Violation
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-4 whitespace-nowrap text-[13px] text-muted-foreground">
-                  {row.date} · {row.time}
-                </td>
-                <td className="px-4 py-4 whitespace-nowrap text-[13px] text-muted-foreground">
-                  {row.duration}
-                </td>
-                <td className="px-4 py-4 whitespace-nowrap">
-                  <div
-                    className="text-[18px] font-bold"
-                    style={{
-                      fontFamily: "var(--font-serif)",
-                      color: row.overallScore >= 85 ? "var(--success)" : row.overallScore >= 75 ? "var(--primary)" : "var(--destructive)",
-                    }}
-                  >
-                    {row.overallScore}%
-                  </div>
-                </td>
-                <td className="px-4 py-4 whitespace-nowrap text-[13px] text-foreground">{row.empathyScore}</td>
-                <td className="px-4 py-4 whitespace-nowrap text-[13px] text-foreground">{row.policyScore}</td>
-                <td className="px-4 py-4 whitespace-nowrap text-[13px] text-foreground">{row.resolutionScore}</td>
-                <td className="px-4 py-4 whitespace-nowrap text-center align-middle">
-                  <div className="flex justify-center">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${row.resolved ? "bg-success/5 text-success border-success/20" : "bg-destructive/5 text-destructive border-destructive/20"}`}>
-                      {(row.status || "").toLowerCase() === "failed"
-                        ? "⚠ Failed"
-                        : (row.status || "").toLowerCase() === "processing" || (row.status || "").toLowerCase() === "pending"
-                          ? "⟳ Processing"
-                          : row.resolved
-                            ? "✓ Resolved"
-                            : "✗ Unresolved"}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-4 py-4 text-[12px] text-muted-foreground max-w-[12rem] w-[12rem] align-top">
-                  <span className="break-words line-clamp-4" title={getFailurePreview(row) || undefined}>
-                    {isFailedStatus(row) || (row.processingFailures && row.processingFailures.length > 0)
-                      ? getFailurePreview(row) || "—"
-                      : "—"}
-                  </span>
-                </td>
-                <td
-                  className={`sticky right-0 z-20 whitespace-nowrap border-l border-border/80 px-3 py-4 text-center align-middle shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.1)] ${
-                    isFailedStatus(row)
-                      ? "bg-destructive/[0.04] group-hover:bg-muted/5"
-                      : "bg-card group-hover:bg-muted/5"
-                  }`}
-                >
-                  <div className="flex items-center justify-center">
-                    {isFailedStatus(row) ? (
-                      <button
-                        type="button"
-                        onClick={() => void handleReprocess(row.id)}
-                        disabled={reprocessingIds.has(row.id)}
-                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-[11px] font-semibold text-foreground hover:bg-muted disabled:opacity-50"
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 ${reprocessingIds.has(row.id) ? "animate-spin" : ""}`} />
-                        {reprocessingIds.has(row.id) ? "Reprocessing" : "Reprocess"}
-                      </button>
-                    ) : (
-                      <Link
-                        to={`/manager/inspector/${row.id}`}
-                        onMouseEnter={() => {
-                          void getInteractionDetail(row.id).catch(() => undefined);
-                        }}
-                        className="inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-primary hover:text-primary/80 font-semibold text-[13px] transition-colors"
-                      >
-                        Inspect
-                      </Link>
-                    )}
-                  </div>
-                </td>
+            <thead>
+              <tr className="bg-muted/10 border-b border-border">
+                <th className="px-4 py-4 text-left text-label">Agent</th>
+                <th className="px-4 py-4 text-left text-label">Date & Time</th>
+                <th className="px-4 py-4 text-left text-label">Duration</th>
+                <th className="px-4 py-4 text-left text-label">Score</th>
+                <th className="px-4 py-4 text-left text-label">Empathy</th>
+                <th className="px-4 py-4 text-left text-label">Policy</th>
+                <th className="px-4 py-4 text-left text-label">Resolution</th>
+                <th className="px-4 py-4 text-center text-label">Status</th>
+                <th className="px-3 py-4 text-center text-label sticky right-0 z-30 w-32 min-w-[8rem] border-l border-border bg-muted/10 shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.12)]">
+                  Actions
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {paginatedInteractions.map((row, index) => {
+                const failed = isFailedStatus(row);
+                const processing = isProcessingStatus(row);
+                const isReprocessing = reprocessingIds.has(row.id);
+                const openUpward = index >= Math.max(1, paginatedInteractions.length - 2);
+
+                return (
+                  <tr
+                    key={row.id}
+                    className={`group hover:bg-muted/5 transition-colors ${failed ? "bg-destructive/[0.04]" : ""}`}
+                  >
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px] font-semibold text-foreground">{row.agentName}</span>
+                          {row.hasViolation && (
+                            <span className="px-2 py-0.5 bg-destructive/10 text-destructive rounded-full text-[10px] font-medium">
+                              Violation
+                            </span>
+                          )}
+                        </div>
+                        {failed && row.processingFailures && row.processingFailures.length > 0 && (
+                          <span className="text-[11px] text-destructive/70 line-clamp-1" title={getFailurePreview(row)}>
+                            {getFailurePreview(row)}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="text-[13px] font-medium text-foreground">{row.date}</div>
+                      <div className="text-[11px] text-muted-foreground">{row.time}</div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-[13px] text-muted-foreground">
+                      {row.duration}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span
+                        className="text-[18px] font-bold"
+                        style={{ color: scoreColor(row.overallScore) }}
+                      >
+                        {row.overallScore}<span className="text-[12px] font-semibold text-muted-foreground">%</span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap"><ScoreChip score={row.empathyScore} /></td>
+                    <td className="px-4 py-4 whitespace-nowrap"><ScoreChip score={row.policyScore} /></td>
+                    <td className="px-4 py-4 whitespace-nowrap"><ScoreChip score={row.resolutionScore} /></td>
+                    <td className="px-4 py-4 whitespace-nowrap text-center align-middle">
+                      <div className="flex justify-center">
+                        {processing || isReprocessing ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-primary/5 text-primary border-primary/20">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Processing
+                          </span>
+                        ) : failed ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold border bg-destructive/5 text-destructive border-destructive/20">
+                            Failed
+                          </span>
+                        ) : row.resolved ? (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold border bg-success/5 text-success border-success/20">
+                            Resolved
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold border bg-muted text-muted-foreground border-border">
+                            Unresolved
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Actions — sticky */}
+                    <td
+                      className={`sticky right-0 whitespace-nowrap border-l border-border/80 px-3 py-4 text-center align-middle shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.1)] ${
+                        openMenuId === row.id ? "z-30" : "z-20"
+                      } ${
+                        failed ? "bg-destructive/[0.04] group-hover:bg-muted/5" : "bg-card group-hover:bg-muted/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Link
+                          to={`/manager/inspector/${row.id}`}
+                          onMouseEnter={() => {
+                            void getInteractionDetail(row.id).catch(() => undefined);
+                          }}
+                          className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary/10 px-3 text-[12px] font-semibold text-primary hover:bg-primary/20 transition-colors"
+                        >
+                          Inspect
+                          <ArrowDown className="w-3 h-3 -rotate-90" />
+                        </Link>
+
+                        {/* More menu */}
+                        <div className="relative" ref={openMenuId === row.id ? menuRef : undefined}>
+                          <button
+                            type="button"
+                            onClick={() => { setOpenMenuId(openMenuId === row.id ? null : row.id); setConfirmDeleteId(null); }}
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+                              openMenuId === row.id
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                          {openMenuId === row.id && (
+                            <div className={`absolute right-0 w-48 rounded-xl border border-border bg-popover shadow-xl z-[99] py-1.5 overflow-hidden ${
+                              openUpward ? "bottom-full mb-1.5" : "top-full mt-1.5"
+                            }`}>
+                              <Link
+                                to={`/manager/inspector/${row.id}`}
+                                className="flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium text-foreground hover:bg-muted/60 transition-colors"
+                                onClick={() => setOpenMenuId(null)}
+                              >
+                                <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                                View details
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => void handleReprocess(row.id)}
+                                disabled={isReprocessing || processing}
+                                className="flex items-center gap-2.5 w-full px-3 py-2 text-[12px] font-medium text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                <RotateCcw className={`w-3.5 h-3.5 text-muted-foreground ${isReprocessing ? "animate-spin" : ""}`} />
+                                {isReprocessing ? "Reprocessing..." : "Reprocess"}
+                              </button>
+                              <div className="my-1 h-px bg-border/60 mx-2" />
+                              {confirmDeleteId === row.id ? (
+                                <div className="px-3 py-2 space-y-1.5">
+                                  <p className="text-[11px] font-semibold text-destructive">Delete this session?</p>
+                                  <div className="flex gap-1.5">
+                                    <button type="button"
+                                      onClick={() => void handleDelete(row.id)}
+                                      disabled={deletingIds.has(row.id)}
+                                      className="flex-1 h-7 rounded-md bg-destructive text-[11px] font-bold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+                                    >
+                                      {deletingIds.has(row.id) ? "Deleting…" : "Confirm"}
+                                    </button>
+                                    <button type="button"
+                                      onClick={() => setConfirmDeleteId(null)}
+                                      className="flex-1 h-7 rounded-md border border-border text-[11px] font-semibold text-muted-foreground hover:bg-muted/60 transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(row.id)}
+                                  className="flex items-center gap-2.5 w-full px-3 py-2 text-[12px] font-medium text-destructive hover:bg-destructive/8 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  Delete session
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         {/* Pagination */}
         <div className="px-6 py-4 bg-muted/5 border-t border-border flex items-center justify-between rounded-b-[14px]">
           <div className="text-[13px] text-muted-foreground font-medium">
-            Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems}
+            Showing {totalItems > 0 ? startIndex + 1 : 0}–{Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="h-9 px-4 rounded-xl border border-border bg-background text-[13px] font-semibold text-foreground hover:bg-muted disabled:opacity-40 transition-all flex items-center gap-2"
+              className="h-9 px-4 rounded-xl border border-border bg-background text-[13px] font-semibold text-foreground hover:bg-muted disabled:opacity-40 transition-all"
             >
-              ← Prev
+              Previous
             </button>
+            <span className="px-3 text-[12px] text-muted-foreground tabular-nums">{currentPage} / {totalPages}</span>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages || totalItems === 0}
-              className="h-9 px-4 rounded-xl border border-border bg-background text-[13px] font-semibold text-foreground hover:bg-muted disabled:opacity-40 transition-all flex items-center gap-2"
+              className="h-9 px-4 rounded-xl border border-border bg-background text-[13px] font-semibold text-foreground hover:bg-muted disabled:opacity-40 transition-all"
             >
-              Next →
+              Next
             </button>
           </div>
         </div>
