@@ -16,7 +16,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies (torch installed separately so uv.lock stays stable without a huge lock refresh)
-RUN uv sync --no-dev --locked \
+RUN uv sync --no-dev \
 	&& uv pip install --python /app/.venv/bin/python pypdf \
 	&& uv pip install --python /app/.venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
 

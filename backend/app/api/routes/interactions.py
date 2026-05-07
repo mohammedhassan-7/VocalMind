@@ -601,26 +601,28 @@ async def delete_interaction(
     if not interaction:
         raise HTTPException(status_code=404, detail="Interaction not found")
 
-    if await interaction_has_active_jobs(session, interaction_id):
-        raise HTTPException(
-            status_code=409,
-            detail="Interaction is currently processing; wait for completion before deleting.",
-        )
 
-    # Collect utterance ids first so we can clear EmotionEvent rows that link to them.
-    utt_ids_result = await session.exec(
-        select(Utterance.id).where(Utterance.interaction_id == interaction_id)
+    # Collect emotion event ids so we can delete EmotionFeedback rows that reference them.
+    evt_ids_result = await session.exec(
+        select(EmotionEvent.id).where(EmotionEvent.interaction_id == interaction_id)
     )
-    utt_ids = [row for row in utt_ids_result.all()]
+    evt_ids = list(evt_ids_result.all())
+
+    # Collect policy compliance ids so we can delete ComplianceFeedback rows that reference them.
+    comp_ids_result = await session.exec(
+        select(PolicyCompliance.id).where(PolicyCompliance.interaction_id == interaction_id)
+    )
+    comp_ids = list(comp_ids_result.all())
 
     # Order: feedback tables -> derived analytics -> raw signals -> processing jobs -> parent.
-    if utt_ids:
+    if evt_ids:
         await session.exec(
-            EmotionFeedback.__table__.delete().where(EmotionFeedback.utterance_id.in_(utt_ids))
+            EmotionFeedback.__table__.delete().where(EmotionFeedback.emotion_event_id.in_(evt_ids))
         )
-    await session.exec(
-        ComplianceFeedback.__table__.delete().where(ComplianceFeedback.interaction_id == interaction_id)
-    )
+    if comp_ids:
+        await session.exec(
+            ComplianceFeedback.__table__.delete().where(ComplianceFeedback.policy_compliance_id.in_(comp_ids))
+        )
     await session.exec(
         InteractionLLMTriggerCache.__table__.delete().where(
             InteractionLLMTriggerCache.interaction_id == interaction_id
