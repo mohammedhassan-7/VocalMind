@@ -19,5 +19,11 @@
   "resolution": {
     "min_resolved_accuracy": 0.8,
     "min_missing_step_f1": 0.7
+  },
+  "diarization": {
+    "max_overall_der": 0.35,
+    "max_missed_detection_rate": 0.20,
+    "max_false_alarm_rate": 0.15,
+    "max_speaker_confusion_rate": 0.15
   }
 }
