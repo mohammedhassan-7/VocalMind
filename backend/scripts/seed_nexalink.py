@@ -156,6 +156,8 @@ async def seed_policies_and_faqs(session: AsyncSession, org_id):
     """Ingest policy, SOP, and KB documents into the tables used by the UI."""
     backend_dir = Path(__file__).resolve().parents[1]
     storage_docs_dir = backend_dir.parent / "storage" / "docs" / "nexalink"
+    if not storage_docs_dir.exists():
+        storage_docs_dir = Path("/app/storage/docs/nexalink")
     parsed_docs_dir = storage_docs_dir / "parsed-docs"
     
     if not storage_docs_dir.exists():

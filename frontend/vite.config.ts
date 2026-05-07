@@ -42,6 +42,15 @@ export default defineConfig({
     open: false,
     watch: {
       usePolling: true,
+      ignored: [
+        '**/node_modules/**',
+        '**/.pnpm-store/**',
+        '**/.next/**',
+        '**/dist/**',
+        '**/.git/**',
+        '**/playwright-report/**',
+        '**/test-results/**',
+      ],
     },
   },
 });

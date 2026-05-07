@@ -152,6 +152,11 @@ _AGENT_TEXT_HINTS = (
     "i can help",
     "i can assist",
     "please verify",
+    "thank you for calling",
+    "thanks for calling",
+    "welcome to",
+    "my name is",
+    "this is",
 )
 _CUSTOMER_TEXT_HINTS = (
     "i need help",

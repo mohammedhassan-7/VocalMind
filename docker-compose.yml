@@ -187,6 +187,8 @@ services:
     cpus: 2.0
     ports:
       - "8001:8000"
+    volumes:
+      - ./services/emotion/app.py:/app/app.py
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
       interval: 10s
