@@ -355,3 +355,11 @@ Full templates: `.env.example` (root, 80 lines), `backend/.env.example` (49 line
 | `docs/rag/INGESTION_PIPELINE.md` | 8-stage ingestion, Qdrant routing |
 | `docs/design/vocalmind-design-spec.md` | Complete Figma spec (932 lines) |
 | `infra/db/01_schema.sql` | v5.2 PostgreSQL DDL |
+
+---
+
+## Code Quality Rules
+
+1. Ensure the code you write is concise and clear.
+2. Ensure your changes are minimal and don't miss any component inside the codebase.
+3. After finishing a task, verify the changes are correct and the task is completed successfully (e.g., run relevant tests, lint, or type checks).
