@@ -177,18 +177,26 @@ def infer_text_emotion_with_provider(text: str) -> tuple[str, float]:
 
         import httpx
         try:
-            url = f"{settings.EMOTION_API_URL}/predict_text"
+            if not settings.IS_LOCAL:
+                base = settings.KAGGLE_SERVER_URL or settings.KAGGLE_NGROK_URL
+                if not base:
+                    return infer_text_emotion(text)
+                url = f"{base.rstrip('/')}/predict_text"
+                headers = {"ngrok-skip-browser-warning": "true"}
+            else:
+                url = f"{settings.EMOTION_API_URL}/predict_text"
+                headers = {}
             with httpx.Client(timeout=10.0) as client:
-                response = client.post(url, json={"text": text})
+                response = client.post(url, json={"text": text}, headers=headers)
                 if response.status_code == 200:
                     data = response.json()
                     return data["emotion"], data["confidence"]
                 else:
-                    raise RuntimeError(f"GPU Service returned {response.status_code}: {response.text}")
+                    raise RuntimeError(f"Text emotion service returned {response.status_code}: {response.text}")
         except Exception as exc:
             _HF_PROVIDER_DISABLED_REASON = str(exc)
             logger.warning(
-                "GPU text emotion provider disabled for this process, using rule-based fallback: %s",
+                "Text emotion provider disabled for this process, using rule-based fallback: %s",
                 exc,
             )
 

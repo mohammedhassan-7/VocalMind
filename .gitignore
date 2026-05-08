@@ -146,6 +146,9 @@ services/whisperx/models/speaker_role/distilbert/
 *.mp3
 backend/storage/uploads/
 
+# ── Kaggle audit reports (regenerated per run) ─────────────────────────────
+infra/fixtures/kaggle/reports/
+
 # ── Research & Experiments ──────────────────────────────────────────────
 research/voice-gen/generated_audio/
 research/voices-examples/

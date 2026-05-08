@@ -32,8 +32,8 @@ async def run_smoke_test(base_url: str, audio_file: Path, timeout_s: int) -> Non
 
     audio_bytes = audio_file.read_bytes()
     async with httpx.AsyncClient(timeout=timeout_s) as client:
-        await _probe_endpoint(client, base_url.rstrip("/"), "predict", audio_bytes)
-        await _probe_endpoint(client, base_url.rstrip("/"), "split", audio_bytes)
+        await _probe_endpoint(client, base_url.rstrip("/"), "emotion", audio_bytes)
+        await _probe_endpoint(client, base_url.rstrip("/"), "vad", audio_bytes)
 
 
 def main() -> None:

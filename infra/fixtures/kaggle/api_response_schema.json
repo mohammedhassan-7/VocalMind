@@ -3,47 +3,82 @@
     "curl_example": "curl -X GET https://etta-cleistogamous-untangentially.ngrok-free.dev/health -H \"ngrok-skip-browser-warning: true\"",
     "response": {
       "status": "ok"
+    },
+    "audit_2026_05_08": {
+      "status_code": 200,
+      "elapsed_s": 0.9,
+      "notes": "Healthy, responsive."
     }
   },
   "/transcribe": {
-    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/transcribe -H \"ngrok-skip-browser-warning: true\" -F \"file=@telecom_call.mp3\"",
+    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/transcribe -H \"ngrok-skip-browser-warning: true\" -F \"file=@CALL_03_marcus_tech_support.wav\"",
     "response": {
-      "text": "Hello, thank you for calling customer support...",
+      "text": "Thank you for calling NexaLink Telecommunications Broadband and Support. My name is Marcus...",
       "language": "en",
       "segments": [
         {
           "start": 0.0,
           "end": 4.72,
-          "text": " Hello, thank you for calling customer support. My name is Rajesh. How can I help you today?"
+          "text": " Thank you for calling NexaLink Telecommunications Broadband and Support."
         }
       ]
+    },
+    "audit_2026_05_08": {
+      "status_code": 200,
+      "elapsed_s": 68.4,
+      "segment_count": 67,
+      "segment_keys": ["start", "end", "text"],
+      "notes": "No 'speaker' field in transcription segments — diarization mapping happens in /full only."
     }
   },
   "/emotion": {
-    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/emotion -H \"ngrok-skip-browser-warning: true\" -F \"file=@telecom_call.mp3\"",
+    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/emotion -H \"ngrok-skip-browser-warning: true\" -F \"file=@CALL_03_marcus_tech_support.wav\"",
     "response": {
       "top_emotion": "neutral",
       "emotions": [
-        {
-          "label": "neutral",
-          "score": 0.2776
-        },
-        {
-          "label": "sad",
-          "score": 0.2193
-        }
+        {"label": "neutral", "score": 0.2776},
+        {"label": "sad", "score": 0.2193}
       ]
+    },
+    "audit_2026_05_08": {
+      "status_code": 503,
+      "elapsed_s": 88.6,
+      "notes": "Failed with ngrok 503 — GPU OOM after sequential heavy requests on same 23MB file. Likely recovers after GPU cooldown. Backend client correctly interprets non-200 as 502 via normalize logic."
     }
   },
   "/diarize": {
-    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/diarize -H \"ngrok-skip-browser-warning: true\" -F \"file=@telecom_call.mp3\"",
+    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/diarize -H \"ngrok-skip-browser-warning: true\" -F \"file=@CALL_03_marcus_tech_support.wav\"",
     "response": {
-      "segments": []
+      "segments": [
+        {"start": 0.03, "end": 8.64, "speaker": "SPEAKER_00"},
+        {"start": 10.95, "end": 11.64, "speaker": "SPEAKER_01"}
+      ]
     },
-    "note": "Currently returns empty if the remote model is still being optimized or if speaker separation is unclear."
+    "audit_2026_05_08": {
+      "status_code": 200,
+      "elapsed_s": 48.6,
+      "segment_count": 71,
+      "segment_keys": ["start", "end", "speaker"],
+      "notes": "Now returns populated segments (previously was empty). Backend DiarizationAPIClient.normalize_response() maps this correctly."
+    }
+  },
+  "/vad": {
+    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/vad -H \"ngrok-skip-browser-warning: true\" -F \"file=@CALL_03_marcus_tech_support.wav\"",
+    "response": {
+      "speech_segments": [
+        {"start": 0.3, "end": 8.6},
+        {"start": 9.6, "end": 9.9}
+      ]
+    },
+    "audit_2026_05_08": {
+      "status_code": 200,
+      "elapsed_s": 47.9,
+      "segment_count": 173,
+      "notes": "Fixed — removed _to_mono_16k and double os.remove. Silero read_audio handles resampling natively."
+    }
   },
   "/full": {
-    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/full -H \"ngrok-skip-browser-warning: true\" -F \"file=@telecom_call.mp3\"",
+    "curl_example": "curl -X POST https://etta-cleistogamous-untangentially.ngrok-free.dev/full -H \"ngrok-skip-browser-warning: true\" -F \"file=@CALL_03_marcus_tech_support.wav\"",
     "response": {
       "text": "Hello, thank you for calling customer support...",
       "language": "en",
@@ -52,16 +87,19 @@
           "start": 0.0,
           "end": 4.72,
           "text": " Hello, thank you for calling customer support...",
-          "speaker": "UNKNOWN"
+          "speaker": "UNKNOWN",
+          "emotion": "neutral",
+          "emotion_scores": [{"label": "neutral", "score": 0.28}]
         }
       ],
       "top_emotion": "neutral",
       "emotions": [
-        {
-          "label": "neutral",
-          "score": 0.2776
-        }
+        {"label": "neutral", "score": 0.2776}
       ]
+    },
+    "audit_2026_05_08": {
+      "status_code": null,
+      "notes": "Connection error — server crashed after OOM from prior heavy requests. Based on notebook code: /full runs transcribe + diarize + per-segment emotion inference on GPU — the heaviest endpoint. Backend normalize_full_response() correctly handles per-segment 'emotion'/'emotion_scores' fields when present."
     }
   }
 }

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from typing import Any
@@ -17,6 +18,8 @@ _LOCAL_SERVICE_FALLBACK_PORTS = {
     "emotion": 8001,
     "vad": 8002,
 }
+
+_REMOTE_MAX_RETRIES = 2
 
 
 class BaseKaggleClient:
@@ -92,34 +95,48 @@ class BaseKaggleClient:
     async def _post(self, filename: str, content: bytes, content_type: str) -> dict[str, Any]:
         urls_to_try = [self.url, *self._fallback_urls(self.url)]
         timeout = httpx.Timeout(900.0, connect=10.0)
+        max_attempts = (1 + _REMOTE_MAX_RETRIES) if not settings.IS_LOCAL else 1
         last_error: Exception | None = None
         response: httpx.Response | None = None
 
         for url in urls_to_try:
-            try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(
-                        url,
-                        files={"file": (filename, content, content_type)},
-                        headers=self.headers(),
-                    )
-            except httpx.TimeoutException as exc:
-                last_error = exc
-                logger.warning("%s timed out at %s: %s", self.endpoint, url, exc)
-                continue
-            except httpx.RequestError as exc:
-                last_error = exc
-                logger.warning("%s unreachable at %s: %s", self.endpoint, url, exc)
-                continue
+            for attempt in range(max_attempts):
+                try:
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(
+                            url,
+                            files={"file": (filename, content, content_type)},
+                            headers=self.headers(),
+                        )
+                except httpx.TimeoutException as exc:
+                    last_error = exc
+                    logger.warning("%s timed out at %s (attempt %d/%d): %s", self.endpoint, url, attempt + 1, max_attempts, exc)
+                    if attempt < max_attempts - 1:
+                        await asyncio.sleep(min(2 ** attempt, 8))
+                        continue
+                    break
+                except httpx.RequestError as exc:
+                    last_error = exc
+                    logger.warning("%s unreachable at %s (attempt %d/%d): %s", self.endpoint, url, attempt + 1, max_attempts, exc)
+                    if attempt < max_attempts - 1:
+                        await asyncio.sleep(min(2 ** attempt, 8))
+                        continue
+                    break
 
-            if response.status_code == 200:
-                return self.normalize_response(response.json())
+                if response.status_code == 200:
+                    try:
+                        return self.normalize_response(response.json())
+                    except Exception as parse_exc:
+                        raise HTTPException(
+                            status_code=502,
+                            detail=f"Invalid JSON from {self.endpoint}: {parse_exc}",
+                        ) from parse_exc
 
-            logger.error("%s API error %s at %s: %s", self.endpoint, response.status_code, url, response.text)
-            raise HTTPException(
-                status_code=502,
-                detail=f"{self.endpoint} service error: {response.text}",
-            )
+                logger.error("%s API error %s at %s: %s", self.endpoint, response.status_code, url, response.text)
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"{self.endpoint} service error: {response.text}",
+                )
 
         if isinstance(last_error, httpx.TimeoutException):
             raise HTTPException(status_code=504, detail=f"{self.endpoint} service timed out.") from last_error

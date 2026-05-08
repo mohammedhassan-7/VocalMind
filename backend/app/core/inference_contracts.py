@@ -228,6 +228,30 @@ def normalize_full_response(data: dict[str, Any]) -> dict[str, Any]:
             segment["speaker_meta"] = dict(item.get("speaker_meta") or {})
         segments.append(segment)
 
+    if top_emotion == "unknown" or not emotions:
+        full_text = (data.get("text") or "").strip()
+        if not full_text:
+            full_text = " ".join(s["text"] for s in segments if s["text"]).strip()
+        fallback = build_deterministic_emotion_analysis(full_text)
+        fb_emotion = normalize_emotion_label(fallback.get("top_emotion"))
+        fb_scores = normalize_emotion_scores(fallback.get("emotions"))
+        if top_emotion == "unknown" and fb_emotion != "unknown":
+            top_emotion = fb_emotion
+        if not emotions and fb_scores:
+            emotions = fb_scores
+        if top_score is None and emotions:
+            top_score = emotions[0]["score"]
+
+    for segment in segments:
+        if segment["emotion"] == "unknown" or not segment.get("emotion_scores"):
+            text_fallback = build_deterministic_emotion_analysis(segment.get("text") or "")
+            fb_emotion = normalize_emotion_label(text_fallback.get("top_emotion"))
+            fb_scores = normalize_emotion_scores(text_fallback.get("emotions"))
+            if segment["emotion"] == "unknown" and fb_emotion != "unknown":
+                segment["emotion"] = fb_emotion
+            if not segment.get("emotion_scores") and fb_scores:
+                segment["emotion_scores"] = fb_scores
+
     text = (data.get("text") or "").strip()
     if not text:
         text = " ".join(segment["text"] for segment in segments if segment["text"]).strip()
