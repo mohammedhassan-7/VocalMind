@@ -8,6 +8,7 @@ from app.core.interaction_processing import start_processing_worker, stop_proces
 from app.core.audio_folder_watcher import start_audio_folder_watcher, stop_audio_folder_watcher
 from app.api.main import api_router
 from scripts.seed_nexalink import main as seed_nexalink_main
+from scripts.seed_meridian import main as seed_meridian_main
 
 
 from app.api.routes.dashboard import prewarm_dashboard_cache
@@ -16,6 +17,7 @@ from app.api.routes.dashboard import prewarm_dashboard_cache
 async def lifespan(app: FastAPI):
     await create_db_and_tables()
     await seed_nexalink_main()
+    await seed_meridian_main()
     await start_processing_worker()
     await start_audio_folder_watcher()
     # Pre-warm the dashboard cache so the first manager load is instantaneous

@@ -1,0 +1,526 @@
+{
+  "call_id": "CALL_06_pin_reset",
+  "audio_file": "CALL_06_priya_pin_reset.wav",
+  "script_file": "scripts/CALL_06_pin_reset.md",
+  "primary_agent": "Priya",
+  "agent_token": "priya",
+  "extra_speakers": [],
+  "customer_profile": "Rachel Thornton",
+  "sop_primary": "SOP-04 (Account Access Recovery)",
+  "policy_refs": "[CS-RULE-001, CS-RULE-002, CS-RULE-003, CS-RULE-004, CS-RULE-005, SEC-RULE-001, SEC-RULE-007, CS-RULE-018, CS-RULE-019, CS-RULE-020, CS-RULE-021, CS-RULE-022]",
+  "kb_refs": "[Section 4.2 - Credential Reset Procedures]",
+  "expected_outcome": "Security PIN reset completed on-call after successful 3-of-5 verification (name + account number + last 4 of payment). No ticket required. Case ref provided. Survey offered.",
+  "emotional_arc": "anxious -> reassured -> cooperative -> grateful",
+  "content_warning": "",
+  "turn_count": 34,
+  "duration_estimate": "4m 30s",
+  "emotion_distribution": {
+    "neutral": 16,
+    "frustrated": 1,
+    "happy": 17
+  },
+  "coverage": [
+    {
+      "element": "Greeting",
+      "where": "T01",
+      "notes": "CS-RULE-001 verbatim — PASS"
+    },
+    {
+      "element": "Recording notice",
+      "where": "T02",
+      "notes": "CS-RULE-002, SEC-RULE-001 — PASS"
+    },
+    {
+      "element": "Acknowledge reason for call",
+      "where": "T04",
+      "notes": "CS-RULE-003 — PASS"
+    },
+    {
+      "element": "3-of-5 verification",
+      "where": "T06–T12",
+      "notes": "name + account number + last 4 of payment — PASS"
+    },
+    {
+      "element": "Refuse account access pre-verification",
+      "where": "T06",
+      "notes": "SEC-RULE-005, SEC-RULE-006 — PASS (implicit)"
+    },
+    {
+      "element": "Credential reset after verification",
+      "where": "T14–T21",
+      "notes": "SEC-RULE-007 — PASS"
+    },
+    {
+      "element": "Re-engagement during silent task",
+      "where": "T19",
+      "notes": "CS-RULE-009 — PASS"
+    },
+    {
+      "element": "Privacy data-use statement",
+      "where": "T14",
+      "notes": "SEC-RULE-002 — PASS"
+    },
+    {
+      "element": "Root cause + resolution summary",
+      "where": "T26–T28",
+      "notes": "CS-RULE-018, CS-RULE-019 — PASS"
+    },
+    {
+      "element": "Anything else + case ref + survey",
+      "where": "T30, T32",
+      "notes": "CS-RULE-020, CS-RULE-021 — PASS"
+    }
+  ],
+  "turns": [
+    {
+      "turn_id": "T01",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Thank you for calling NexaLink Telecommunications Broadband and Support. My name is Priya. Who do I have the pleasure of speaking with today?",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T02",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "And just so you know, this call may be recorded for quality assurance and training purposes.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T03",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Hi Priya, my name is Rachel Thornton. I can't log into my account — I think my PIN isn't working anymore.",
+      "emotion": "anxious",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T04",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "I'm sorry to hear that, Ms. Thornton — being locked out is frustrating. I understand you're calling regarding a security PIN reset, and I can certainly help you with that.",
+      "emotion": "empathetic",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T05",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Okay, thank you. I tried it three times and now it just says blocked.",
+      "emotion": "relieved",
+      "intensity": 2,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T06",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "That's a standard protective lockout — it doesn't mean anything is wrong with your account. Before I can pull anything up or make any changes, I'll need to verify your identity. Can I start with the account number on file?",
+      "emotion": "reassuring",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T07",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Sure. It's five-five-one-two, nine-zero-eight-seven, four-four.",
+      "emotion": "cooperative",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T08",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Thank you. And could you confirm the last four digits of the payment method on file?",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [
+        "typing"
+      ],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T09",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "That should be the card ending in seven-three-one-two.",
+      "emotion": "thoughtful",
+      "intensity": 2,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [
+        "pause"
+      ],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T10",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Perfect, that matches. And to complete the third identifier — could you confirm the full name on the account exactly as it appears?",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T11",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Rachel Anne Thornton.",
+      "emotion": "cooperative",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T12",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Wonderful. You're fully verified, Ms. Thornton — that's three of five identifiers confirmed.",
+      "emotion": "reassuring",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T13",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Oh good.",
+      "emotion": "relieved",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T14",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Just a quick note: your data is used solely for service provisioning and support quality, in accordance with our Privacy Policy. I'll proceed with the PIN reset now.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T15",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Okay.",
+      "emotion": "neutral",
+      "intensity": 2,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T16",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "You'll be choosing a new four-digit PIN. It can't be all the same digit, and it can't be a simple sequence like one-two-three-four. Do you have one in mind?",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T17",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Eight-two-five-one.",
+      "emotion": "thoughtful",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [
+        "pause"
+      ],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T18",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Eight-two-five-one. Let me set that now.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [
+        "typing"
+      ],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T19",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "I'm still here with you, Ms. Thornton — the system is just confirming the change. Thank you for your patience.",
+      "emotion": "warm",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T20",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "No problem.",
+      "emotion": "calm",
+      "intensity": 2,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T21",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Alright — the new PIN is set and the lockout has been cleared. You should be able to log in immediately.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T22",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Should I try it now while you're on the line?",
+      "emotion": "hopeful",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T23",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "That's a great idea. Take your time.",
+      "emotion": "reassuring",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T24",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Okay, I'm in. That worked.",
+      "emotion": "satisfied",
+      "intensity": 4,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T25",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Wonderful. I'm glad that's sorted.",
+      "emotion": "warm",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T26",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Just to give you the full picture — the lockout happens automatically after three failed PIN attempts. It's a security feature to protect against someone else trying to guess in. Nothing was wrong with your account, and no one else accessed it.",
+      "emotion": "empathetic",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T27",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Oh, that's a relief. I was worried someone had hacked me.",
+      "emotion": "grateful",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T28",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Completely understandable, but no — clean lockout, clean reset. To summarize: you reported you were locked out, I verified your identity using three of five identifiers, reset your security PIN to the new value you chose, and confirmed you can log in. There's no follow-up required on your end.",
+      "emotion": "reassuring",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T29",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Perfect. Thank you so much, Priya.",
+      "emotion": "satisfied",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T30",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "My pleasure. Is there anything else I can help you with today, Ms. Thornton?",
+      "emotion": "warm",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T31",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "No, that was the only thing.",
+      "emotion": "calm",
+      "intensity": 2,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T32",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Your case reference number for today is N-X-L dash six-six-one-nine-four-zero-three. After we hang up you'll receive a brief survey — if you have a moment to share your feedback, we'd really appreciate it.",
+      "emotion": "warm",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T33",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Sure, happy to.",
+      "emotion": "cooperative",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T34",
+      "speaker": "AGENT",
+      "agent_name": "Priya",
+      "text": "Thank you so much for being a NexaLink customer, Ms. Thornton. Have a great rest of your day.",
+      "emotion": "warm",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    }
+  ]
+}

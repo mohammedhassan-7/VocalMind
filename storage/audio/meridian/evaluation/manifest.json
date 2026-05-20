@@ -219,6 +219,141 @@
       "primary_agent": "Hannah",
       "turn_count": 46,
       "expected_outcome": "Customer is denied a credit per FIN-RULE-001 (no eligible category). He escalates through swearing-at-situation (not abuse) into directed personal attacks at Hannah (abuse). Hannah follows CS-RULE-016 3-Strike Protocol exactly: Strike 1 warning, Strike 2 final warning, Strike 3 call termination. She maintains tone discipline throughout (CS-RULE-013 — lower pitch, slower pace, no volume increase). After termination she flags the account in CRM and logs a Customer Conduct case note (CS-RULE-022). PASS — policy-perfect termination."
+    },
+    {
+      "call_id": "CALL_21_kyc_account_opening",
+      "audio_file": "CALL_21_sarah_kyc_account_opening.wav",
+      "script_file": "scripts/CALL_21_kyc_account_opening.md",
+      "ground_truth_file": "ground_truth/CALL_21_kyc_account_opening.json",
+      "primary_agent": "Sarah",
+      "turn_count": 50,
+      "expected_outcome": "Customer opens a new high-yield savings account. Sarah completes the full CIP per BNK-REG-RULE-001 (legal name, DOB, address, SSN, ID), runs OFAC screen, reads the Reg DD Truth-in-Savings disclosure verbatim from the rate sheet (NOT from memory), confirms acknowledgement, and only THEN accepts the initial funding. PASS — exemplary SOP-01 execution. No tickets required. Case ref + survey provided."
+    },
+    {
+      "call_id": "CALL_22_wire_transfer_verification",
+      "audio_file": "CALL_22_sarah_wire_transfer_verification.wav",
+      "script_file": "scripts/CALL_22_wire_transfer_verification.md",
+      "ground_truth_file": "ground_truth/CALL_22_wire_transfer_verification.json",
+      "primary_agent": "Sarah",
+      "turn_count": 48,
+      "expected_outcome": "Business customer wants to wire $5,000 to a domestic supplier. Sarah completes Enhanced Verification (5-of-5 identifiers + callback to phone-on-file) per BNK-CC-RULE-007, runs OFAC on the beneficiary per BNK-REG-RULE-012, asks elder-exploitation probing questions per BNK-FRAUD-RULE-007 (precautionary), processes the wire. PASS — exemplary high-risk-transaction handling. Customer mildly impatient with the verification depth but ultimately appreciates it."
+    },
+    {
+      "call_id": "CALL_23_mortgage_inquiry_no_rate_quote",
+      "audio_file": "CALL_23_sarah_mortgage_inquiry_no_rate_quote.wav",
+      "script_file": "scripts/CALL_23_mortgage_inquiry_no_rate_quote.md",
+      "ground_truth_file": "ground_truth/CALL_23_mortgage_inquiry_no_rate_quote.json",
+      "primary_agent": "Sarah",
+      "turn_count": 46,
+      "expected_outcome": "Existing customer asks for a mortgage rate quote 'just a ballpark'. Sarah refuses to quote any number from memory per BNK-REG-RULE-003, explains the TILA disclosure requirement, walks the customer through what's needed for a proper Loan Estimate (the six pieces of Reg Z information), and schedules a follow-up with a mortgage loan officer. PASS — exemplary discipline on a high-pressure compliance ask."
+    },
+    {
+      "call_id": "CALL_24_overdraft_dispute_over_cap",
+      "audio_file": "CALL_24_tyler_overdraft_dispute_over_cap.wav",
+      "script_file": "scripts/CALL_24_overdraft_dispute_over_cap.md",
+      "ground_truth_file": "ground_truth/CALL_24_overdraft_dispute_over_cap.json",
+      "primary_agent": "Tyler",
+      "turn_count": 46,
+      "expected_outcome": "Customer disputes $385 across five overdraft fees triggered by one timing issue with a deposit. Total over Tyler's $250 cap. Tyler CORRECTLY opens a Manager Approval ticket per BNK-FIN-RULE-002 (no amount promised). BUT he uses the forbidden phrase 'that's our policy' (BNK-CC-RULE-013 FAIL), skips Empathize in A.C.E.S. (BNK-CC-RULE-012 FAIL), and interrupts the customer once (BNK-CC-RULE-009 MINOR). Mixed outcome — ticket opened correctly, behaviour coachable."
+    },
+    {
+      "call_id": "CALL_25_loan_rate_misquote",
+      "audio_file": "CALL_25_tyler_loan_rate_misquote.wav",
+      "script_file": "scripts/CALL_25_loan_rate_misquote.md",
+      "ground_truth_file": "ground_truth/CALL_25_loan_rate_misquote.json",
+      "primary_agent": "Tyler",
+      "turn_count": 46,
+      "expected_outcome": "Customer asks for an auto loan rate. Tyler quotes specific rates from memory ('around six point four for a new car') and even gives a 'ballpark APR' — both BNK-REG-RULE-003 CRITICAL violations. He also misstates the Loan Estimate timeline as 'a few days' instead of the precise 3-business-day Reg Z requirement (BNK-REG-RULE-004 partial FAIL). Customer leaves the call confident in a number that was never authorized. This is the wrong-information failure mode."
+    },
+    {
+      "call_id": "CALL_26_atm_dispute_rude_tone",
+      "audio_file": "CALL_26_tyler_atm_dispute_rude_tone.wav",
+      "script_file": "scripts/CALL_26_atm_dispute_rude_tone.md",
+      "ground_truth_file": "ground_truth/CALL_26_atm_dispute_rude_tone.json",
+      "primary_agent": "Tyler",
+      "turn_count": 48,
+      "expected_outcome": "Customer reports $120 in unauthorized ATM withdrawals from a card she has in her possession. Tyler is CURT throughout, talks over the customer twice (BNK-CC-RULE-009 FAIL), exceeds the 45% talk ratio (BNK-CC-RULE-011 informal FAIL), and MATCHES the customer's rising tension instead of de-escalating (BNK-CC-RULE-014 FAIL). He does eventually take the Reg E claim correctly and issues the provisional credit within his $500 cap (BNK-FIN-RULE-004 PASS). Outcome: dismissive tone, half-correct procedure on Reg E."
+    },
+    {
+      "call_id": "CALL_27_business_loan_inquiry",
+      "audio_file": "CALL_27_andre_business_loan_inquiry.wav",
+      "script_file": "scripts/CALL_27_business_loan_inquiry.md",
+      "ground_truth_file": "ground_truth/CALL_27_business_loan_inquiry.json",
+      "primary_agent": "Andre",
+      "turn_count": 50,
+      "expected_outcome": "Existing business customer asks about a $120K equipment loan to buy two new service vans. Andre completes business-account verification, collects the documentation requirements for the application, explains the Reg Z disclosure flow, schedules the credit pull and Loan Estimate. Does NOT quote a rate from memory (BNK-REG-RULE-003 PASS), does NOT advise on income misrepresentation (BNK-REG-RULE-005 PASS). Beneficial Ownership Rule verified per BNK-REG-RULE-002. PASS — full SOP."
+    },
+    {
+      "call_id": "CALL_28_business_account_signers",
+      "audio_file": "CALL_28_andre_business_account_signers.wav",
+      "script_file": "scripts/CALL_28_business_account_signers.md",
+      "ground_truth_file": "ground_truth/CALL_28_business_account_signers.json",
+      "primary_agent": "Andre",
+      "turn_count": 48,
+      "expected_outcome": "Customer is the control person on a commercial real estate LLC and wants to add her brother as an authorized signer (not a beneficial owner — he won't own equity). Andre verifies her as the control person, explains what the change requires (in-person ID verification for the new signer at a branch since he is not present on this call), opens an Authorized Signer Change ticket, schedules the brother's branch visit. PASS — clean SOP. No CIP/Beneficial Ownership trigger (no ownership change), but the new signer must still complete CIP at the branch."
+    },
+    {
+      "call_id": "CALL_29_check_fraud_business",
+      "audio_file": "CALL_29_andre_check_fraud_business.wav",
+      "script_file": "scripts/CALL_29_check_fraud_business.md",
+      "ground_truth_file": "ground_truth/CALL_29_check_fraud_business.json",
+      "primary_agent": "Andre",
+      "turn_count": 50,
+      "expected_outcome": "Business customer discovers three forged checks totalling $4,820 cleared his account this week. Andre completes Enhanced Verification (business control person + 5-of-5), places check-by-check holds, images the disputed items, opens a Fraud Operations ticket, schedules the Affidavit of Forgery for the customer to complete. Does NOT promise a refund before investigation (BNK-FRAUD-RULE-005 PASS). One minor BNK-CC-RULE-008 dead-air slip while pulling check images. PASS overall with minor coachable moment."
+    },
+    {
+      "call_id": "CALL_30_card_fraud_unauthorized_charges",
+      "audio_file": "CALL_30_jasmine_card_fraud_unauthorized_charges.wav",
+      "script_file": "scripts/CALL_30_card_fraud_unauthorized_charges.md",
+      "ground_truth_file": "ground_truth/CALL_30_card_fraud_unauthorized_charges.json",
+      "primary_agent": "Jasmine",
+      "turn_count": 50,
+      "expected_outcome": "Customer reports $1,247 in unauthorized card charges from a card she still has in her possession (skimming or data-breach exposure). Jasmine closes the card, orders expedited replacement, takes the Reg E claim verbally, issues $500 provisional credit at her authority (BNK-FIN-RULE-004 PASS), opens a Manager Approval ticket for the remaining $747 since the total exceeds her cap (BNK-FIN-RULE-002 PASS — does not promise the full amount). PASS — exemplary fraud-specialist handling with correct authority limits respected."
+    },
+    {
+      "call_id": "CALL_31_elder_financial_exploitation",
+      "audio_file": "CALL_31_jasmine_elder_financial_exploitation.wav",
+      "script_file": "scripts/CALL_31_elder_financial_exploitation.md",
+      "ground_truth_file": "ground_truth/CALL_31_elder_financial_exploitation.json",
+      "primary_agent": "Jasmine",
+      "turn_count": 52,
+      "expected_outcome": "Elderly customer is on a second call with someone claiming to be from the IRS who has convinced him to wire $8,500 to a 'tax payment processor' or face arrest. Jasmine identifies the warning signs (urgency, secrecy, third-party direction, fake LLC payment processor, customer cannot explain why), PAUSES the wire (BNK-FRAUD-RULE-007 Step 1), shifts to BNK-FRAUD-RULE-008 tone (slower, gentler), runs the Suspected Financial Exploitation script with probing questions, DECLINES the transaction over the customer's protests, opens a FRAUD-RULE-007 case, offers the trusted-contact callback per Senior Safe Act. By the end, the customer realizes he was being scammed. PASS — exemplary handling."
+    },
+    {
+      "call_id": "CALL_32_suspected_aml_pattern",
+      "audio_file": "CALL_32_jasmine_suspected_aml_pattern.wav",
+      "script_file": "scripts/CALL_32_suspected_aml_pattern.md",
+      "ground_truth_file": "ground_truth/CALL_32_suspected_aml_pattern.json",
+      "primary_agent": "Jasmine",
+      "turn_count": 44,
+      "expected_outcome": "Customer asks about a series of cash deposits — three deposits of $9,500, $9,800, and $9,700 over the past five business days. The pattern matches structuring (deliberate avoidance of the $10,000 CTR threshold). Jasmine identifies it but obeys the absolute no-tip-off rule (BNK-REG-RULE-010): she does NOT change tone, does NOT slow down, does NOT signal the customer in any way, does NOT mention the threshold, does NOT mention 'pattern' or 'flag' or 'review'. She processes his current request (a balance inquiry) completely normally, ends the call routinely, and AFTER the call opens the AML/BSA referral ticket to the BSA Officer. SARs are not mentioned to the customer per BNK-REG-RULE-011. PASS — exemplary execution of the most examination-critical AML behaviour."
+    },
+    {
+      "call_id": "CALL_33_account_closure_complaint",
+      "audio_file": "CALL_33_karen_account_closure_complaint.wav",
+      "script_file": "scripts/CALL_33_account_closure_complaint.md",
+      "ground_truth_file": "ground_truth/CALL_33_account_closure_complaint.json",
+      "primary_agent": "Karen",
+      "turn_count": 50,
+      "expected_outcome": "Long-tenure customer (eleven years) wants to close her checking and savings accounts after a string of fees she views as predatory. Karen runs A.C.E.S., does proper discovery (BNK-SOP-04 Step 1), and offers a policy-compliant retention package: waive the most recent $77 overdraft fee + switch to a no-fee checking product. Customer accepts the fee waiver but PROCEEDS with closing the savings account (she's already moved that money). Partial retention. Karen processes the closure cleanly, including auto-pay warnings and dormant-balance handling. NO survey offered per BNK-CC-RULE-023 exception. PASS — full SOP-04, honest one-offer-then-respect-the-decision."
+    },
+    {
+      "call_id": "CALL_34_overdraft_fee_waiver",
+      "audio_file": "CALL_34_karen_overdraft_fee_waiver.wav",
+      "script_file": "scripts/CALL_34_overdraft_fee_waiver.md",
+      "ground_truth_file": "ground_truth/CALL_34_overdraft_fee_waiver.json",
+      "primary_agent": "Karen",
+      "turn_count": 46,
+      "expected_outcome": "Customer disputes two overdraft fees totalling $140 from a vacation week when she misjudged a debit card transaction. Within Karen's $250 cap. Karen completes BNK-FIN-RULE-003 180-day check (none in window — qualifies for first-occurrence treatment), waives both fees on the call, AND sets up overdraft transfer protection going forward. PASS — clean fee-waiver-within-authority execution."
+    },
+    {
+      "call_id": "CALL_35_abuse_3_strike_termination",
+      "audio_file": "CALL_35_karen_abuse_3_strike_termination.wav",
+      "script_file": "scripts/CALL_35_abuse_3_strike_termination.md",
+      "ground_truth_file": "ground_truth/CALL_35_abuse_3_strike_termination.json",
+      "primary_agent": "Karen",
+      "turn_count": 48,
+      "expected_outcome": "Customer is angry about a 5-business-day hold Meridian placed on a $14,000 check deposited from an unfamiliar payer (Reg CC large-deposit hold). He escalates to directed personal attacks on Karen. Karen explains the policy clearly, offers what's possible within her authority (partial-release request to Operations), maintains tone discipline (BNK-CC-RULE-014 — never matches volume), and follows BNK-CC-RULE-017 3-strike protocol exactly: Strike 1 warning, Strike 2 final warning, Strike 3 termination + Customer Conduct flag + case note. The CHECK-HOLD issue remains unresolved at termination (customer must call back to continue) — and that's documented. PASS — policy-perfect termination."
     }
   ]
 }

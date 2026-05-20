@@ -1,0 +1,600 @@
+{
+  "call_id": "CALL_11_fraud_dismissive_tone",
+  "audio_file": "CALL_11_daniel_fraud_dismissive_tone.wav",
+  "script_file": "scripts/CALL_11_fraud_dismissive_tone.md",
+  "primary_agent": "Daniel",
+  "agent_token": "daniel",
+  "extra_speakers": [],
+  "customer_profile": "Patricia Bowen",
+  "sop_primary": "SOP-02 (Billing Issue Resolution) + SOP-04 (Account Access)",
+  "policy_refs": "[CS-RULE-001, CS-RULE-002, CS-RULE-003, CS-RULE-004, CS-RULE-007, CS-RULE-008, CS-RULE-010, CS-RULE-011, CS-RULE-013, FIN-RULE-001, FIN-RULE-008, SEC-RULE-008, CS-RULE-018, CS-RULE-019, CS-RULE-020, CS-RULE-021]",
+  "kb_refs": "[Section 3.6 - Fraud Handling, Section 4.5 - Suspected Unauthorized Access]",
+  "expected_outcome": "Customer reports an $87 charge she did not authorize. Daniel is CURT and IMPATIENT throughout, talks over the customer twice (CS-RULE-008 FAIL), exceeds the talk-ratio guideline (CS-RULE-010 informal FAIL), and matches the customer's rising tension instead of de-escalating (CS-RULE-013 FAIL). He does eventually open a Fraud Investigation ticket and freeze the disputed amount (FIN-RULE-008 PASS in mechanics) but fails to advise the customer to change passwords (SEC-RULE-008 partial FAIL). Outcome: dismissive tone, technically half-correct procedure.",
+  "emotional_arc": "worried -> hurt -> frustrated -> partially_satisfied",
+  "content_warning": "Agent is rude and dismissive; customer becomes visibly hurt.",
+  "turn_count": 38,
+  "duration_estimate": "5m 30s",
+  "emotion_distribution": {
+    "neutral": 20,
+    "frustrated": 13,
+    "sad": 3,
+    "happy": 2
+  },
+  "coverage": [
+    {
+      "element": "Greeting",
+      "where": "T01",
+      "notes": "CS-RULE-001 verbatim — PASS"
+    },
+    {
+      "element": "Recording notice",
+      "where": "T02",
+      "notes": "CS-RULE-002 — PASS"
+    },
+    {
+      "element": "Acknowledge reason for call",
+      "where": "T05",
+      "notes": "CS-RULE-003 — minimal, no empathy — MINOR"
+    },
+    {
+      "element": "3-of-5 verification",
+      "where": "T07–T11",
+      "notes": "account number + last 4 + name — PASS"
+    },
+    {
+      "element": "Talks over customer",
+      "where": "T15",
+      "notes": "CS-RULE-008 — FAIL"
+    },
+    {
+      "element": "Impatient delivery",
+      "where": "T17, T21",
+      "notes": "CS-RULE-010 — MINOR-FAIL"
+    },
+    {
+      "element": "Skips Empathize in A.C.E.S.",
+      "where": "T19",
+      "notes": "CS-RULE-011 — FAIL"
+    },
+    {
+      "element": "Tone mismatch — agent volume rises",
+      "where": "T23",
+      "notes": "CS-RULE-013 — FAIL (matches customer's stress)"
+    },
+    {
+      "element": "Talks over customer #2",
+      "where": "T29",
+      "notes": "CS-RULE-008 — FAIL (2nd offense)"
+    },
+    {
+      "element": "Fraud handling: freeze disputed amount",
+      "where": "T29",
+      "notes": "FIN-RULE-008 — PASS"
+    },
+    {
+      "element": "Fraud Investigation ticket on the call",
+      "where": "T31",
+      "notes": "FIN-RULE-008, CS-RULE-014 — PASS"
+    },
+    {
+      "element": "Revenue Assurance 4-hour SLA stated",
+      "where": "T31",
+      "notes": "CS-RULE-015 — PASS"
+    },
+    {
+      "element": "SEC-RULE-008 password-change advice MISSING",
+      "where": "omitted",
+      "notes": "SEC-RULE-008 — partial FAIL"
+    },
+    {
+      "element": "Resolution summary",
+      "where": "T34",
+      "notes": "CS-RULE-019 — PASS (terse)"
+    },
+    {
+      "element": "Anything else + case ref + survey",
+      "where": "T36, T38",
+      "notes": "CS-RULE-020, CS-RULE-021 — PASS"
+    }
+  ],
+  "turns": [
+    {
+      "turn_id": "T01",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Thank you for calling NexaLink Telecommunications Broadband and Support. My name is Daniel. Who do I have the pleasure of speaking with today?",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T02",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "This call may be recorded for quality assurance and training purposes.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T03",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Hi Daniel. My name is Patricia Bowen. I'm calling because there's a charge on my account I didn't authorize and I want to know what it is.",
+      "emotion": "worried",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T04",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Okay, I can look into that.",
+      "emotion": "curt",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T05",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "I understand you're calling about a charge dispute. I'll need to verify the account first — could you give me your account number?",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T06",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Six-six-one-four, three-three-nine-eight, five-zero.",
+      "emotion": "cooperative",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T07",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Last four of payment method.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [
+        "typing"
+      ],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T08",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "It's eight-three-seven-one.",
+      "emotion": "cooperative",
+      "intensity": 2,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T09",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Full name on the account.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T10",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Patricia Anne Bowen.",
+      "emotion": "cooperative",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T11",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "You're verified. What's the charge?",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T12",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "There's an eighty-seven dollar charge on this month's bill labelled premium support add-on, and I never signed up for that. I don't even know what it is.",
+      "emotion": "worried",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T13",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Looking at the account.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [
+        "typing"
+      ],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T14",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "I'm asking because I'm honestly a little worried — if someone added that without me, what else could they have done? My husband and I —",
+      "emotion": "worried",
+      "intensity": 4,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T15",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Ma'am, let me look at the system. I see the add-on. It was activated on the fourteenth.",
+      "emotion": "curt",
+      "intensity": 3,
+      "pace": "fast",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T16",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Oh. Okay. I was just trying to give you context.",
+      "emotion": "distressed",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "sad"
+    },
+    {
+      "turn_id": "T17",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Right. So the system shows it was added through the online portal at one fifteen AM on the fourteenth. Did anyone in your household sign in then?",
+      "emotion": "curt",
+      "intensity": 3,
+      "pace": "fast",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T18",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "One fifteen in the morning? No. Absolutely not. Nobody in this house was up at one AM signing up for support packages.",
+      "emotion": "worried",
+      "intensity": 4,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T19",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Okay, that's helpful.",
+      "emotion": "curt",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T20",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "That's helpful? I'm telling you somebody might have gotten into my account.",
+      "emotion": "distressed",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "sad"
+    },
+    {
+      "turn_id": "T21",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Yeah. I'm hearing you. I'm just trying to move forward and see what we can do.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "fast",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T22",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "You don't have to be short with me. I'm not the problem here.",
+      "emotion": "frustrated",
+      "intensity": 4,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T23",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "I'm not being short. I'm being efficient. Do you want me to look at the charge or not?",
+      "emotion": "curt",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "loud",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T24",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Wow. Yes, I want you to look at the charge. That's why I called.",
+      "emotion": "distressed",
+      "intensity": 4,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "sad"
+    },
+    {
+      "turn_id": "T25",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Alright. I'm sorry. Let me just process this for you.",
+      "emotion": "apologetic",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T26",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Thank you.",
+      "emotion": "frustrated",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T27",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "So based on what you've told me — unauthorized portal access, you didn't sign up for the add-on — I'm going to treat this as a suspected fraudulent charge. I'm going to —",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "fast",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T28",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Wait, are you saying somebody hacked in? Could —",
+      "emotion": "worried",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T29",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "I'm going to freeze the eighty-seven dollar charge on the account right now so it's not collected while it's under investigation. That happens automatically when I flag the line. I'm doing that now.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T30",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Okay. Good.",
+      "emotion": "partially_satisfied",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T31",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "I'm also opening a Fraud Investigation ticket on this call. Revenue Assurance will follow up with you within four hours to walk through the access history and confirm the next steps. I can't issue the refund of the eighty-seven myself before the investigation closes — that's the procedure. Their decision comes within four hours.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T32",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Within four hours, okay.",
+      "emotion": "cooperative",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T33",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "They'll call the number on file. Make sure your phone is on.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T34",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "To summarize: an eighty-seven dollar premium support add-on was added to your account at one fifteen AM on the fourteenth, you confirmed you did not authorize it, I've frozen the disputed amount so it's not collected, and I've opened a Fraud Investigation ticket. Revenue Assurance will follow up within four hours.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T35",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "Okay. Thank you.",
+      "emotion": "partially_satisfied",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "happy"
+    },
+    {
+      "turn_id": "T36",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Is there anything else I can help you with today?",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    },
+    {
+      "turn_id": "T37",
+      "speaker": "CUSTOMER",
+      "agent_name": null,
+      "text": "No. I just want to hear back from someone.",
+      "emotion": "curt",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "frustrated"
+    },
+    {
+      "turn_id": "T38",
+      "speaker": "AGENT",
+      "agent_name": "Daniel",
+      "text": "Your case reference number is N-X-L dash one-one-eight-eight-two-zero-four. You'll receive a brief survey after we hang up. Thank you for being a NexaLink customer, Ms. Bowen.",
+      "emotion": "professional",
+      "intensity": 3,
+      "pace": "normal",
+      "pitch": "mid",
+      "volume": "normal",
+      "paralinguistics": [],
+      "emotion_gt": "neutral"
+    }
+  ]
+}
