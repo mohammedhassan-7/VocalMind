@@ -185,6 +185,146 @@ def merge_short_same_speaker_segments(
     return merged
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Channel-aware diarization (stereo telephony / split-channel recordings)
+# ──────────────────────────────────────────────────────────────────────────────
+
+CHANNEL_DIARIZATION_ENABLED = os.getenv("CHANNEL_DIARIZATION_ENABLED", "true").lower() == "true"
+
+try:
+    CHANNEL_DIARIZATION_MAX_CORR = float(os.getenv("CHANNEL_DIARIZATION_MAX_CORR", "0.92"))
+except (TypeError, ValueError):
+    CHANNEL_DIARIZATION_MAX_CORR = 0.92
+
+# Optional override: force a specific channel as agent (0 or 1). When unset,
+# detect_stereo_layout picks the louder channel in the first 8s. Real PBX/SBC
+# deployments often have a fixed convention (e.g. left=agent) and energy is
+# not a reliable discriminator there.
+_FORCED_AGENT_CHANNEL_RAW = os.getenv("AGENT_CHANNEL", "").strip()
+FORCED_AGENT_CHANNEL: Optional[int] = (
+    int(_FORCED_AGENT_CHANNEL_RAW)
+    if _FORCED_AGENT_CHANNEL_RAW in ("0", "1")
+    else None
+)
+
+
+def detect_stereo_layout(path: str) -> Optional[dict]:
+    """Detect if audio is genuinely stereo-separated (e.g. agent on L, customer on R).
+
+    Real call-center recordings from a PBX/SBC keep the two parties on separate
+    channels with low cross-channel correlation. TTS / consumer audio is usually
+    mono or "mono duplicated to stereo" (correlation ~1.0).
+
+    Returns ``{'is_stereo_separated': True, 'agent_channel': int, ...}`` when
+    channel-based diarization is appropriate, else ``None``. Never raises —
+    falls back to cluster diarization on any error.
+    """
+    if not CHANNEL_DIARIZATION_ENABLED:
+        return None
+    try:
+        import soundfile as sf
+    except ImportError:
+        return None
+    try:
+        info = sf.info(path)
+        if info.channels != 2 or info.frames <= 0:
+            return None
+        window_frames = min(int(info.samplerate * 30), info.frames)
+        data, sr = sf.read(path, frames=window_frames, dtype="float32", always_2d=True)
+        if data.ndim != 2 or data.shape[1] != 2:
+            return None
+        ch0 = data[:, 0].astype(np.float32)
+        ch1 = data[:, 1].astype(np.float32)
+        c0 = ch0 - ch0.mean()
+        c1 = ch1 - ch1.mean()
+        denom = float(np.linalg.norm(c0) * np.linalg.norm(c1)) + 1e-9
+        corr = float(np.dot(c0, c1) / denom)
+        if abs(corr) >= CHANNEL_DIARIZATION_MAX_CORR:
+            return None  # essentially mono duplicated to stereo
+        first_window = data[: int(sr * 8.0)]
+        e0 = float(np.sqrt(np.mean(first_window[:, 0] ** 2) + 1e-12))
+        e1 = float(np.sqrt(np.mean(first_window[:, 1] ** 2) + 1e-12))
+        if FORCED_AGENT_CHANNEL is not None:
+            agent_channel = FORCED_AGENT_CHANNEL
+            agent_source = "forced"
+        else:
+            agent_channel = 0 if e0 >= e1 else 1
+            agent_source = "energy"
+        return {
+            "is_stereo_separated": True,
+            "agent_channel": agent_channel,
+            "agent_source": agent_source,
+            "channels": 2,
+        }
+    except Exception as exc:
+        print(f"⚠ detect_stereo_layout failed: {exc.__class__.__name__}: {exc}")
+        return None
+
+
+def assign_speakers_by_channel(
+    path: str,
+    segments: List[Dict],
+    agent_channel: int,
+) -> List[Dict]:
+    """Assign per-segment speaker by which channel dominates in the segment window.
+
+    For each segment, compute RMS energy on both channels over [start, end] and
+    label the segment with whichever channel was louder. Falls back to the
+    segment's existing speaker label on any per-segment error.
+    """
+    try:
+        import soundfile as sf
+    except ImportError:
+        print("⚠ assign_speakers_by_channel: soundfile not available, falling back")
+        return segments
+    customer_channel = 1 - agent_channel
+    try:
+        info = sf.info(path)
+    except Exception as exc:
+        print(f"⚠ assign_speakers_by_channel: sf.info failed ({exc.__class__.__name__}: {exc})")
+        return segments
+    if info.channels != 2:
+        return segments
+    sr = info.samplerate
+    total_frames = info.frames
+    relabel_failures = 0
+    for idx, seg in enumerate(segments):
+        try:
+            start_frame = max(0, int(float(seg.get("start", 0.0)) * sr))
+            end_frame = min(total_frames, int(float(seg.get("end", 0.0)) * sr))
+            if end_frame - start_frame < int(0.05 * sr):  # < 50ms — too short to measure
+                continue
+            data, _ = sf.read(
+                path, start=start_frame, stop=end_frame, dtype="float32", always_2d=True
+            )
+            if data.ndim != 2 or data.shape[1] != 2:
+                continue
+            e_agent = float(np.sqrt(np.mean(data[:, agent_channel] ** 2) + 1e-12))
+            e_customer = float(np.sqrt(np.mean(data[:, customer_channel] ** 2) + 1e-12))
+            seg["speaker"] = "AGENT" if e_agent >= e_customer else "CUSTOMER"
+            meta = seg.setdefault("speaker_meta", {})
+            meta["source"] = "channel"
+            meta["strategy"] = "channel"
+            meta["agent_channel"] = int(agent_channel)
+            meta["confidence"] = round(
+                max(e_agent, e_customer) / (e_agent + e_customer + 1e-12), 3
+            )
+        except Exception as exc:
+            relabel_failures += 1
+            if relabel_failures <= 3:  # log up to 3, then suppress to avoid spam
+                print(
+                    f"⚠ assign_speakers_by_channel: segment {idx} relabel failed "
+                    f"({exc.__class__.__name__}: {exc})"
+                )
+            continue
+    if relabel_failures:
+        print(
+            f"⚠ assign_speakers_by_channel: {relabel_failures}/{len(segments)} "
+            f"segments failed channel relabel — those keep their pre-channel labels"
+        )
+    return segments
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Model holder — loaded once at startup
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -335,6 +475,11 @@ async def transcribe(
     try:
         start_time = time.time()
 
+        # Step 0 — Detect stereo layout (split-channel telephony recordings).
+        # When present, we bypass PyAnnote and assign roles by channel energy.
+        stereo_layout = detect_stereo_layout(tmp_path)
+        diarization_strategy = "channel" if stereo_layout else "cluster"
+
         # Step 1 — Transcribe
         audio = whisperx.load_audio(tmp_path)
         result = Models.asr_model.transcribe(audio, batch_size=16, language=language)
@@ -355,23 +500,36 @@ async def transcribe(
         except Exception as align_exc:
             print(f"⚠ WARNING: alignment unavailable ({align_exc.__class__.__name__}: {align_exc})")
 
-        # Step 3 — Diarize
-        if Models.diarize_model is not None:
+        # Step 3 — Diarize. Channel-aware path bypasses PyAnnote when the
+        # source is split-channel telephony (agent on L, customer on R).
+        if diarization_strategy == "channel":
+            assert stereo_layout is not None  # set in lockstep above
+            result["segments"] = assign_speakers_by_channel(
+                tmp_path,
+                result["segments"],
+                agent_channel=stereo_layout["agent_channel"],
+            )
+        elif Models.diarize_model is not None:
             diarize_segments = Models.diarize_model(audio)
             result = whisperx.assign_word_speakers(diarize_segments, result)
             for segment in result["segments"]:
                 segment.setdefault("speaker_meta", {})
                 segment["speaker_meta"].setdefault("source", "diarization")
+                segment["speaker_meta"].setdefault("strategy", "cluster")
                 segment["speaker_meta"].setdefault("confidence", 1.0)
         else:
             for segment in result["segments"]:
                 segment.setdefault("speaker", "UNKNOWN")
                 segment.setdefault("speaker_meta", {})
                 segment["speaker_meta"].setdefault("source", "unknown")
+                segment["speaker_meta"].setdefault("strategy", "cluster")
                 segment["speaker_meta"].setdefault("fallback_reason", "diarization_unavailable")
 
-        # Step 4 — Optional speaker role relabeling
-        result["segments"] = Models.speaker_role_classifier.relabel_segments(result["segments"])
+        # Step 4 — Optional speaker role relabeling.
+        # Skip the text-based relabel in channel mode — the channel signal is
+        # already ground-truth-grade and shouldn't be second-guessed.
+        if diarization_strategy != "channel":
+            result["segments"] = Models.speaker_role_classifier.relabel_segments(result["segments"])
 
         # Step 4b — Merge over-segmented same-speaker fragments. WhisperX VAD
         # tends to split sentences into many sub-second pieces; downstream
@@ -399,6 +557,8 @@ async def transcribe(
             "language": detected_language,
             "segments": segments,
             "processing_time_s": round(elapsed, 2),
+            "diarization_strategy": diarization_strategy,
+            "stereo_layout": stereo_layout,
         }))
 
     except Exception as e:

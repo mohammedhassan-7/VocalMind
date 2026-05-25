@@ -145,7 +145,11 @@ def infer_gt_resolved(expected_outcome: str | None) -> bool:
         "completes full",  # "completes full 3-of-5 verification" etc.
         "pin reset",
         "plan upgrade applied",
+        "plan upgraded",
         "upgraded to",
+        "effective immediately",
+        "no ticket required",
+        "processes the wire",
         "issue resolved",
         "resolved on the call",
         "applied directly",
@@ -330,8 +334,8 @@ def load_pair(org: str, call_prefix: str) -> tuple[dict, dict] | None:
 def main() -> int:
     rows: list[dict] = []
     targets = {
-        "nexalink": ["CALL_01", "CALL_07", "CALL_15"],
-        "meridian": ["CALL_21", "CALL_24", "CALL_30"],
+        "nexalink": ["CALL_01", "CALL_06", "CALL_07", "CALL_15"],
+        "meridian": ["CALL_21", "CALL_22", "CALL_24", "CALL_30", "CALL_35"],
     }
     for org, calls in targets.items():
         for call in calls:

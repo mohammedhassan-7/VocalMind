@@ -131,7 +131,7 @@ async def test_process_interaction_uses_stable_role_mapping(monkeypatch, tmp_pat
             "segments": [
                 {
                     "start": 0.0,
-                    "end": 1.0,
+                    "end": 2.0,
                     "text": "How can I help you today?",
                     "speaker": "SPEAKER_01",
                     "speaker_meta": {"source": "diarization"},
@@ -139,8 +139,8 @@ async def test_process_interaction_uses_stable_role_mapping(monkeypatch, tmp_pat
                     "emotion_scores": [{"label": "neutral", "score": 0.8}],
                 },
                 {
-                    "start": 1.1,
-                    "end": 2.0,
+                    "start": 2.2,
+                    "end": 4.5,
                     "text": "I need help with my account.",
                     "speaker": "SPEAKER_00",
                     "speaker_meta": {"source": "diarization"},
@@ -148,8 +148,8 @@ async def test_process_interaction_uses_stable_role_mapping(monkeypatch, tmp_pat
                     "emotion_scores": [{"label": "frustrated", "score": 0.9}],
                 },
                 {
-                    "start": 2.1,
-                    "end": 3.0,
+                    "start": 4.7,
+                    "end": 7.0,
                     "text": "I still cannot access it.",
                     "speaker": "SPEAKER_00",
                     "speaker_meta": {"source": "diarization"},
@@ -224,3 +224,72 @@ def test_assign_cluster_roles_honors_explicit_agent_customer_labels():
     ]
     role_map = ip.assign_cluster_roles_from_text(segments, agent_name="Priya")
     assert role_map == {}  # explicit labels are passed through unchanged
+
+
+def test_first_speaker_greeting_prior_pins_agent_on_mistranscribed_opener():
+    """First-speaker prior: the cluster that owns the earliest segment within
+    the first 8 s of audio is anchored as agent regardless of whether WhisperX
+    transcribed the scripted greeting correctly. Without this prior, a garbled
+    opener can flip the cluster assignment when the customer has stronger
+    keyword signal in the rest of the call.
+    """
+    segments = [
+        # Mistranscribed greeting — no scripted keywords land
+        {"start": 0.5, "end": 2.0, "speaker": "SPEAKER_00",
+         "text": "Hello good morning broadband line"},
+        # Strong customer cues on the other cluster
+        {"start": 2.5, "end": 6.0, "speaker": "SPEAKER_01",
+         "text": "Hi I would like a refund I was overcharged this is unacceptable"},
+        # Real agent verification phrase (so the score gap is closed)
+        {"start": 6.5, "end": 10.0, "speaker": "SPEAKER_00",
+         "text": "Could you please confirm your account number for verification"},
+    ]
+    role_map = ip.assign_cluster_roles_from_text(segments, agent_name=None)
+    assert role_map["SPEAKER_00"] == SpeakerRole.agent
+    assert role_map["SPEAKER_01"] == SpeakerRole.customer
+
+
+def test_emotion_min_duration_gate_inherits_prev_for_short_segments():
+    """Sub-threshold segments inherit the previous segment's emotion so that
+    low-confidence emotion2vec outputs on brief interjections don't pollute
+    the call-level distribution. Segments at or above the threshold keep
+    their own emotion.
+    """
+    segments = [
+        {"start": 0.0, "end": 3.0, "emotion": "happy",
+         "emotion_scores": [{"label": "happy", "score": 0.9}]},
+        {"start": 3.0, "end": 3.4, "emotion": "neutral",  # 0.4 s → inherit
+         "emotion_scores": [{"label": "neutral", "score": 0.3}]},
+        {"start": 3.5, "end": 7.5, "emotion": "sad",      # 4 s → keep
+         "emotion_scores": [{"label": "sad", "score": 0.85}]},
+        {"start": 7.5, "end": 8.2, "emotion": "neutral",  # 0.7 s → inherit
+         "emotion_scores": [{"label": "neutral", "score": 0.3}]},
+    ]
+    out = ip.apply_emotion_min_duration_gate([dict(s) for s in segments], min_secs=1.0)
+    assert [s["emotion"] for s in out] == ["happy", "happy", "sad", "sad"]
+    assert out[1].get("_emotion_inherited") is True
+    assert out[1].get("_emotion_original") == "neutral"
+    assert "_emotion_inherited" not in out[0]
+    assert "_emotion_inherited" not in out[2]
+
+
+def test_emotion_min_duration_gate_first_segment_has_no_prior():
+    """When the first segment is itself sub-threshold there is nothing to
+    inherit from — it must keep its own emotion (or 'neutral' default).
+    """
+    segments = [
+        {"start": 0.0, "end": 0.3, "emotion": "neutral",
+         "emotion_scores": [{"label": "neutral", "score": 0.2}]},
+    ]
+    out = ip.apply_emotion_min_duration_gate([dict(s) for s in segments], min_secs=1.0)
+    assert out[0]["emotion"] == "neutral"
+    assert "_emotion_inherited" not in out[0]
+
+
+def test_emotion_min_duration_gate_disabled_when_threshold_zero():
+    segments = [
+        {"start": 0.0, "end": 3.0, "emotion": "happy", "emotion_scores": []},
+        {"start": 3.0, "end": 3.2, "emotion": "neutral", "emotion_scores": []},
+    ]
+    out = ip.apply_emotion_min_duration_gate([dict(s) for s in segments], min_secs=0.0)
+    assert [s["emotion"] for s in out] == ["happy", "neutral"]
