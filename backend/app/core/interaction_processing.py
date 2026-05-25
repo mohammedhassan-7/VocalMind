@@ -57,6 +57,56 @@ def _deterministic_emotion_analysis(text: str) -> dict:
     return build_deterministic_emotion_analysis(text)
 
 
+def _emotion_min_segment_secs() -> float:
+    try:
+        return max(0.0, float(os.getenv("EMOTION_MIN_SEGMENT_SECS", "1.0")))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def apply_emotion_min_duration_gate(
+    segments: list[dict[str, Any]],
+    min_secs: float | None = None,
+) -> list[dict[str, Any]]:
+    """Inherit the previous segment's emotion for very short segments.
+
+    Why: emotion2vec on sub-1s clips returns low-confidence "neutral" labels
+    that drag the call-level distribution toward neutral. Inheriting from
+    the prior segment keeps the per-utterance emotion sticky across short
+    interjections while preserving real transitions on substantive turns.
+
+    How to apply: only mutates segments whose duration < threshold AND for
+    which a prior segment exists. Stores the original value under
+    `_emotion_original` for telemetry; resets `emotion_confidence` to the
+    inherited segment's confidence.
+    """
+    threshold = _emotion_min_segment_secs() if min_secs is None else max(0.0, min_secs)
+    if threshold <= 0.0 or not segments:
+        return segments
+    prev_emotion: str | None = None
+    prev_scores: list[dict[str, Any]] | None = None
+    for seg in segments:
+        try:
+            start = float(seg.get("start") or 0.0)
+            end = float(seg.get("end") or 0.0)
+        except (TypeError, ValueError):
+            start, end = 0.0, 0.0
+        duration = max(0.0, end - start)
+        current = (seg.get("emotion") or "").strip() or None
+        if duration < threshold and prev_emotion:
+            if current and current != prev_emotion:
+                seg["_emotion_original"] = current
+                seg["_emotion_inherited"] = True
+            seg["emotion"] = prev_emotion
+            if prev_scores is not None:
+                seg["emotion_scores"] = prev_scores
+        else:
+            if current:
+                prev_emotion = current
+                prev_scores = seg.get("emotion_scores") or prev_scores
+    return segments
+
+
 def _storage_root() -> Path:
     return Path(settings.LOCAL_AUDIO_STORAGE_DIR)
 
@@ -162,10 +212,14 @@ _AGENT_PHRASE_WEIGHTS: tuple[tuple[str, int], ...] = (
     ("how may i help", 8),
     ("how can i assist", 8),
     ("case reference", 8),
-    # Strong agent phrasing
-    ("i'll need to verify", 6),
-    ("could you please confirm", 6),
-    ("could you please verify", 6),
+    # Strong agent phrasing — verification script (high precision)
+    ("i'll need to verify", 8),
+    ("could you please confirm", 8),
+    ("could you please verify", 8),
+    ("could you confirm the", 7),
+    ("can you confirm the", 7),
+    ("for security purposes", 7),
+    ("for security reasons", 7),
     ("let me pull up", 6),
     ("let me look up", 6),
     ("my name is", 6),
@@ -190,6 +244,15 @@ _CUSTOMER_PHRASE_WEIGHTS: tuple[tuple[str, int], ...] = (
     ("i need help", 8),
     ("i was charged", 8),
     ("i want a credit", 8),
+    # Refund / dispute openers — high-precision customer signals
+    ("i'd like a refund", 8),
+    ("i want a refund", 8),
+    ("i want my money back", 8),
+    ("i was overcharged", 8),
+    ("i didn't authorize", 8),
+    ("i didn't make this", 7),
+    ("this is unacceptable", 6),
+    ("this charge is wrong", 7),
     ("are you serious", 6),
     ("i'm calling because", 6),
     ("cannot access", 6),
@@ -235,6 +298,21 @@ def assign_cluster_roles_from_text(
 
     name_norm = (agent_name or "").strip().lower()
 
+    # First-speaker prior: in inbound call-center audio, the agent answers
+    # the line first. Whichever cluster owns the earliest segment within the
+    # first 8s of audio gets a strong agent prior regardless of what they say
+    # — this anchors cluster assignment even when WhisperX mistranscribes the
+    # scripted greeting. The 8s window is wide enough to cover a slow
+    # greeting but tight enough to never cover a customer reply.
+    earliest_cluster: str | None = None
+    earliest_start: float = float("inf")
+    for cluster, start in cluster_first_seen.items():
+        if start < earliest_start:
+            earliest_start = start
+            earliest_cluster = cluster
+    if earliest_cluster is not None and earliest_start >= 8.0:
+        earliest_cluster = None  # no segment in the first 8s — don't apply prior
+
     scores: dict[str, tuple[int, int]] = {}
     for cluster, texts in cluster_texts.items():
         joined = " ".join(texts)
@@ -253,6 +331,10 @@ def assign_cluster_roles_from_text(
             or "welcome to" in joined
         ):
             agent_score += 10
+
+        # First-speaker prior — anchors agent role even on mistranscribed greetings.
+        if cluster == earliest_cluster:
+            agent_score += 12
 
         scores[cluster] = (agent_score, customer_score)
 
@@ -570,6 +652,7 @@ async def process_interaction(interaction_id: UUID) -> None:
 
         segments = analysis.get("segments", []) or []
         segments = relabel_segments_with_speaker_model([dict(s) for s in segments])
+        segments = apply_emotion_min_duration_gate(segments)
         agent_user = await session.get(User, interaction.agent_id) if interaction.agent_id else None
         agent_name = agent_user.name if agent_user else None
         cluster_role_map = assign_cluster_roles_from_text(segments, agent_name)

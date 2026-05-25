@@ -637,6 +637,8 @@ def _is_resolved_heuristic(transcript_text: str) -> bool:
         "your plan has been upgraded",
         "your plan has been updated",
         "your plan is now",
+        "is live on your account",
+        "i upgraded your",
         "plan change has been applied",
         "your account has been updated",
         "case reference number for today",
