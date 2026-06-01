@@ -1,1 +1,5 @@
+allowBuilds:
+  '@tailwindcss/oxide': set this to true or false
+  cypress: set this to true or false
+  esbuild: set this to true or false
 enablePrePostScripts: true

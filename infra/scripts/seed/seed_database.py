@@ -61,7 +61,7 @@ USERS = [
     # ── NileTech: 1 manager + 4 agents ──
     {"id": USER_IDS[0], "organization_id": ORG_IDS[0], "email": "manager@niletech.com",
      "password_hash": HASH, "name": "Galal Manager", "role": "manager", "is_active": True},
-    {"id": USER_IDS[1], "organization_id": ORG_IDS[0], "email": "mohsen@niletech.com",
+    {"id": USER_IDS[1], "organization_id": ORG_IDS[0], "email": "agent@niletech.com",
      "password_hash": HASH, "name": "Mohsen Agent", "role": "agent", "agent_type": "human", "is_active": True},
     {"id": USER_IDS[2], "organization_id": ORG_IDS[0], "email": "sara@niletech.com",
      "password_hash": HASH, "name": "Sara Agent", "role": "agent", "agent_type": "human", "is_active": True},

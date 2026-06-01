@@ -173,7 +173,7 @@ uv.lock
 tools/supabase-cli/supabase.exe
 tools/supabase_windows_amd64.tar.gz
 
-# ── Claude Code (local tooling) ─────────────────────────────────────────
+# ── Claude Code ─────────────────────────────────────────
 .claude/
 CLAUDE.md
 code-health-report.md
@@ -181,3 +181,9 @@ data/
 
 # ── Pipeline-eval generated artifacts (regenerable via tools/evaluate_pipeline.py) ──
 tools/reports/
+
+# ── OpenCode ─────────────────────────────────────────────────────────────
+.opencode/
+opencode.json
+opencode.jsonc
+

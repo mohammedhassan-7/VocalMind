@@ -14,7 +14,7 @@ describe('Authentication and routing', () => {
 
     cy.visit('/login');
     cy.get('input[type="email"]').type('manager@niletech.com');
-    cy.get('input[type="password"]').type('password');
+    cy.get('input[type="password"]').type('Password*8');
     cy.contains('button', 'Sign In').click();
 
     cy.location('pathname').should('eq', '/manager');
@@ -26,8 +26,8 @@ describe('Authentication and routing', () => {
     cy.mockApiScenario({ auth: false });
 
     cy.visit('/login');
-    cy.get('input[type="email"]').type('mohsen@niletech.com');
-    cy.get('input[type="password"]').type('password');
+    cy.get('input[type="email"]').type('agent@niletech.com');
+    cy.get('input[type="password"]').type('Password*8');
     cy.contains('button', 'Sign In').click();
 
     cy.location('pathname').should('eq', '/agent');

@@ -11,7 +11,7 @@ INSERT INTO organizations (id, name, slug, status) VALUES
 -- users
 INSERT INTO users (id, organization_id, email, password_hash, name, role, is_active, agent_type) VALUES
   ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'manager@niletech.com', '$2b$12$q8lyq/NpKlA80YMdzrKtPuHkg1pG4HIk1zIDPpKu78TPFy3zw6NW6', 'Galal Manager', 'manager', true, NULL),
-  ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'mohsen@niletech.com', '$2b$12$q8lyq/NpKlA80YMdzrKtPuHkg1pG4HIk1zIDPpKu78TPFy3zw6NW6', 'Mohsen Agent', 'agent', true, 'human'),
+  ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'agent@niletech.com', '$2b$12$q8lyq/NpKlA80YMdzrKtPuHkg1pG4HIk1zIDPpKu78TPFy3zw6NW6', 'Mohsen Agent', 'agent', true, 'human'),
   ('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'sara@niletech.com', '$2b$12$q8lyq/NpKlA80YMdzrKtPuHkg1pG4HIk1zIDPpKu78TPFy3zw6NW6', 'Sara Agent', 'agent', true, 'human'),
   ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'omar@niletech.com', '$2b$12$q8lyq/NpKlA80YMdzrKtPuHkg1pG4HIk1zIDPpKu78TPFy3zw6NW6', 'Omar Agent', 'agent', true, 'human'),
   ('b0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'nourbot@niletech.com', '$2b$12$q8lyq/NpKlA80YMdzrKtPuHkg1pG4HIk1zIDPpKu78TPFy3zw6NW6', 'Nour AI Bot', 'agent', true, 'ai'),
@@ -22,24 +22,24 @@ INSERT INTO users (id, organization_id, email, password_hash, name, role, is_act
   ('b0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000002', 'aibot@cairoconnect.com', '$2b$12$q8lyq/NpKlA80YMdzrKtPuHkg1pG4HIk1zIDPpKu78TPFy3zw6NW6', 'Cairo AI Bot', 'agent', true, 'ai');
 
 -- company_policies
-INSERT INTO company_policies (id, policy_title, policy_category, policy_text, is_active) VALUES
-  ('20000000-0000-0000-0000-000000000001', 'Greeting Policy', 'Communication', 'Agents must greet customers warmly and professionally within the first 5 seconds of the call.', true),
-  ('20000000-0000-0000-0000-000000000002', 'Escalation Protocol', 'Escalation', 'If a customer expresses extreme frustration or anger, the agent must offer to escalate to a supervisor within 60 seconds.', true),
-  ('20000000-0000-0000-0000-000000000003', 'Hold Time Limit', 'Communication', 'Customers must not be placed on hold for more than 2 minutes without a status update.', true),
-  ('20000000-0000-0000-0000-000000000004', 'Data Privacy Compliance', 'Privacy', 'Agents must never ask for full credit card numbers or passwords over the phone.', true),
-  ('20000000-0000-0000-0000-000000000005', 'Refund Authorization', 'Finance', 'Agents may authorize refunds up to $50 without supervisor approval. Amounts above $50 require escalation.', true),
-  ('20000000-0000-0000-0000-000000000006', 'Closing Script', 'Communication', 'Agents must summarize the resolution and ask if there is anything else before ending the call.', true);
+INSERT INTO company_policies (id, organization_id, policy_title, policy_category, policy_text, is_active) VALUES
+  ('20000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'Greeting Policy', 'Communication', 'Agents must greet customers warmly and professionally within the first 5 seconds of the call.', true),
+  ('20000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'Escalation Protocol', 'Escalation', 'If a customer expresses extreme frustration or anger, the agent must offer to escalate to a supervisor within 60 seconds.', true),
+  ('20000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'Hold Time Limit', 'Communication', 'Customers must not be placed on hold for more than 2 minutes without a status update.', true),
+  ('20000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'Data Privacy Compliance', 'Privacy', 'Agents must never ask for full credit card numbers or passwords over the phone.', true),
+  ('20000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'Refund Authorization', 'Finance', 'Agents may authorize refunds up to $50 without supervisor approval. Amounts above $50 require escalation.', true),
+  ('20000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000001', 'Closing Script', 'Communication', 'Agents must summarize the resolution and ask if there is anything else before ending the call.', true);
 
 -- faq_articles
-INSERT INTO faq_articles (id, question, answer, category, is_active) VALUES
-  ('f0000000-0000-0000-0000-000000000001', 'How do I reset my password?', 'Go to Settings > Security > Reset Password, or click ''Forgot password'' on the login page.', 'Account', true),
-  ('f0000000-0000-0000-0000-000000000002', 'How do I update my billing information?', 'Navigate to Settings > Billing > Payment Methods and update your card details.', 'Billing', true),
-  ('f0000000-0000-0000-0000-000000000003', 'What is the refund policy?', 'Refunds are processed within 5-7 business days. Contact support for amounts over $50.', 'Billing', true),
-  ('f0000000-0000-0000-0000-000000000004', 'How do I contact technical support?', 'Use the in-app chat, call +1-800-555-0199, or email support@vocalmind.com.', 'Technical', true),
-  ('f0000000-0000-0000-0000-000000000005', 'How to enable two-factor authentication?', 'Go to Settings > Security > 2FA and follow the setup wizard with your authenticator app.', 'Account', true),
-  ('f0000000-0000-0000-0000-000000000006', 'What are the service hours?', 'Our support team is available 24/7 for critical issues. General inquiries: Sun-Thu 9AM-6PM EET.', 'General', true),
-  ('f0000000-0000-0000-0000-000000000007', 'How do I cancel my subscription?', 'Go to Settings > Subscription > Cancel. Note: cancellation takes effect at the end of the billing cycle.', 'Billing', true),
-  ('f0000000-0000-0000-0000-000000000008', 'How to export my data?', 'Navigate to Settings > Data Management > Export. You can download CSV or JSON formats.', 'Technical', true);
+INSERT INTO faq_articles (id, organization_id, question, answer, category, is_active) VALUES
+  ('f0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'How do I reset my password?', 'Go to Settings > Security > Reset Password, or click ''Forgot password'' on the login page.', 'Account', true),
+  ('f0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'How do I update my billing information?', 'Navigate to Settings > Billing > Payment Methods and update your card details.', 'Billing', true),
+  ('f0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'What is the refund policy?', 'Refunds are processed within 5-7 business days. Contact support for amounts over $50.', 'Billing', true),
+  ('f0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'How do I contact technical support?', 'Use the in-app chat, call +1-800-555-0199, or email support@vocalmind.com.', 'Technical', true),
+  ('f0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'How to enable two-factor authentication?', 'Go to Settings > Security > 2FA and follow the setup wizard with your authenticator app.', 'Account', true),
+  ('f0000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000001', 'What are the service hours?', 'Our support team is available 24/7 for critical issues. General inquiries: Sun-Thu 9AM-6PM EET.', 'General', true),
+  ('f0000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000001', 'How do I cancel my subscription?', 'Go to Settings > Subscription > Cancel. Note: cancellation takes effect at the end of the billing cycle.', 'Billing', true),
+  ('f0000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000001', 'How to export my data?', 'Navigate to Settings > Data Management > Export. You can download CSV or JSON formats.', 'Technical', true);
 
 -- interactions
 INSERT INTO interactions (id, organization_id, agent_id, uploaded_by, audio_file_path, file_size_bytes, duration_seconds, file_format, interaction_date, processing_status, language_detected, has_overlap, channel_count) VALUES
