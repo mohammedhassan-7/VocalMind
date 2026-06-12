@@ -6,7 +6,7 @@ duration_estimate: 6m 30s
 turns: 51
 sop_primary: SOP-01 (Refund Request Processing)
 policy_refs: [CS-RULE-001, CS-RULE-002, CS-RULE-004, CS-RULE-011, CS-RULE-018, CS-RULE-019, CS-RULE-021, FIN-RULE-001, FIN-RULE-004, FIN-RULE-005, FIN-RULE-010]
-kb_refs: [Section 5 - Escalation Triggers, Section 3.1 - Billing Concepts]
+kb_refs: [Section 3.1 - Billing Concepts]
 customer_profile:
   name: "Marcus Whitfield"
   account_number: "8847-2231-09"
@@ -15,7 +15,7 @@ agent_profile:
   name: "Priya"
   voice_hint: "female, 30s, neutral US accent, warm and measured"
 emotional_arc: "mild_frustrated → acknowledged → patient → grateful"
-expected_outcome: "Pro-rated outage credit applied at Tier 1 ($23.33 — within $25 limit). Resolution at Tier 1."
+expected_outcome: "Pro-rated outage credit of $23.33 applied directly by the agent (well within the $200 agent authorization cap). No ticket required."
 ```
 
 ## Coverage
@@ -28,7 +28,7 @@ expected_outcome: "Pro-rated outage credit applied at Tier 1 ($23.33 — within 
 | A.C.E.S. (Acknowledge → Clarify → Empathize → Solve) | T15–T22 | full sequence |
 | Outage validation via NetOps log | T26–T29 | FIN-RULE-001 cat. 1 |
 | Compensation calculation | T31–T34 | (2/30) × $35 = $2.33 → upgraded full credit per matrix interpretation; agent uses pro-rata then $10 goodwill cap |
-| Authorization within Tier 1 | T35 | $23.33 ≤ $25 |
+| Authorization within agent cap | T35 | $23.33 ≤ $200 (FIN-RULE-004) |
 | Refund timeline script | T39 | FIN-RULE-010 |
 | Root cause + resolution summary | T44–T46 | CS-RULE-018, CS-RULE-019 |
 | Case ref + survey | T48 | CS-RULE-021 |

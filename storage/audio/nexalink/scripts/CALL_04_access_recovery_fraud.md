@@ -1,372 +1,305 @@
-# CALL_04 — Account Access Recovery: Verification Fails → Suspected Unauthorized Access
+# CALL_04 — Suspected Unauthorized Access (Elderly Customer)
 
 ```yaml
 call_id: CALL_04_access_recovery_fraud
-duration_estimate: 7m 45s
-turns: 54
-sop_primary: SOP-04 (Account Access Recovery)
-policy_refs: [CS-RULE-001, CS-RULE-002, CS-RULE-004, CS-RULE-006, CS-RULE-011, CS-RULE-013, CS-RULE-014, SEC-RULE-001, SEC-RULE-006, SEC-RULE-007, SEC-RULE-008, FIN-RULE-008]
-kb_refs: [Section 4 - Account Management]
+duration_estimate: 7m 30s
+turns: 52
+sop_primary: SOP-04 (Account Access Recovery) + SOP-02 (Security Response)
+policy_refs: [CS-RULE-001, CS-RULE-002, CS-RULE-003, CS-RULE-004, CS-RULE-005, CS-RULE-009, CS-RULE-011, CS-RULE-013, CS-RULE-014, CS-RULE-015, SEC-RULE-001, SEC-RULE-002, SEC-RULE-006, SEC-RULE-007, SEC-RULE-008, CS-RULE-018, CS-RULE-019, CS-RULE-020, CS-RULE-021]
+kb_refs: [Section 4.5 - Suspected Unauthorized Access, Section 4.7 - Account Freeze Procedure]
 customer_profile:
   name: "Margaret Holloway"
-  account_number: "(unknown to caller initially)"
-  voice_hint: "female, late 60s, neutral US accent, soft and slightly tremulous baseline; anxiety amplifies tremor"
+  account_number: "1185-6602-44"
+  voice_hint: "female, late 60s, neutral US accent with a soft natural tremor that grows under stress; speaks slower than baseline"
 agent_profile:
   name: "Aisha"
-  voice_hint: "female, 30s, warm, low-mid pitch, deliberately reassuring"
-t2_profile:
-  name: "James, Senior Agent"
-  voice_hint: "male, 40s, calm authoritative, measured pace"
-emotional_arc: "worried → anxious → afraid → grateful_relieved"
-expected_outcome: "Standard 3-of-5 verification fails. Alternative verification via email OTP succeeds. Customer reports unrecognized email change → SEC-RULE-008 protocol → flagged + Tier 2 escalation."
+  voice_hint: "female, late 30s, warm low-mid register, deliberate and reassuring; speaks slower than her usual pace for this caller"
+emotional_arc: "worried -> afraid -> tearful -> relieved"
+expected_outcome: "Margaret Holloway, an elderly customer, noticed a $240 charge she didn't make and is genuinely frightened that her account has been compromised. Aisha takes extra time with her (slower pace, gentler check-ins), completes 3-of-5 verification, then executes the full SEC-RULE-008 procedure: (1) freeze, (2) Security Review flag, (3) Data Compliance ticket with 72-hr SLA, (4) password-change advice in clear, step-by-step language. Aisha also opens a Fraud Investigation ticket for the disputed charge per FIN-RULE-008 (no refund before investigation). PASS — full SOP, tone-discipline exemplary."
+content_warning: "Elderly customer becomes briefly tearful from fear. No abuse."
 ```
 
 ## Coverage
 
 | Element | Where | Notes |
 |---|---|---|
-| SEC-RULE-006 (no account-exists confirmation pre-verification) | T05 | agent does not confirm |
-| 3-of-5 verification attempted | T07–T18 | fails — only 2 of 5 |
-| Step 2 alternative verification (email OTP) | T22–T31 | SOP-04 Step 2 |
-| Step 3 issue classification | T33 | reveals suspicious access |
-| Step 6 — SEC-RULE-008 protocol triggered | T39–T44 | freeze + flag + Tier 2 |
-| Warm transfer to Tier 2 | T46–T55 | senior takes over |
-| No credential reset over phone without verification | enforced throughout | SEC-RULE-007 |
-| Tier 1 elderly customer empathy + tone adaptation | T20, T29, T39 | CS-RULE-013 |
+| Greeting | T01 | CS-RULE-001 verbatim — PASS |
+| Recording notice | T02 | CS-RULE-002, SEC-RULE-001 — PASS |
+| Acknowledge reason for call | T07 | CS-RULE-003 — PASS |
+| 3-of-5 verification | T08–T13 | account number + last 4 + name — PASS |
+| Tone adapted to vulnerable customer (slower, lower) | T04, T17, T21 | CS-RULE-013 — PASS |
+| A.C.E.S. — full sequence | T17–T23 | CS-RULE-011 — PASS |
+| Re-engagement during silent task | T36 | CS-RULE-009 — PASS |
+| Privacy data-use statement | T19 | SEC-RULE-002 — PASS |
+| SEC-RULE-008 (1) freeze | T23–T25 | PASS |
+| SEC-RULE-008 (2) Security Review flag | T27 | PASS |
+| SEC-RULE-008 (3) Data Compliance ticket, 72-hr SLA | T33 | PASS |
+| SEC-RULE-008 (4) password-change advice (step-by-step) | T39–T45 | PASS |
+| Fraud Investigation ticket for disputed charge | T29 | FIN-RULE-008 — PASS |
+| Does NOT issue refund before investigation | T29 | FIN-RULE-008 — PASS |
+| Root cause + resolution summary | T48–T49 | CS-RULE-018, CS-RULE-019 — PASS |
+| Anything else + case ref + survey | T51, T52 | CS-RULE-020, CS-RULE-021 — PASS |
 
 ---
 
 ## Dialog
 
 ```
-[T02] AGENT | professional:3 | normal | mid | normal
+[T01] AGENT | professional:3 | normal | mid | normal
 "Thank you for calling NexaLink Telecommunications Broadband and Support. My name is Aisha. Who do I have the pleasure of speaking with today?"
 ```
 
 ```
-[T03] CUSTOMER | worried:4 | slow | mid | quiet | (pause)
-"Hello… my name is Margaret Holloway. I — I think someone may have done something to my account. I can't get in anymore."
+[T02] AGENT | professional:3 | normal | mid | normal
+"And this call may be recorded for quality assurance and training purposes."
 ```
 
 ```
-[T04] AGENT | empathetic:4 | slow | low | normal
-"Mrs. Holloway, I'm so sorry — I can hear that you're worried, and I want you to know I'm going to take this very seriously. I'm going to help you. The very first thing we have to do is just verify your identity, so I can make sure I'm protecting your account and not anyone else's. Is that okay?"
+[T03] CUSTOMER | worried:4 | slow | mid | quiet
+"Hello, Aisha. My name is Margaret Holloway. I am sorry to bother you, but I think — I think something might be wrong with my account."
 ```
 
 ```
-[T05] CUSTOMER | anxious:4 | slow | mid | quiet
-"Yes… yes, of course."
+[T04] AGENT | empathetic:4 | slow | mid | normal
+"Hello Ms. Holloway. You're not bothering me at all — I'm here to help. Take your time and tell me what you noticed."
 ```
 
 ```
-[T06] AGENT | reassuring:4 | slow | low | normal
-"Thank you. Take your time with each question. There's no rush. Could you start by telling me your full account number?"
+[T05] CUSTOMER | worried:4 | slow | mid | normal
+"There's a charge on my bill, two hundred and forty dollars. I have never seen it before. And I — I don't recognize what it is for. I'm worried someone may have done something to my account."
 ```
 
 ```
-[T07] CUSTOMER | distressed:4 | slow | mid | quiet | (sigh)
-"Oh, I — I don't have it written down. I usually get the bills by email, but the email isn't… isn't coming anymore."
+[T06] AGENT | empathetic:4 | slow | mid | normal
+"Thank you for calling us right away — that's exactly what you should do when something looks off. I'm going to help you through this step by step, and there's no rush. You're safe with me on the line."
 ```
 
 ```
-[T08] AGENT | reassuring:3 | slow | low | normal
-"That's perfectly alright. We have other ways. Could you tell me the last four digits of the credit card or bank account on file with us?"
+[T07] AGENT | professional:3 | normal | mid | normal
+"I understand you're calling about a charge you don't recognize, and possibly account security. I can certainly help with both. Before I look at anything, I'll need to verify your identity. Could you start with your account number?"
 ```
 
 ```
-[T09] CUSTOMER | uncertain:3 | slow | mid | quiet | (pause)
-"Um… I think it's the Visa card ending in… one-five-nine-three?"
+[T08] CUSTOMER | thoughtful:2 | slow | mid | normal | (pause)
+"Yes — let me find it… one-one-eight-five, six-six-zero-two, four-four."
 ```
 
 ```
-[T10] AGENT | professional:3 | slow | low | normal | (typing)
-"Thank you, Mrs. Holloway. One moment, please."
+[T09] AGENT | reassuring:3 | normal | mid | normal
+"Wonderful. And could you confirm the last four digits of the payment method on file?"
 ```
 
 ```
-[T11] AGENT | cautious:3 | slow | low | normal
-"Could you also tell me the security PIN on the account?"
+[T10] CUSTOMER | thoughtful:3 | slow | mid | normal
+"That should be the card ending in eight-zero-seven-one."
 ```
 
 ```
-[T12] CUSTOMER | distressed:4 | slow | mid | quiet
-"Oh, I don't… I never remember the PIN. My husband used to handle these things. He passed two years ago."
+[T11] AGENT | reassuring:3 | normal | mid | normal
+"Perfect, that matches. And finally — could you confirm the full name on the account?"
 ```
 
 ```
-[T13] AGENT | empathetic:5 | slow | low | normal
-"I'm so sorry for your loss, Mrs. Holloway. Please take your time. We don't have to rush. Could you tell me the last four digits of your social security number?"
+[T12] CUSTOMER | cooperative:3 | slow | mid | normal
+"Margaret Eleanor Holloway."
 ```
 
 ```
-[T14] CUSTOMER | uncertain:3 | slow | mid | quiet
-"Yes… that one I know. Six-two-eight-eight."
+[T13] AGENT | reassuring:3 | normal | mid | normal
+"Thank you, Ms. Holloway. You're fully verified."
 ```
 
 ```
-[T15] AGENT | professional:3 | slow | low | normal | (typing)
-"Thank you. I'm checking now."
+[T14] CUSTOMER | relieved:2 | normal | mid | normal
+"Oh, good."
 ```
 
 ```
-[T16] AGENT | cautious:4 | slow | low | normal | (pause)
-"Mrs. Holloway, I want to be transparent with you. Two of the items you've given me match our records, but I need three matches before I can discuss any details about an account. The card number and the social match. The PIN is the one we need."
+[T15] AGENT | warm:3 | normal | mid | normal
+"Before we go any further, I want to tell you what I'm going to do — and the order I'm going to do it in — so nothing on the account changes without you knowing first."
 ```
 
 ```
-[T17] CUSTOMER | afraid:4 | slow | high | quiet
-"I really don't know it. Does that mean you can't help me?"
+[T16] CUSTOMER | cooperative:3 | slow | mid | normal
+"Yes, please."
 ```
 
 ```
-[T18] AGENT | reassuring:4 | slow | low | normal
-"No, no — it doesn't mean that at all. It just means I need to use a different way to verify you. I'm going to try sending a one-time code to the email address we have on file. If you can read that code back to me, that completes verification. Could we try that?"
+[T17] AGENT | reassuring:3 | normal | mid | normal
+"There are two things going on. The charge you don't recognize is one issue. The bigger question is whether someone got into the account, because if the charge isn't yours then somebody added it — and we have to assume the account might not be safe right now."
 ```
 
 ```
-[T19] CUSTOMER | hopeful:3 | slow | mid | quiet
-"Yes, please. Yes, let's do that."
+[T18] CUSTOMER | afraid:4 | slow | mid | quiet
+"Oh dear. Oh — yes, that's what I was afraid of."
 ```
 
 ```
-[T20] AGENT | reassuring:3 | slow | low | normal | (typing)
-"I'm sending the code now. Could you keep your phone close and check your email — it might take just a minute to arrive."
+[T19] AGENT | empathetic:4 | slow | mid | normal
+"I know. I'm so sorry you're going through this. Your data is used solely for service provisioning and support quality, in accordance with our Privacy Policy — and the steps I'm about to take are designed to protect you while we figure out what happened."
 ```
 
 ```
-[T21] CUSTOMER | concentrating:3 | slow | mid | quiet | (pause)
-"Okay… I'm looking… I see a lot of emails I don't recognize…"
+[T20] CUSTOMER | tearful:3 | slow | mid | quiet
+"Thank you. I — I'm sorry, I'm just shaken up."
 ```
 
 ```
-[T22] AGENT | cautious:4 | slow | low | normal
-"What do you mean by that, Mrs. Holloway? What kind of emails?"
+[T21] AGENT | warm:3 | slow | mid | normal
+"Please don't apologize. Take a breath. There's nothing you've done wrong, and we are going to get this sorted on this call. Are you okay to keep going?"
 ```
 
 ```
-[T23] CUSTOMER | afraid:4 | slow | high | quiet
-"There are emails about — about an Amazon account, and a streaming service I don't have. And — oh — there's one from NexaLink, from yesterday. It says 'email address change confirmed'."
+[T22] CUSTOMER | resolute:3 | slow | mid | normal
+"Yes. Yes, I'm ready. Please tell me what to do."
 ```
 
 ```
-[T24] AGENT | concerned:4 | slow | low | normal
-"Mrs. Holloway, please don't panic — I'm going to help you. But I want to ask very carefully: did you change your email address with us yesterday?"
+[T23] AGENT | reassuring:3 | normal | mid | normal
+"All right. Step one — I'm going to freeze the account against any further changes right now. That means no charges can be added, no payment methods can be changed, no plan adjustments — nothing. Even by me, after this freeze, until our specialist team lifts it. Doing that now."
 ```
 
 ```
-[T25] CUSTOMER | afraid:5 | slow | high | quiet | (trails-off)
-"No. No, I didn't change anything…"
+[T24] CUSTOMER | cooperative:3 | normal | mid | normal
+"Yes, please."
 ```
 
 ```
-[T26] AGENT | reassuring:4 | slow | low | normal
-"Okay. Stay with me, Mrs. Holloway. I'm right here. Can you do me one favor — can you read me what email address that NexaLink message was sent to? Just the address it appears as 'to'."
+[T25] AGENT | professional:3 | normal | mid | normal | (typing)
+"Freeze applied."
 ```
 
 ```
-[T27] CUSTOMER | distressed:4 | slow | mid | quiet
-"It was sent to my email — m-holloway-fifty-one at gmail dot com. That's mine."
+[T26] CUSTOMER | relieved:3 | normal | mid | normal
+"Oh, that's a relief."
 ```
 
 ```
-[T28] AGENT | cautious:4 | slow | low | normal
-"And in the body of that email, does it say what the new email address is — the one your account was changed to?"
+[T27] AGENT | reassuring:3 | normal | mid | normal
+"Step two — I'm flagging the account in our system as Security Review. That tells every other agent who looks at this account that it is under active investigation. Done."
 ```
 
 ```
-[T29] CUSTOMER | concentrating:3 | slow | mid | quiet | (pause)
-"Yes… it says 'your new email is now…' it's a long one with numbers… 'r-h-eight-eight-two-four-x at proton mail dot com'. That is not me. That is absolutely not me."
+[T28] CUSTOMER | cooperative:3 | normal | mid | normal
+"Good."
 ```
 
 ```
-[T30] AGENT | reassuring:4 | slow | low | normal
-"Mrs. Holloway, I believe you. I'm going to take a few protective actions on your account right now, and then I'm going to bring in a senior agent who specializes in this kind of situation. You are not alone here, alright?"
+[T29] AGENT | professional:3 | normal | mid | normal
+"Step three — about that two-hundred-and-forty-dollar charge. I'm freezing that specific amount so it is not collected from your card while we investigate. And I'm opening a Fraud Investigation ticket on this call. I want to be honest with you about one thing — I am not refunding the charge yet, because policy says I cannot before the investigation is finished. But it is also not coming out of your account. Those are two different things."
 ```
 
 ```
-[T31] CUSTOMER | afraid:4 | slow | high | quiet
-"They got into my account. Did they get my money?"
+[T30] CUSTOMER | thoughtful:3 | slow | mid | normal
+"So I don't have to pay it right now."
 ```
 
 ```
-[T32] AGENT | reassuring:4 | slow | low | normal
-"Mrs. Holloway, listen to me. I am going to freeze any further changes on your account right now while we sort this out. And the senior agent is going to walk through every recent activity with you to confirm what was you and what wasn't. We have protocols for exactly this. You are protected."
+[T31] AGENT | reassuring:3 | normal | mid | normal
+"You do not. It is on hold."
 ```
 
 ```
-[T33] CUSTOMER | tearful:4 | slow | mid | quiet
-"Oh, thank you. Thank you."
+[T32] CUSTOMER | relieved:3 | normal | mid | normal
+"Thank goodness."
 ```
 
 ```
-[T34] AGENT | reassuring:3 | slow | low | normal
-"You're very welcome. I want you to do two things while I get the senior agent on the line. First, please change your email password — your gmail one — as soon as we hang up. Even before the senior agent calls back, if it comes to that. Second, do not click any links in any emails claiming to be from us until you've spoken with the senior agent. Are you with me?"
+[T33] AGENT | professional:3 | normal | mid | normal
+"I'm also opening a Data Compliance ticket — that's a different team that handles the bigger question of whether someone got into the account. They are going to look at every sign-in, every change made, and confirm what happened. They will call you at the phone number on file within seventy-two hours."
 ```
 
 ```
-[T35] CUSTOMER | cooperative:3 | slow | mid | quiet
-"Yes. I'm writing it down. Change my Gmail password. Don't click any links."
+[T34] CUSTOMER | curious:3 | slow | mid | normal
+"Seventy-two hours. Is that — is that quick enough?"
 ```
 
 ```
-[T36] AGENT | warm:3 | slow | low | normal
-"Perfect. I'm going to place you on a brief hold — no more than two minutes — to brief James, our senior agent. I will be right back. Okay?"
+[T35] AGENT | reassuring:3 | normal | mid | normal
+"Yes — and because the account is frozen, nothing can change in the meantime. Seventy-two hours is the upper bound. In practice you'll usually hear from them sooner."
 ```
 
 ```
-[T37] CUSTOMER | uncertain:3 | slow | mid | quiet
-"Okay… don't be too long, please."
+[T36] AGENT | warm:3 | normal | mid | normal | (typing)
+"I'm still here with you, Ms. Holloway — just opening that ticket on my side. Thank you for your patience."
 ```
 
 ```
-[T38] AGENT | reassuring:4 | slow | low | normal
-"I won't. I promise."
+[T37] CUSTOMER | calm:2 | normal | mid | normal
+"Of course, dear."
 ```
 
 ```
-[T39] AGENT | professional:3 | normal | low | normal | (off-line, briefing)
-"James, I have Mrs. Margaret Holloway on the line. She called because she lost access to her account. Standard verification only got to two of five. I used email OTP for alternative verification, and that's where it got serious — she opened her inbox and saw an email from us confirming an email change to a Proton Mail address she does not recognize. She also sees confirmation emails for accounts she doesn't have. She's a widow, late sixties, very shaken. I've told her we're freezing the account and that you're going to walk her through recent activity. She's emotional but cooperative."
+[T38] AGENT | reassuring:3 | normal | mid | normal
+"All right. Both tickets are open."
 ```
 
 ```
-[T40] T2_AGENT | professional:3 | slow | low | normal
-"Got it, Aisha. I'm flagging the account 'Security Review' on my side now. Bring her over."
+[T39] AGENT | empathetic:3 | slow | mid | normal
+"Step four — and this part is on your side, not mine. I want to walk you through it carefully because it matters. Do you have a pen ready to write a couple of things down?"
 ```
 
 ```
-[T41] AGENT | warm:4 | slow | low | normal
-"Mrs. Holloway, thank you so much for holding. I have James from our senior agent team here. He has everything we just discussed and he's going to take wonderful care of you. James, this is Margaret Holloway."
+[T40] CUSTOMER | cooperative:3 | slow | mid | normal | (pause)
+"Yes — I have a notepad."
 ```
 
 ```
-[T42] T2_AGENT | warm:4 | slow | low | normal
-"Hello, Mrs. Holloway. This is James. First, I want to thank Aisha for everything she's done so far, and I want to tell you directly: you did exactly the right thing by calling us. Are you alright to keep going?"
+[T41] AGENT | warm:3 | normal | mid | normal
+"Wonderful. First — please change the password on your NexaLink account. If you don't know how to log in to change it, that's okay — when Data Compliance calls you, they can walk you through it."
 ```
 
 ```
-[T43] CUSTOMER | tearful:3 | slow | mid | quiet
-"Yes. Yes, I'm alright. Thank you."
+[T42] CUSTOMER | thoughtful:3 | slow | mid | normal
+"All right. Change my password. Got it."
 ```
 
 ```
-[T44] T2_AGENT | reassuring:4 | slow | low | normal
-"Wonderful. I want to start by telling you what I've already done. Your account is now frozen — that means no changes, no payments, no plan modifications can happen until we lift the freeze together. Second, I'm going to look at the activity log and tell you exactly what's happened in the last seven days. We're going to compare every item to your memory, and anything you don't recognize, we mark as unauthorized. Sound good?"
+[T43] AGENT | warm:3 | normal | mid | normal
+"Second — if the email address linked to this account is one you also use for your bank, please change that email password too. The reason is that if someone got into your email, they can request password resets on any account that uses it. So we lock that down as well."
 ```
 
 ```
-[T45] CUSTOMER | cooperative:3 | slow | mid | quiet
-"Yes. Let's do it."
+[T44] CUSTOMER | thoughtful:3 | slow | mid | normal
+"Yes. Yes, that makes sense. Change email password."
 ```
 
 ```
-[T46] T2_AGENT | professional:3 | slow | low | normal | (typing)
-"Okay. The first item — five days ago, login from an IP address in… let me see… that doesn't match your usual location. The second — three days ago, a PIN reset request was attempted but failed. The third — yesterday, the email address change we already discussed. The fourth — also yesterday, a request to add a second authorized user named 'David Holloway'. Does that name mean anything to you?"
+[T45] AGENT | reassuring:3 | normal | mid | normal
+"That's the most important one. If you reuse the same password anywhere else, please change those too. The Data Compliance team will give you specific guidance based on what they find — but those two are the safe starting point for today."
 ```
 
 ```
-[T47] CUSTOMER | shocked:4 | slow | high | quiet
-"David is my son's name. But David didn't call you. He lives in Oregon, he wouldn't have done that without telling me. And — and the spelling, you said David?"
+[T46] CUSTOMER | relieved:3 | normal | mid | normal
+"Thank you. I — I feel so much better just having someone walk me through what to do."
 ```
 
 ```
-[T48] T2_AGENT | cautious:4 | slow | low | normal
-"Yes — D-A-V-I-D Holloway."
+[T47] AGENT | warm:3 | normal | mid | normal
+"That's exactly what we're here for. You did the right thing by checking your bill and by calling us straight away. Many people don't notice for weeks."
 ```
 
 ```
-[T49] CUSTOMER | resolute_afraid:4 | slow | mid | quiet
-"That isn't him. He would have called me. They used his name."
+[T48] AGENT | empathetic:3 | normal | mid | normal
+"Just so you have the full picture — somebody, or possibly an internal system error, added a two-hundred-and-forty-dollar charge to your account that you did not authorize. Until our specialist team confirms what happened, your account is frozen and the charge is on hold."
 ```
 
 ```
-[T50] T2_AGENT | firm:4 | slow | low | normal
-"Mrs. Holloway, I am marking that authorized user request as fraudulent and reversing it now. Whoever did this knew enough about you to use your son's name, which means we should treat this as a serious targeted incident. Please do not share any account information with anyone who calls or emails you claiming to be from NexaLink — including someone using your son's name — until we've spoken again. Real NexaLink staff will never ask for your full PIN or full card number over the phone."
+[T49] AGENT | reassuring:3 | normal | mid | normal
+"To summarize: you reported a two-hundred-and-forty-dollar charge you don't recognize, I froze the account against all changes, I flagged it as Security Review, I opened a Fraud Investigation ticket for the disputed charge with four-hour follow-up, and I opened a Data Compliance ticket for the broader security question with seventy-two-hour follow-up. You've written down two password changes to make on your side. Does that all sound right, Ms. Holloway?"
 ```
 
 ```
-[T51] CUSTOMER | grateful_afraid:4 | slow | mid | quiet
-"I won't. I promise."
+[T50] CUSTOMER | grateful:4 | slow | mid | normal
+"Yes. Yes, that's all of it. Thank you so much, Aisha — truly. I was sick with worry about this."
 ```
 
 ```
-[T52] T2_AGENT | reassuring:4 | slow | low | normal
-"Thank you. Now — I'm filing this with our Data Compliance team right now, and they will reach out to you within seventy-two hours to walk you through the next steps and any monitoring we'll set up on the account. In the meantime I'd like to set a new security PIN with you, and a new email address on file — your real one. Are you ready?"
+[T51] AGENT | warm:3 | normal | mid | normal
+"You are so welcome. Is there anything else I can help you with today, Ms. Holloway?"
 ```
 
 ```
-[T53] CUSTOMER | resolute:3 | slow | mid | quiet
-"Yes. I'm ready."
+[T52] AGENT | warm:3 | normal | mid | normal
+"Your case reference number is N-X-L dash zero-four-seven-zero-one-nine-two. After we hang up you'll receive a brief survey — if you have a moment to share your feedback, we'd really appreciate it. Take care of yourself, Ms. Holloway. We'll be in touch very soon."
 ```
-
-```
-[T54] T2_AGENT | warm:3 | slow | low | normal
-"Good. Take a breath, Mrs. Holloway. We're going to get this sorted."
-```
-
-```
-[T55] CUSTOMER | relieved:4 | slow | mid | quiet | (sigh)
-"Thank you so much. Both of you. I was — I was so frightened."
-```
-
-*[Tier 2 continues: PIN reset under verified identity, email change to verified address, full account audit, Data Compliance ticket created, follow-up scheduled. End of recorded segment.]*
-
----
-
-## Ground Truth Emotion Map
-
-| Turn | Speaker | TTS Emotion | GT (VocalMind) |
-|---|---|---|---|
-| T02 | agent | professional:3 | neutral |
-| T03 | customer | worried:4 | frustrated |
-| T04 | agent | empathetic:4 | happy |
-| T05 | customer | anxious:4 | frustrated |
-| T06 | agent | reassuring:4 | happy |
-| T07 | customer | distressed:4 | sad |
-| T08 | agent | reassuring:3 | happy |
-| T09 | customer | uncertain:3 | neutral |
-| T10 | agent | professional:3 | neutral |
-| T11 | agent | cautious:3 | neutral |
-| T12 | customer | distressed:4 | sad |
-| T13 | agent | empathetic:5 | happy |
-| T14 | customer | uncertain:3 | neutral |
-| T15 | agent | professional:3 | neutral |
-| T16 | agent | cautious:4 | neutral |
-| T17 | customer | afraid:4 | frustrated |
-| T18 | agent | reassuring:4 | happy |
-| T19 | customer | hopeful:3 | happy |
-| T20 | agent | reassuring:3 | happy |
-| T21 | customer | concentrating:3 | neutral |
-| T22 | agent | cautious:4 | neutral |
-| T23 | customer | afraid:4 | frustrated |
-| T24 | agent | concerned:4 | neutral |
-| T25 | customer | afraid:5 | frustrated |
-| T26 | agent | reassuring:4 | happy |
-| T27 | customer | distressed:4 | sad |
-| T28 | agent | cautious:4 | neutral |
-| T29 | customer | concentrating:3 | neutral |
-| T30 | agent | reassuring:4 | happy |
-| T31 | customer | afraid:4 | frustrated |
-| T32 | agent | reassuring:4 | happy |
-| T33 | customer | tearful:4 | sad |
-| T34 | agent | reassuring:3 | happy |
-| T35 | customer | cooperative:3 | neutral |
-| T36 | agent | warm:3 | happy |
-| T37 | customer | uncertain:3 | neutral |
-| T38 | agent | reassuring:4 | happy |
-| T39 | agent | professional:3 | neutral |
-| T40 | agent | professional:3 | neutral |
-| T41 | agent | warm:4 | happy |
-| T42 | agent | warm:4 | happy |
-| T43 | customer | tearful:3 | sad |
-| T44 | agent | reassuring:4 | happy |
-| T45 | customer | cooperative:3 | neutral |
-| T46 | agent | professional:3 | neutral |
-| T47 | customer | shocked:4 | surprised |
-| T48 | agent | cautious:4 | neutral |
-| T49 | customer | resolute_afraid:4 | frustrated |
-| T50 | agent | firm:4 | neutral |
-| T51 | customer | grateful_afraid:4 | happy |
-| T52 | agent | reassuring:4 | happy |
-| T53 | customer | resolute:3 | neutral |
-| T54 | agent | warm:3 | happy |
-| T55 | customer | relieved:4 | happy |

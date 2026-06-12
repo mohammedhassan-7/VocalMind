@@ -6,7 +6,7 @@ duration_estimate: 5m 50s
 turns: 54
 sop_primary: SOP-03 (Technical Support Troubleshooting), Path B
 policy_refs: [CS-RULE-001, CS-RULE-002, CS-RULE-004, CS-RULE-009, CS-RULE-011, CS-RULE-018, CS-RULE-019, CS-RULE-021, FIN-RULE-003]
-kb_refs: [Section 2.1 - Technology Tiers, Section 2.2 - Router & WiFi, Section 5 - Escalation Triggers]
+kb_refs: [Section 2.1 - Technology Tiers, Section 2.2 - Router & WiFi]
 customer_profile:
   name: "Sofia Reyes"
   account_number: "7790-3322-15"
@@ -15,7 +15,7 @@ agent_profile:
   name: "Marcus"
   voice_hint: "male, 30s, neutral US accent, friendly and methodical"
 emotional_arc: "tired → cooperative → curious → relieved"
-expected_outcome: "Resolution at Tier 1 — modem power-cycle restored speed. No escalation."
+expected_outcome: "Agent resolves at his seat — modem power-cycle restored speed. No back-office ticket required."
 ```
 
 ## Coverage
@@ -25,7 +25,7 @@ expected_outcome: "Resolution at Tier 1 — modem power-cycle restored speed. No
 | Greeting + recording | T02–T03 | |
 | 3-of-5 verification | T08–T13 | name + account + last 4 of SSN |
 | Issue classification questions | T15–T19 | mobile vs home, all devices vs one, sudden vs gradual |
-| Account status + outage check | T20–T22 | KB Section 5 |
+| Account status + outage check | T20–T22 | SOP-03 Step 3 |
 | Path B steps in order | T24–T38 | speed test → device count → 5GHz → modem reboot |
 | Hardwired test enforcement | T26 | FIN-RULE-003 |
 | Resolution confirmation | T39–T41 | live test |

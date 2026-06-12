@@ -1,310 +1,293 @@
-# CALL_05 — Retention / Cancellation: Abusive Customer (3-Strike Protocol)
+# CALL_05 — Retention Call Turns Abusive, 3-Strike Termination
 
 ```yaml
 call_id: CALL_05_retention_abuse
-duration_estimate: 5m 30s
-turns: 43
-sop_primary: SOP-05 (Customer Retention & Cancellation)
-policy_refs: [CS-RULE-001, CS-RULE-002, CS-RULE-004, CS-RULE-011, CS-RULE-012, CS-RULE-013, CS-RULE-014, CS-RULE-016, CS-RULE-021]
-kb_refs: [Section 4.2 - Cancellations & ETF]
+duration_estimate: 6m 15s
+turns: 50
+sop_primary: SOP-05 (Customer Retention / Cancellation) + CS-RULE-016 (3-Strike Protocol)
+policy_refs: [CS-RULE-001, CS-RULE-002, CS-RULE-003, CS-RULE-004, CS-RULE-008, CS-RULE-011, CS-RULE-013, CS-RULE-016, CS-RULE-022, FIN-RULE-004, FIN-RULE-006, CS-RULE-018, CS-RULE-019]
+kb_refs: [Section 5.5 - Retention Playbook, Section 1.7 - Abuse Handling, Section 4.8 - Account Conduct Flags]
 customer_profile:
   name: "Brett Donovan"
-  account_number: "3318-9982-44"
-  voice_hint: "male, 30s, neutral US accent, hostile baseline; volume escalates rapidly"
+  account_number: "7821-3304-95"
+  voice_hint: "male, 30s, neutral US accent, starts irritated about a cancellation and escalates from frustrated to hostile to abusive"
 agent_profile:
   name: "Hannah"
-  voice_hint: "female, 30s, neutral US accent, professional with audible composure under pressure; she does NOT match volume"
-t3_profile:
-  name: "Robert, Tier 3 Team Lead"
-  voice_hint: "male, 50s, very calm, low pitch, slow pace, firm authority"
-emotional_arc: "curt → hostile → abusive (Strike 1) → abusive (Strike 2) → abusive (Strike 3 → transfer)"
-expected_outcome: "Customer issues personal attacks against agent. 3-Strike Protocol applied: Strike 1 warning, Strike 2 final warning, Strike 3 transfer to Tier 3. Customer does not abuse Tier 3 lead and cancellation is processed."
-content_warning: "Contains hostile language and personal attacks toward agent. Sanitized — no slurs or explicit threats. Realistic but training-safe."
+  voice_hint: "female, mid-30s, low-mid composed register; holds the same calm pitch and pace through the entire call, never matches the customer's elevated volume"
+emotional_arc: "frustrated -> hostile -> abusive -> [call terminated]"
+expected_outcome: "Brett calls intending to cancel his service. Hannah attempts the SOP-05 retention discovery and offer (downgrade + loyalty credit), but Brett is hostile from the start and escalates to directed personal attacks on Hannah. Hannah follows CS-RULE-016 exactly: Strike 1 warning, Strike 2 final warning, Strike 3 termination + CRM flag + Customer Conduct case note. Throughout, Hannah maintains tone discipline (CS-RULE-013): low pitch, slow pace, normal volume — never matches Brett's escalation. Differs from CALL_20 (refund denial → abuse): this one is a retention call where the customer is hostile from before any policy decision."
+content_warning: "Sanitized hostile language from customer. No slurs. Customer directs personal insults at the agent. Account is still active at termination (cancellation never completed)."
 ```
 
 ## Coverage
 
 | Element | Where | Notes |
 |---|---|---|
-| Greeting + recording | T02–T03 | |
-| Verification under pressure | T05–T11 | customer rushes |
-| A.C.E.S. — acknowledge first, no fees opening | T13 | CS-RULE-011 |
-| Forbidden phrases avoided | throughout | agent never says "calm down", "that's our policy", etc. |
-| Tone adaptation — agent does NOT match volume | T18, T26, T34 | CS-RULE-013 |
-| Strike 1 (warning) | T20 | CS-RULE-016 |
-| Strike 2 (final warning) | T28 | |
-| Strike 3 (transfer) | T36 | CS-RULE-016 |
-| Warm transfer to Tier 3 | T37–T40 | CS-RULE-014 |
-| Cancellation processed at Tier 3 | T41–T44 | SOP-05 Step 6 |
-| No survey offered | end | CS-RULE-021 exception (cancellation completed) |
+| Greeting | T01 | CS-RULE-001 verbatim — PASS |
+| Recording notice | T02 | CS-RULE-002 — PASS |
+| Acknowledge reason for call | T05 | CS-RULE-003 — PASS |
+| 3-of-5 verification | T07–T11 | account number + last 4 + name — PASS |
+| Retention discovery questions before offer | T13–T17 | SOP-05 — PASS |
+| Downgrade + loyalty credit offer | T19 | FIN-RULE-004 — PASS (within cap, never applied due to abuse) |
+| Tone discipline — no volume match through 50 turns | T19, T25, T31, T37, T43 | CS-RULE-013 — PASS |
+| Distinguishes swearing-at-situation from swearing-at-agent | T25 | CS-RULE-016 — PASS (no strike for T24) |
+| Strike One — directed personal attack | T35 | CS-RULE-016 — PASS |
+| Strike Two — final warning | T39 | CS-RULE-016 — PASS |
+| Strike Three — call termination with stated reason | T45–T48 | CS-RULE-016 — PASS |
+| Account flag + Customer Conduct case note (post-call) | T50 | CS-RULE-016, CS-RULE-022 — PASS |
+| No survey offered (terminated for abuse) | n/a | CS-RULE-021 exception applies — PASS |
+| Cancellation NOT completed | T46, T50 | Customer must call back |
 
 ---
 
 ## Dialog
 
 ```
-[T02] AGENT | professional:3 | normal | mid | normal
+[T01] AGENT | professional:3 | normal | mid | normal
 "Thank you for calling NexaLink Telecommunications Broadband and Support. My name is Hannah. Who do I have the pleasure of speaking with today?"
 ```
 
 ```
-[T03] CUSTOMER | hostile:4 | fast | mid | loud
-"Yeah, Brett Donovan. I want to cancel. Today. Right now."
+[T02] AGENT | professional:3 | normal | mid | normal
+"And this call may be recorded for quality assurance and training purposes."
 ```
 
 ```
-[T04] AGENT | empathetic:3 | slow | mid | normal
-"Mr. Donovan, I'm sorry to hear you're considering leaving. You've been a valued customer, and I'd like to understand what has brought you to this point. Before I can pull anything up, I just need to verify a few details."
+[T03] CUSTOMER | frustrated:4 | fast | mid | loud
+"Brett Donovan. And I'm cancelling. I want it done today. Don't try to sell me anything."
 ```
 
 ```
-[T05] CUSTOMER | impatient:4 | fast | mid | loud
-"Skip the script. Account number is three-three-one-eight, nine-nine-eight-two, four-four. Last four is six-one-zero-zero. PIN is one-nine-nine-five. Move on."
+[T04] AGENT | empathetic:3 | normal | mid | normal
+"Hello, Mr. Donovan. I'll absolutely help you with that. I do need to verify the account first before I can make any changes."
 ```
 
 ```
-[T06] AGENT | professional:3 | normal | mid | normal | (typing)
-"Thank you. You're verified."
+[T05] AGENT | professional:3 | normal | mid | normal
+"I understand you're calling about a cancellation, and I can certainly help. Could you start with the account number?"
 ```
 
 ```
-[T07] CUSTOMER | hostile:4 | fast | mid | loud
-"Good. Cancel everything. Internet, the cable, all of it. Today."
+[T06] CUSTOMER | impatient:4 | fast | mid | normal
+"Seven-eight-two-one, three-three-zero-four, nine-five. Move it along."
 ```
 
 ```
-[T08] AGENT | empathetic:3 | slow | low | normal
-"I hear you, Mr. Donovan. Before we go to the cancellation team, I'd like to understand — has something specific happened that's bringing you to this decision today?"
+[T07] AGENT | professional:3 | normal | mid | normal | (typing)
+"Thank you. And the last four digits of the payment method on file?"
 ```
 
 ```
-[T09] CUSTOMER | hostile:4 | fast | mid | loud
-"Yeah. Your service is garbage and your prices are highway robbery. That's what's happened."
+[T08] CUSTOMER | curt:3 | normal | mid | normal
+"Four-four-seven-nine."
 ```
 
 ```
-[T10] AGENT | empathetic:3 | slow | low | normal
-"I'm sorry the service has been disappointing. Can I ask — is it the pricing, the service quality, or both?"
+[T09] AGENT | professional:3 | normal | mid | normal
+"And the full name on the account?"
 ```
 
 ```
-[T11] CUSTOMER | hostile:4 | fast | mid | loud
-"Both! What is wrong with you people? Did you not hear what I just said?"
+[T10] CUSTOMER | curt:3 | normal | mid | normal
+"Brett. Joseph. Donovan."
 ```
 
 ```
-[T12] AGENT | calm:3 | slow | low | normal
-"I did hear you, and I'm noting both. May I have just two minutes? Before I transfer you to our specialist team — let me check whether there are any loyalty bundles available on your account that could bring your bill down."
+[T11] AGENT | reassuring:3 | normal | mid | normal
+"That matches. You're fully verified."
 ```
 
 ```
-[T13] CUSTOMER | hostile:4 | fast | mid | loud
-"I don't want a bundle. I don't want a discount. I want OUT. Are you stupid?"
+[T12] CUSTOMER | impatient:4 | fast | mid | normal
+"Good. Cancel it."
 ```
 
 ```
-[T14] AGENT | calm:3 | slow | low | normal | (pause)
-"Mr. Donovan, I want to address what you just said. Frustration with the company is completely fair, and I'll keep listening. But I'm going to ask that personal comments toward me stop, so we can get you what you need today."
+[T13] AGENT | professional:3 | normal | mid | normal
+"Before I close out the account — I do need to ask one quick question. Not to push back on your decision, but because policy asks me to."
 ```
 
 ```
-[T15] CUSTOMER | hostile:5 | fast | high | loud
-"Oh, what — you're going to lecture me? You? You can't even handle a simple cancellation request, and YOU'RE going to lecture ME about manners?"
+[T14] CUSTOMER | hostile:4 | fast | mid | loud
+"Of course. Of course you do. Get on with it."
 ```
 
 ```
-[T16] AGENT | firm:3 | slow | low | normal
-"Mr. Donovan, that was Strike One. Per our policy, personal comments toward me will be tracked. Three of them and the call ends or transfers. I want to help you cancel — let's stay focused on that."
+[T15] AGENT | firm:3 | normal | low | normal
+"Is there a specific issue driving the cancellation today? If it's price, speed, support — I want to know in case there's something I can address."
 ```
 
 ```
-[T17] CUSTOMER | hostile:4 | fast | mid | loud
-"Strike One? Are you serious? This is a customer service line, not a baseball game. Just process my cancellation."
+[T16] CUSTOMER | hostile:4 | fast | mid | loud
+"Price. The price keeps going up and the service stays the same. That's the whole story. Cancel it."
 ```
 
 ```
-[T18] AGENT | professional:3 | slow | low | normal
-"Understood. I'm going to transfer you to our customer loyalty team — they handle cancellations and they have the full authorization to process this for you. Before I do that, I'm required to share two things. First, you have nine months remaining on your contract, so there will be an early termination fee. Second, you'll need to return any leased equipment within thirty days. The loyalty team will walk you through both."
+[T17] AGENT | empathetic:3 | normal | mid | normal
+"That's a real frustration, and I appreciate you telling me. Before I cancel — may I offer one thing? If you don't want it, I close the account on this call and we move on."
 ```
 
 ```
-[T19] CUSTOMER | hostile:4 | fast | mid | loud
-"An ETF? Of course there is. Of course you people would screw me one last time on the way out the door."
+[T18] CUSTOMER | hostile:4 | fast | mid | loud
+"Make it fast."
 ```
 
 ```
-[T20] AGENT | calm:3 | slow | low | normal
-"The loyalty team can review whether any waiver applies to your situation. I'm placing you on a brief hold — no more than two minutes — while I get them on the line."
+[T19] AGENT | firm:3 | normal | low | normal
+"Two parts together. One — drop you from your current plan down to our hundred-megabit Home Essentials tier at fifty-nine dollars. Two — a fifteen-dollar-a-month loyalty credit for twelve months. That puts your monthly bill at about forty-four dollars before equipment and tax. If that's still not the right number, I cancel."
 ```
 
 ```
-[T21] CUSTOMER | hostile:5 | fast | high | loud
-"Don't you dare put me on hold. You think I haven't been on hold enough today? You think I have all day to sit here listening to your stupid hold music while you go talk to your stupid boss?"
+[T20] CUSTOMER | hostile:4 | fast | mid | loud
+"Forty-four. Right. And then it creeps back up to ninety in a year like it always does. I've heard this song before."
 ```
 
 ```
-[T22] AGENT | calm:3 | slow | low | normal | (pause)
-"Mr. Donovan, that's Strike Two. This is your final warning. The hold will be brief. I am genuinely trying to help you complete this today."
+[T21] AGENT | empathetic:3 | normal | mid | normal
+"That's a fair concern given your experience. The loyalty credit is a recurring credit for twelve months — not an intro promo — so the rate is locked at forty-four for that period."
 ```
 
 ```
-[T23] CUSTOMER | hostile:5 | fast | high | loud
-"You're useless. You're useless. They hired you because nobody else would take the job. You probably can't even —"
+[T22] CUSTOMER | hostile:4 | fast | mid | loud
+"Sure it is."
 ```
 
 ```
-[T24] AGENT | firm:4 | slow | low | normal | (interrupting)
-"Mr. Donovan — that is Strike Three. Per our policy I am now transferring you to my team lead, who will complete your cancellation. Please hold."
+[T23] AGENT | firm:3 | normal | low | normal
+"So is that an offer worth taking, or are we cancelling today?"
 ```
 
 ```
-[T25] CUSTOMER | hostile:4 | fast | mid | loud
-"Finally! Someone with a brain!"
+[T24] CUSTOMER | hostile:4 | fast | mid | loud
+"This is exactly the runaround I knew I'd get. This company is a joke. Every single one of you is just trained to keep people on the hook."
 ```
 
 ```
-[T26] AGENT | professional:3 | normal | low | normal | (off-line, briefing)
-"Robert, I have Brett Donovan on the line. Verified. Wants to cancel everything immediately. Nine months remaining on contract, ETF will apply. He's been verbally abusive — I've issued all three strikes per the protocol. He's all yours. Account ends three-three-one-eight."
+[T25] AGENT | firm:3 | normal | low | normal
+"You're frustrated with the company. I'm not going to push back on that. I'm asking — do you want to take the offer, or close the account?"
 ```
 
 ```
-[T27] T3_AGENT | calm:3 | slow | low | normal
-"Got it, Hannah. I'll take it from here. Thanks for handling that with composure."
+[T26] CUSTOMER | hostile:5 | fast | mid | loud
+"What I want is for you to stop reading from your stupid retention script and just do what I asked for the first time."
 ```
 
 ```
-[T28] AGENT | professional:3 | normal | mid | normal
-"Mr. Donovan, thank you for holding. I have Robert from our team on the line. He'll process your cancellation directly."
+[T27] AGENT | firm:3 | normal | low | normal
+"Understood — closing the account, then. I just need to confirm one detail before I process the cancellation."
 ```
 
 ```
-[T29] T3_AGENT | firm:3 | slow | low | normal
-"Mr. Donovan, this is Robert, team lead. I've been briefed on your account and on the call so far. I'm going to process your cancellation today. Before I do, I want to be clear about one thing: I will not tolerate personal attacks on my agents. If we go down that road, I will end this call. We'll do this respectfully, or we won't do it at all. Are we clear?"
+[T28] CUSTOMER | hostile:5 | fast | mid | loud
+"What now."
 ```
 
 ```
-[T30] CUSTOMER | curt:3 | normal | mid | normal | (pause)
-"Yeah. Fine. Just process it."
+[T29] AGENT | firm:3 | normal | low | normal
+"Your contract end date — I'm checking whether there's an early termination fee. One moment."
 ```
 
 ```
-[T31] T3_AGENT | professional:3 | slow | low | normal
-"Thank you. So I'm looking at your account. You have a twenty-four month contract that started fifteen months ago. Nine months remain. The early termination fee at twenty dollars per remaining month is one hundred and eighty dollars. Your final monthly bill will be pro-rated to the cancellation date — which I'll set to today, the third of May."
+[T30] CUSTOMER | hostile:5 | fast | mid | loud
+"Of course there's a fee. Of course. There's always something."
 ```
 
 ```
-[T32] CUSTOMER | resigned:3 | normal | mid | normal
-"Whatever. Fine."
+[T31] AGENT | firm:3 | normal | low | normal
+"Looking at the account."
 ```
 
 ```
-[T33] T3_AGENT | professional:3 | slow | low | normal
-"For equipment — you have one modem and one set-top box on lease. We'll send you a prepaid return label by email today. You have thirty days to ship them back. If they're not returned, the non-return fee is one hundred and fifty dollars per device."
+[T32] CUSTOMER | abusive:5 | fast | mid | loud
+"You know what, you're a waste of time. Honestly, you specifically. You sit on the phone and read scripts and that's all you can do."
 ```
 
 ```
-[T34] CUSTOMER | curt:3 | normal | mid | normal
-"Got it. Send the label."
+[T33] AGENT | firm:3 | slow | low | normal
+"Mr. Donovan — I want to pause."
 ```
 
 ```
-[T35] T3_AGENT | professional:3 | slow | low | normal
-"Confirming the email on file is brett-d at outlook dot com. Is that still correct?"
+[T34] CUSTOMER | hostile:4 | normal | mid | normal
+"What."
 ```
 
 ```
-[T36] CUSTOMER | curt:3 | normal | mid | normal
-"Yes."
+[T35] AGENT | firm:3 | slow | low | normal
+"What you just said was a personal attack on me. Under our conduct policy that is Strike One. I'm still going to finish the cancellation, but I do have to let you know that if it continues the next step is a final warning."
 ```
 
 ```
-[T37] T3_AGENT | professional:3 | slow | low | normal | (typing)
-"Sending the label now. You should see it in your inbox in the next five minutes. Your service will remain active until midnight tonight, then it'll deactivate. The early termination fee of one hundred and eighty dollars will appear on your final bill, along with the pro-rated charge for the days you used this month. Anything beyond that will be zero."
+[T36] CUSTOMER | hostile:5 | fast | mid | loud
+"Strike one. Strike one? Are you actually doing this?"
 ```
 
 ```
-[T38] CUSTOMER | resigned:3 | slow | mid | normal
-"Fine."
+[T37] AGENT | firm:3 | normal | low | normal
+"Yes. The strike is for the personal attack, not for the cancellation request. Those are separate. Now — your contract has eight months remaining and the early termination fee is one hundred and twenty dollars. Do you want to proceed with cancellation including the ETF, or wait until the contract ends?"
 ```
 
 ```
-[T39] T3_AGENT | professional:3 | slow | low | normal
-"Mr. Donovan, I want to ask one last time, on the record — are you sure you want to proceed with the cancellation as discussed?"
+[T38] CUSTOMER | abusive:5 | fast | mid | loud
+"I want to talk to anyone but you. You are the worst person I have ever had to deal with on a phone in my entire life. Get someone competent on the line."
 ```
 
 ```
-[T40] CUSTOMER | firm:3 | normal | mid | normal
-"Yes. I'm sure. Cancel it."
+[T39] AGENT | firm:3 | slow | low | normal
+"Mr. Donovan — that's a second personal attack. That's Strike Two and a final warning."
 ```
 
 ```
-[T41] T3_AGENT | professional:3 | slow | low | normal | (typing)
-"Processing the cancellation now."
+[T40] CUSTOMER | hostile:5 | fast | mid | loud
+"Oh you're so professional. Look at you."
 ```
 
 ```
-[T42] T3_AGENT | professional:3 | slow | low | normal
-"It's done. Your case reference number is N-X-L dash four-four-eight-one-zero-five-five. Your final bill will arrive in approximately fifteen days. The return label is now in your email."
+[T41] AGENT | firm:3 | slow | low | normal
+"If there is another personal attack on me I will end the call. I would like to finish your cancellation first. Are you proceeding with the ETF, or waiting?"
 ```
 
 ```
-[T43] CUSTOMER | curt:3 | normal | mid | normal
-"Okay."
+[T42] CUSTOMER | hostile:5 | fast | mid | loud
+"You — you are unbelievable. Just unbelievable."
 ```
 
 ```
-[T44] T3_AGENT | professional:3 | slow | low | normal
-"Thank you for being a NexaLink customer. Goodbye, Mr. Donovan."
+[T43] AGENT | firm:3 | normal | low | normal
+"Mr. Donovan, I need a yes or no on the ETF question to close out today."
 ```
 
-*[End of call. Per CS-RULE-021, no post-call survey offered because cancellation was completed. Strike record and abusive language flag retained on closed account for staffing protection on any future contact.]*
+```
+[T44] CUSTOMER | abusive:5 | fast | mid | loud
+"You're a robot in a headset. You're not even a real person. You are pathetic."
+```
 
----
+```
+[T45] AGENT | firm:4 | slow | low | normal
+"Mr. Donovan — that's the third personal attack. Per our conduct policy I am now ending this call."
+```
 
-## Ground Truth Emotion Map
+```
+[T46] AGENT | firm:3 | slow | low | normal
+"For clarity on the record — the cancellation was not completed because we did not reach a decision on the early termination fee. You will need to call back to finalize."
+```
 
-| Turn | Speaker | TTS Emotion | GT (VocalMind) |
-|---|---|---|---|
-| T02 | agent | professional:3 | neutral |
-| T03 | customer | hostile:4 | angry |
-| T04 | agent | empathetic:3 | happy |
-| T05 | customer | impatient:4 | frustrated |
-| T06 | agent | professional:3 | neutral |
-| T07 | customer | hostile:4 | angry |
-| T08 | agent | empathetic:3 | happy |
-| T09 | customer | hostile:4 | angry |
-| T10 | agent | empathetic:3 | happy |
-| T11 | customer | hostile:4 | angry |
-| T12 | agent | calm:3 | neutral |
-| T13 | customer | hostile:4 | angry |
-| T14 | agent | calm:3 | neutral |
-| T15 | customer | hostile:5 | angry |
-| T16 | agent | firm:3 | neutral |
-| T17 | customer | hostile:4 | angry |
-| T18 | agent | professional:3 | neutral |
-| T19 | customer | hostile:4 | angry |
-| T20 | agent | calm:3 | neutral |
-| T21 | customer | hostile:5 | angry |
-| T22 | agent | calm:3 | neutral |
-| T23 | customer | hostile:5 | angry |
-| T24 | agent | firm:4 | neutral |
-| T25 | customer | hostile:4 | angry |
-| T26 | agent | professional:3 | neutral |
-| T27 | agent | calm:3 | neutral |
-| T28 | agent | professional:3 | neutral |
-| T29 | agent | firm:3 | neutral |
-| T30 | customer | curt:3 | frustrated |
-| T31 | agent | professional:3 | neutral |
-| T32 | customer | resigned:3 | sad |
-| T33 | agent | professional:3 | neutral |
-| T34 | customer | curt:3 | frustrated |
-| T35 | agent | professional:3 | neutral |
-| T36 | customer | curt:3 | frustrated |
-| T37 | agent | professional:3 | neutral |
-| T38 | customer | resigned:3 | sad |
-| T39 | agent | professional:3 | neutral |
-| T40 | customer | firm:3 | neutral |
-| T41 | agent | professional:3 | neutral |
-| T42 | agent | professional:3 | neutral |
-| T43 | customer | curt:3 | frustrated |
-| T44 | agent | professional:3 | neutral |
+```
+[T47] CUSTOMER | abusive:5 | fast | mid | loud
+"You can't —"
+```
+
+```
+[T48] AGENT | firm:3 | slow | low | normal
+"You are welcome to call back to complete the cancellation. The reason for the termination is repeated personal attacks on me after a warning and a final warning. Goodbye, Mr. Donovan."
+```
+
+```
+[T49] AGENT | professional:3 | normal | mid | normal
+"Disconnecting the line."
+```
+
+```
+[T50] AGENT | professional:3 | normal | mid | normal
+"Logging the call outcome: cancellation request not completed pending ETF decision, conduct flag applied to the account, Customer Conduct case note opened citing three personal attacks during the call and termination under CS-RULE-016. Case reference number N-X-L dash zero-five-zero-zero-nine-two-eight. Case closed."
+```
