@@ -252,13 +252,25 @@ python infra/fixtures/kaggle/scripts/kaggle_api_smoke_test.py --audio-file stora
 
 ### Speaker Classifier Artifact
 
-Place `speaker_classifier_export.zip` at the repo root and run:
+You can populate the model artifacts in two ways:
 
+#### Option A: Download programmatically from DagsHub MLflow
+Run the download script using the DagsHub tracking credentials (configured in `.env`):
+```bash
+# List all experiment runs on DagsHub MLflow
+python tools/download_mlflow_model.py --list
+
+# Download model artifacts for a specific run ID into the speaker role directory
+python tools/download_mlflow_model.py --run-id <RUN_ID>
+```
+
+#### Option B: Prepare from local ZIP export
+Place `speaker_classifier_export.zip` at the repo root and run:
 ```bash
 make prepare-speaker-model
 ```
-
 This extracts the DistilBERT model into `services/whisperx/models/speaker_role/distilbert/`. The zip is gitignored — it must be provided separately. WhisperX will fail to start without these model files.
+
 
 ### Audio Auto-Ingest
 
