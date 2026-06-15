@@ -31,6 +31,7 @@ dependencies = [
     "ftfy>=6.1.0",
     "sqlmodel>=0.0.33",
     "supabase>=2.28.0",
+    "slowapi>=0.1.9",
     "tenacity>=9.1.4",
     "transformers>=4.38.0,<4.40.0",
     "google-genai>=0.4.0",

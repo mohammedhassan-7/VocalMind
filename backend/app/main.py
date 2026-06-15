@@ -6,12 +6,16 @@ import asyncpg
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi import _rate_limit_exceeded_handler
 
 from app.core.config import settings, validate_startup_settings
 from app.core.database import create_db_and_tables
 from app.core.interaction_processing import start_processing_worker, stop_processing_worker
 from app.core.audio_folder_watcher import start_audio_folder_watcher, stop_audio_folder_watcher
 from app.core.llm_circuit_breaker import get_breaker_states
+from app.core.rate_limit import limiter
 from app.core.request_context import install_request_id_logging, reset_request_id, set_request_id
 from app.api.main import api_router
 from scripts.seed_nexalink import main as seed_nexalink_main
@@ -55,6 +59,11 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
 )
+
+# Rate limiting (default 60/min/IP, see app/core/rate_limit.py).
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
