@@ -11,7 +11,7 @@ This directory contains Jupyter notebooks and experimental scripts from VocalMin
 | `emotion/`         | Emotion Recognition from speech & text    | 4 notebooks comparing different approaches            |
 | `voice-gen/`       | Voice synthesis / TTS experiments         | `voice_generation.py`, `voice_generation_overlap.py`  |
 | `speech-pipeline/` | Full ASR → Diarization → Emotion pipeline | `pipeline_experiment.py` (consolidated final version) |
-| `training/`        | Customer vs. Agent utterance classification | `customerAgentClassifier.ipynb` |
+| `training/`        | Customer vs. Agent utterance classification | `customerAgentClassifier.ipynb` (includes MLflow logging) |
 
 ## Running Notebooks
 
