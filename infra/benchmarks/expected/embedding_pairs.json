@@ -1,0 +1,51 @@
+{
+  "pairs": [
+    {
+      "id": "emb_001",
+      "query": "What is the outage credit threshold before a customer qualifies for compensation?",
+      "passage": "Outages lasting 24 hours or more qualify for a pro-rated service credit calculated as (outage_days / 30) × monthly plan charge.",
+      "expected_doc_hint": "FIN-RULE-001"
+    },
+    {
+      "id": "emb_002",
+      "query": "How should agents verify customer identity before processing a refund?",
+      "passage": "Agents must complete 3-of-5 identity verification (account number, payment method last four, security PIN, billing ZIP, or registered email) before any financial adjustment.",
+      "expected_doc_hint": "CS-RULE-004"
+    },
+    {
+      "id": "emb_003",
+      "query": "What is the maximum goodwill credit an agent can apply without manager approval?",
+      "passage": "Frontline agents may apply goodwill credits up to $200 per incident without manager escalation when policy criteria are met.",
+      "expected_doc_hint": "FIN-RULE-004"
+    },
+    {
+      "id": "emb_004",
+      "query": "How should agents handle suspected unauthorized charges?",
+      "passage": "Freeze the disputed amount, open a Fraud Investigation ticket, and advise the customer to change passwords and monitor account activity.",
+      "expected_doc_hint": "FIN-RULE-008"
+    },
+    {
+      "id": "emb_005",
+      "query": "What are the escalation triggers for billing disputes?",
+      "passage": "Escalate to Tier 2 when the customer disputes charges over $100, requests a supervisor twice, or when resolution exceeds 15 minutes without progress.",
+      "expected_doc_hint": "Section 5 - Escalation Triggers"
+    }
+  ],
+  "retrieval_queries": [
+    {
+      "id": "ret_001",
+      "query": "refund eligibility outage credit 24 hour threshold",
+      "expected_source_fragments": ["FIN-RULE-001", "refund", "outage"]
+    },
+    {
+      "id": "ret_002",
+      "query": "identity verification 3 of 5 before financial adjustment",
+      "expected_source_fragments": ["CS-RULE-004", "verification"]
+    },
+    {
+      "id": "ret_003",
+      "query": "fraud investigation unauthorized charge freeze",
+      "expected_source_fragments": ["FIN-RULE-008", "fraud"]
+    }
+  ]
+}
