@@ -27,6 +27,7 @@ app_main.start_audio_folder_watcher = AsyncMock(return_value=None)
 app_main.stop_audio_folder_watcher = AsyncMock(return_value=None)
 app = app_main.app
 settings.SECRET_KEY = "test-secret-key-minimum-32-bytes-long"
+settings.GROQ_API_KEY = "test-groq-key"
 
 # --- Fixtures ---
 

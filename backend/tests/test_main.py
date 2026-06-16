@@ -35,4 +35,10 @@ def test_health_check(client: TestClient):
     """
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "db": "ok"}
+
+
+def test_circuit_breakers_health_endpoint(client: TestClient):
+    response = client.get("/health/circuit-breakers")
+    assert response.status_code == 200
+    assert isinstance(response.json(), dict)

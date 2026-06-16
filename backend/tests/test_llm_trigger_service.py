@@ -19,6 +19,7 @@ from app.llm_trigger.service import (
     analyze_emotion_shift,
     evaluate_process_adherence,
 )
+from app.llm_trigger.chains import get_model_for_stage, recognized_stage_names
 
 
 class _FakeProcessChain:
@@ -73,8 +74,9 @@ async def test_analyze_emotion_shift_runs_llm_when_dissonance():
             acoustic_emotion="angry",
         )
 
-    assert result.is_dissonance_detected is True
-    assert result.dissonance_type == "Sarcasm"
+    # Service computes this from dissonance_type; "None" must map to False.
+    assert result.is_dissonance_detected is False
+    assert result.dissonance_type == "None"
 
 
 def test_detect_cross_modal_dissonance_heuristic():
@@ -363,3 +365,49 @@ def test_build_rolling_windows_and_bundle_for_long_transcript():
     citations = _window_citations(windows)
     assert citations
     assert citations[0].source == "transcript"
+
+
+def test_get_model_for_stage_uses_stage_override_first(monkeypatch):
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_MODEL_EMOTION_SHIFT", "kimi-k2.5:cloud")
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_EMOTION_SHIFT_MODEL", "legacy-model")
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_CLOUD_HEAVY_MODEL", "heavy-fallback")
+    assert get_model_for_stage("emotion_shift") == "kimi-k2.5:cloud"
+
+
+def test_get_model_for_stage_uses_legacy_override_when_new_unset(monkeypatch):
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_MODEL_NLI_POLICY", "")
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_NLI_MODEL", "legacy-nli")
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_CLOUD_FAST_MODEL", "fast-fallback")
+    assert get_model_for_stage("nli_policy") == "legacy-nli"
+
+
+def test_get_model_for_stage_uses_fast_and_heavy_fallback_classes(monkeypatch):
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_CLOUD_FAST_MODEL", "fast-fallback")
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_CLOUD_HEAVY_MODEL", "heavy-fallback")
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_MODEL_RAG_JUDGE", "")
+    monkeypatch.setattr("app.llm_trigger.chains.settings.OLLAMA_MODEL_TEXT_TO_SQL", "")
+    assert get_model_for_stage("rag_judge") == "fast-fallback"
+    assert get_model_for_stage("text_to_sql") == "heavy-fallback"
+
+
+def test_get_model_for_stage_rejects_unknown_stage():
+    with pytest.raises(ValueError, match="Unknown LLM stage"):
+        get_model_for_stage("nonexistent_stage")
+
+
+def test_recognized_stage_names_includes_declared_stages():
+    assert recognized_stage_names() == (
+        "emotion_shift",
+        "fast_classification",
+        "nli_policy",
+        "process_adherence",
+        "rag_judge",
+        "rag_synthesis",
+        "text_to_sql",
+    )
+
+
+def test_stage_name_contract_matches_rag_implementation():
+    from rag.config import recognized_stage_names as rag_recognized_stage_names
+
+    assert recognized_stage_names() == rag_recognized_stage_names()

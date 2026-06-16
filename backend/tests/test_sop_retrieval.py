@@ -193,3 +193,24 @@ def test_policy_retriever_filters_by_policy_doc_type(monkeypatch):
     assert chunks[0].metadata["doc_type"] == "policy"
     assert calls[0]["query_filter"].must[1].key == "doc_type"
     assert calls[0]["query_filter"].must[1].match.value == "policy"
+
+
+def test_resolve_retrieved_sop_context_marks_retrieval_failure_and_logs(monkeypatch, caplog):
+    monkeypatch.setattr(retrieval, "_read_manual_org_sop_chunks", lambda _org: [])
+
+    class _BrokenRetriever:
+        def retrieve_sop_chunks(self, transcript_text: str, org_filter: str | None = None):  # noqa: ARG002
+            raise RuntimeError("qdrant unavailable")
+
+    monkeypatch.setattr(retrieval, "SOPRetriever", lambda: _BrokenRetriever())
+
+    context = retrieval.resolve_retrieved_sop_context(
+        transcript_text="customer asked for refund",
+        retrieved_sop_from_pinecone=None,
+        org_filter="nexalink",
+    )
+
+    assert context.retrieval_failed is True
+    assert context.source == "retrieval_error"
+    assert context.text == ""
+    assert "SOP retrieval failed for org=nexalink" in caplog.text
