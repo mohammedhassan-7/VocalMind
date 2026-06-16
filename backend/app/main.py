@@ -6,6 +6,7 @@ import asyncpg
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -59,6 +60,13 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
 )
+
+# Prometheus /metrics endpoint. Excludes itself and /health so the counters
+# don't bloat with health-check noise. Request-id correlation is provided by
+# the existing app.core.request_context middleware below.
+Instrumentator(
+    excluded_handlers=["/metrics", "/health"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # Rate limiting (default 60/min/IP, see app/core/rate_limit.py).
 app.state.limiter = limiter

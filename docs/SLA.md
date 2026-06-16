@@ -77,11 +77,12 @@ Clients hitting the limit receive HTTP 429 with `Retry-After`.
 
 | Signal | Where today | Where it should be |
 |---|---|---|
-| Uptime | manual / `make logs` | external monitor + Grafana board |
-| Latency p50/p95/p99 | none | `prometheus_fastapi_instrumentator` → Prometheus → Grafana |
-| Error rate | `logger.error` calls only | structured logs → log aggregator |
+| Uptime | manual / `make logs` + `GET /health` | external monitor + Grafana board |
+| Latency p50/p95/p99 | `GET /metrics` (Prometheus text format) — exposed by `prometheus_fastapi_instrumentator` | Prometheus scraping + Grafana board |
+| Per-request correlation | `X-Request-ID` request/response header (see `app/core/request_id.py`); accepted from upstream proxy if set, otherwise UUID4 | Same id stamped into every log line once structured logging lands |
+| Error rate | `logger.error` calls only, no aggregation | structured logs → log aggregator |
 | LLM fallback rate | `llm_trigger.service` logs | counter into Prometheus |
 | Pipeline failure rate | `processing_jobs.status=failed` rows | Grafana panel on the same table |
 
-Adding the observability stack is tracked in
-[`docs/MATURITY_GAP_ANALYSIS.md`](MATURITY_GAP_ANALYSIS.md) §6.
+Adding the rest of the observability stack (log aggregation, dashboards)
+is tracked in [`docs/MATURITY_GAP_ANALYSIS.md`](MATURITY_GAP_ANALYSIS.md) §6.
