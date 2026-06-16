@@ -16,7 +16,8 @@ dependencies = [
     # ── Vector Store ──
     "qdrant-client>=1.11.0,<1.13.0",
 
-    # ── LLM (Groq) ──
+    # ── LLM (Groq fallback via llama-index-llms-groq; Ollama Cloud via openai SDK) ──
+    "openai>=1.0.0",
     "groq>=0.30.0",
 
     # ── RAG Framework (response synthesis) ──

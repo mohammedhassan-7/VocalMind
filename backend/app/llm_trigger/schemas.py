@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 CitationSource = Literal["transcript", "policy", "sop", "acoustic", "kb"]
@@ -139,7 +139,10 @@ class EmotionShiftAnalysis(BaseModel):
         description="Whether acoustic emotion contradicts text sentiment."
     )
     dissonance_type: str = Field(
-        description='One of values like "Sarcasm", "Passive-Aggression", or "None".'
+        description=(
+            'Agent friction root cause — exactly one of: "interruption", "dismissive_tone", '
+            '"missing_acknowledgment", "none" (mirrors friction_root_cause / shift_type).'
+        )
     )
     root_cause: str = Field(description="Transcript-grounded explanation of the mismatch.")
     counterfactual_correction: str = Field(
@@ -207,7 +210,10 @@ class ProcessAdherenceReport(BaseModel):
     )
     missing_sop_steps: list[str] = Field(
         default_factory=list,
-        description="SOP steps that are absent or weakly executed in transcript.",
+        description=(
+            "SOP steps absent or weakly executed — use RESOLUTION_GRAPH step_key strings "
+            "(snake_case, e.g. verify_refund_eligibility_window) only."
+        ),
     )
     evidence_quotes: list[str] = Field(
         default_factory=list,
@@ -243,7 +249,9 @@ NLICategory = Literal[
 
 
 class NLIEvaluation(BaseModel):
-    nli_category: NLICategory
+    nli_category: NLICategory = Field(
+        validation_alias=AliasChoices("nli_category", "verdict", "category"),
+    )
     justification: str = Field(description="Short evidence-backed rationale for the label.")
     evidence_quotes: list[str] = Field(
         default_factory=list,

@@ -14,17 +14,29 @@ Evaluators:
 """
 
 import json
+import logging
+import random
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+try:
+    from app.core.llm_circuit_breaker import get_breaker, is_transient_llm_error
+except ImportError:  # pragma: no cover - standalone rag test/runtime fallback
+    from llm_circuit_breaker import get_breaker, is_transient_llm_error
 
 try:
-    from .config import settings
+    from .config import settings, build_rag_llm_client, rag_judge_model
+    from .prompt_safety import sanitize_prompt_text
     from .query_engine import RAGQueryEngine
 except ImportError:  # pragma: no cover - allows direct script/test imports
-    from config import settings
+    from config import settings, build_rag_llm_client, rag_judge_model
+    from prompt_safety import sanitize_prompt_text
     from query_engine import RAGQueryEngine
+
+
+logger = logging.getLogger(__name__)
 
 
 # ── Result Models ─────────────────────────────────────────────────────────────
@@ -35,6 +47,7 @@ class ComplianceResult(BaseModel):
 
     transcript: str
     compliance_score: float = Field(ge=0.0, le=1.0, description="0 = non-compliant, 1 = fully compliant")
+    degraded: bool = False
     violations: list[str] = Field(default_factory=list)
     policy_references: list[str] = Field(default_factory=list)
     reasoning: str = ""
@@ -110,6 +123,7 @@ class PolicyComplianceEvaluator:
 
     def __init__(self, engine: RAGQueryEngine | None = None) -> None:
         self.engine = engine or RAGQueryEngine()
+        self._judge_client = build_rag_llm_client()
 
     def check(
         self,
@@ -125,8 +139,6 @@ class PolicyComplianceEvaluator:
             org_filter:  Filter retrieval to a specific organization.
             verbose:     Print intermediate results.
         """
-        import time
-
         # 1. Retrieve relevant policy sections (parents) via retrieval-only API.
         result = self.engine.retrieve_policy_context(
             transcript,
@@ -135,31 +147,50 @@ class PolicyComplianceEvaluator:
         )
         retrieval_time = result["timing"]["retrieval"]
 
+        safe_transcript = sanitize_prompt_text(transcript, max_length=8000)
         policies_text = "\n\n---\n\n".join(
             f"[{c['metadata'].get('doc_id', 'N/A')} | "
             f"{c['metadata'].get('Header 1', '')} > {c['metadata'].get('Header 2', '')}]\n"
-            f"{c['text']}"
+            f"{sanitize_prompt_text(c['text'], max_length=2500)}"
             for c in result["chunks"]
         )
+        safe_policies = sanitize_prompt_text(policies_text, max_length=12000)
 
-        if not policies_text.strip():
+        if not safe_policies.strip():
             return ComplianceResult(
-                transcript=transcript,
+                transcript=safe_transcript,
                 compliance_score=0.5,
+                degraded=True,
                 reasoning="No relevant policies found for this transcript.",
                 retrieval_seconds=retrieval_time,
             )
 
         # 2. LLM-as-Judge
-        prompt = COMPLIANCE_PROMPT.format(policies=policies_text, transcript=transcript)
+        prompt = COMPLIANCE_PROMPT.format(policies=safe_policies, transcript=safe_transcript)
+        groq_breaker = get_breaker("groq")
 
         t0 = time.perf_counter()
-        response = self.engine.groq_client.chat.completions.create(
-            model=settings.groq.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            max_tokens=2048,
-        )
+        try:
+            response = _invoke_judge_with_retry(
+                lambda: groq_breaker.call_sync(
+                    lambda: self._judge_client.chat.completions.create(
+                        model=rag_judge_model(),
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.0,
+                        max_tokens=2048,
+                    )
+                )
+            )
+        except Exception as llm_exc:
+            eval_time = time.perf_counter() - t0
+            return ComplianceResult(
+                transcript=safe_transcript,
+                compliance_score=0.5,
+                degraded=True,
+                reasoning=f"LLM judge request failed after retries: {llm_exc}",
+                retrieval_seconds=retrieval_time,
+                evaluation_seconds=round(eval_time, 4),
+            )
         eval_time = time.perf_counter() - t0
 
         # 3. Parse response
@@ -170,26 +201,37 @@ class PolicyComplianceEvaluator:
                 raise ValueError(parsed["error"])
         except ValueError as parse_exc:
             return ComplianceResult(
-                transcript=transcript,
+                transcript=safe_transcript,
                 compliance_score=0.5,
+                degraded=True,
                 reasoning=f"Failed to parse LLM evaluation response: {parse_exc}",
                 retrieval_seconds=retrieval_time,
                 evaluation_seconds=round(eval_time, 4),
             )
 
-        return ComplianceResult(
-            transcript=transcript,
-            compliance_score=float(parsed.get("compliance_score", 0.5)),
-            violations=parsed.get("violations", []),
-            policy_references=parsed.get("policy_references", []),
-            reasoning=parsed.get("reasoning", ""),
-            retrieved_policies=[
-                {"text": c["text"][:200], "metadata": c["metadata"]}
-                for c in result["chunks"]
-            ],
-            retrieval_seconds=retrieval_time,
-            evaluation_seconds=round(eval_time, 4),
-        )
+        try:
+            return ComplianceResult(
+                transcript=safe_transcript,
+                compliance_score=_validated_score(parsed, "compliance_score"),
+                violations=_validated_string_list(parsed, "violations"),
+                policy_references=_validated_string_list(parsed, "policy_references"),
+                reasoning=_validated_string(parsed, "reasoning"),
+                retrieved_policies=[
+                    {"text": c["text"][:200], "metadata": c["metadata"]}
+                    for c in result["chunks"]
+                ],
+                retrieval_seconds=retrieval_time,
+                evaluation_seconds=round(eval_time, 4),
+            )
+        except ValueError as validation_exc:
+            return ComplianceResult(
+                transcript=safe_transcript,
+                compliance_score=0.5,
+                degraded=True,
+                reasoning=f"Invalid LLM evaluation shape: {validation_exc}",
+                retrieval_seconds=retrieval_time,
+                evaluation_seconds=round(eval_time, 4),
+            )
 
 
 # ── Answer Correctness Evaluator ──────────────────────────────────────────────
@@ -240,6 +282,7 @@ class AnswerCorrectnessEvaluator:
 
     def __init__(self, engine: RAGQueryEngine | None = None) -> None:
         self.engine = engine or RAGQueryEngine()
+        self._judge_client = build_rag_llm_client()
 
     def check(
         self,
@@ -257,8 +300,6 @@ class AnswerCorrectnessEvaluator:
             org_filter:   Filter retrieval to a specific organization.
             verbose:      Print intermediate results.
         """
-        import time
-
         # 1. Retrieve relevant snippets (children) via retrieval-only API.
         result = self.engine.retrieve_answer_context(
             question,
@@ -267,17 +308,20 @@ class AnswerCorrectnessEvaluator:
         )
         retrieval_time = result["timing"]["retrieval"]
 
+        safe_question = sanitize_prompt_text(question, max_length=3000)
+        safe_answer = sanitize_prompt_text(agent_answer, max_length=3000)
         snippets_text = "\n\n---\n\n".join(
             f"[{c['metadata'].get('doc_id', 'N/A')} | "
             f"{c['metadata'].get('source_file', '')}]\n"
-            f"{c['text']}"
+            f"{sanitize_prompt_text(c['text'], max_length=2500)}"
             for c in result["chunks"]
         )
+        safe_snippets = sanitize_prompt_text(snippets_text, max_length=12000)
 
-        if not snippets_text.strip():
+        if not safe_snippets.strip():
             return CorrectnessResult(
-                question=question,
-                agent_answer=agent_answer,
+                question=safe_question,
+                agent_answer=safe_answer,
                 correctness_score=0.5,
                 reasoning="No relevant knowledge base entries found for this question.",
                 retrieval_seconds=retrieval_time,
@@ -285,16 +329,32 @@ class AnswerCorrectnessEvaluator:
 
         # 2. LLM-as-Judge
         prompt = CORRECTNESS_PROMPT.format(
-            snippets=snippets_text, question=question, answer=agent_answer
+            snippets=safe_snippets, question=safe_question, answer=safe_answer
         )
+        groq_breaker = get_breaker("groq")
 
         t0 = time.perf_counter()
-        response = self.engine.groq_client.chat.completions.create(
-            model=settings.groq.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            max_tokens=2048,
-        )
+        try:
+            response = _invoke_judge_with_retry(
+                lambda: groq_breaker.call_sync(
+                    lambda: self._judge_client.chat.completions.create(
+                        model=rag_judge_model(),
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.0,
+                        max_tokens=2048,
+                    )
+                )
+            )
+        except Exception as llm_exc:
+            eval_time = time.perf_counter() - t0
+            return CorrectnessResult(
+                question=safe_question,
+                agent_answer=safe_answer,
+                correctness_score=0.5,
+                reasoning=f"LLM judge request failed after retries: {llm_exc}",
+                retrieval_seconds=retrieval_time,
+                evaluation_seconds=round(eval_time, 4),
+            )
         eval_time = time.perf_counter() - t0
 
         # 3. Parse response
@@ -305,28 +365,38 @@ class AnswerCorrectnessEvaluator:
                 raise ValueError(parsed["error"])
         except ValueError as parse_exc:
             return CorrectnessResult(
-                question=question,
-                agent_answer=agent_answer,
+                question=safe_question,
+                agent_answer=safe_answer,
                 correctness_score=0.5,
                 reasoning=f"Failed to parse LLM evaluation response: {parse_exc}",
                 retrieval_seconds=retrieval_time,
                 evaluation_seconds=round(eval_time, 4),
             )
 
-        return CorrectnessResult(
-            question=question,
-            agent_answer=agent_answer,
-            correctness_score=float(parsed.get("correctness_score", 0.5)),
-            is_correct=bool(parsed.get("is_correct", False)),
-            reasoning=parsed.get("reasoning", ""),
-            source_references=parsed.get("source_references", []),
-            retrieved_snippets=[
-                {"text": c["text"][:200], "metadata": c["metadata"]}
-                for c in result["chunks"]
-            ],
-            retrieval_seconds=retrieval_time,
-            evaluation_seconds=round(eval_time, 4),
-        )
+        try:
+            return CorrectnessResult(
+                question=safe_question,
+                agent_answer=safe_answer,
+                correctness_score=_validated_score(parsed, "correctness_score"),
+                is_correct=_validated_bool(parsed, "is_correct"),
+                reasoning=_validated_string(parsed, "reasoning"),
+                source_references=_validated_string_list(parsed, "source_references"),
+                retrieved_snippets=[
+                    {"text": c["text"][:200], "metadata": c["metadata"]}
+                    for c in result["chunks"]
+                ],
+                retrieval_seconds=retrieval_time,
+                evaluation_seconds=round(eval_time, 4),
+            )
+        except ValueError as validation_exc:
+            return CorrectnessResult(
+                question=safe_question,
+                agent_answer=safe_answer,
+                correctness_score=0.5,
+                reasoning=f"Invalid LLM evaluation shape: {validation_exc}",
+                retrieval_seconds=retrieval_time,
+                evaluation_seconds=round(eval_time, 4),
+            )
 
 
 # ── Batch Evaluation ──────────────────────────────────────────────────────────
@@ -354,7 +424,7 @@ def run_compliance_batch(
     avg_score = sum(r.compliance_score for r in results) / len(results) if results else 0
     report = EvaluationReport(
         eval_type="compliance",
-        model=settings.groq.model,
+        model=rag_judge_model(),
         total_samples=len(results),
         avg_score=round(avg_score, 4),
         results=results,
@@ -389,7 +459,7 @@ def run_correctness_batch(
     avg_score = sum(r.correctness_score for r in results) / len(results) if results else 0
     report = EvaluationReport(
         eval_type="correctness",
-        model=settings.groq.model,
+        model=rag_judge_model(),
         total_samples=len(results),
         avg_score=round(avg_score, 4),
         results=results,
@@ -399,6 +469,32 @@ def run_correctness_batch(
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _is_transient_llm_error(exc: Exception) -> bool:
+    return is_transient_llm_error(exc)
+
+
+def _invoke_judge_with_retry(call, max_retries: int = 3) -> object:
+    base_delay = 0.5
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            return call()
+        except Exception as exc:
+            last_exc = exc
+            if not _is_transient_llm_error(exc) or attempt == max_retries - 1:
+                raise
+            delay = base_delay * (2 ** attempt) + random.uniform(0, 0.3)
+            logger.warning(
+                "RAG judge attempt %d/%d failed (transient), retrying in %.1fs: %s",
+                attempt + 1,
+                max_retries,
+                delay,
+                exc,
+            )
+            time.sleep(delay)
+    raise last_exc  # type: ignore[misc]
 
 
 def _parse_json_response(content: str) -> dict:
@@ -422,6 +518,51 @@ def _parse_json_response(content: str) -> dict:
             except json.JSONDecodeError:
                 pass
         return {"error": f"Failed to parse LLM response as JSON: {content[:200]}"}
+
+
+def _validated_score(parsed: dict, key: str) -> float:
+    if key not in parsed:
+        raise ValueError(f"Missing required key: {key}")
+    try:
+        raw = float(parsed[key])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid numeric value for {key}") from exc
+    return max(0.0, min(1.0, raw))
+
+
+def _validated_string_list(parsed: dict, key: str) -> list[str]:
+    if key not in parsed:
+        raise ValueError(f"Missing required key: {key}")
+    value = parsed[key]
+    if not isinstance(value, list):
+        raise ValueError(f"Invalid list value for {key}")
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _validated_string(parsed: dict, key: str) -> str:
+    if key not in parsed:
+        raise ValueError(f"Missing required key: {key}")
+    value = parsed[key]
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _validated_bool(parsed: dict, key: str) -> bool:
+    if key not in parsed:
+        raise ValueError(f"Missing required key: {key}")
+    value = parsed[key]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes"}:
+            return True
+        if lowered in {"false", "0", "no"}:
+            return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    raise ValueError(f"Invalid bool value for {key}")
 
 
 def _save_report(report: EvaluationReport, prefix: str) -> Path:

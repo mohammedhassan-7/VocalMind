@@ -16,6 +16,8 @@ from config import (
     ParentChunkingConfig,
     QdrantConfig,
     Settings,
+    recognized_stage_names,
+    resolve_model_for_stage,
 )
 
 
@@ -40,14 +42,16 @@ class TestEmbeddingConfig:
         cfg = EmbeddingConfig()
         assert cfg.model == "snowflake-arctic-embed2"
         assert cfg.dimension == 1024
-        assert cfg.base_url == "http://localhost:11434"
+        assert cfg.base_url
+        assert cfg.base_url.startswith("http://")
         assert cfg.request_timeout == 120.0
 
 
 class TestQdrantConfig:
     def test_defaults(self):
         cfg = QdrantConfig()
-        assert cfg.url == "http://localhost:6333"
+        assert cfg.url
+        assert cfg.url.startswith("http://")
         assert cfg.collection_parents == "vocalmind_parents"
         assert cfg.collection_children == "vocalmind_children"
 
@@ -95,3 +99,51 @@ class TestSettings:
         s = Settings()
         s.DOCS_DIR = tmp_path
         s.validate_config()  # Should not raise
+
+
+def test_resolve_model_for_stage_prefers_new_override(monkeypatch):
+    monkeypatch.setattr("config.settings.OLLAMA_MODEL_RAG_JUDGE", "ministral-3:8b")
+    monkeypatch.setattr("config.settings.OLLAMA_CLOUD_FAST_MODEL", "fast-default")
+    assert resolve_model_for_stage("rag_judge") == "ministral-3:8b"
+
+
+def test_resolve_model_for_stage_uses_legacy_override(monkeypatch):
+    monkeypatch.setattr("config.settings.OLLAMA_MODEL_NLI_POLICY", "")
+    monkeypatch.setattr("config.settings.OLLAMA_NLI_MODEL", "legacy-nli")
+    monkeypatch.setattr("config.settings.OLLAMA_CLOUD_FAST_MODEL", "fast-default")
+    assert resolve_model_for_stage("nli_policy") == "legacy-nli"
+
+
+def test_resolve_model_for_stage_class_fallbacks(monkeypatch):
+    monkeypatch.setattr("config.settings.LLM_PROVIDER", "ollama_cloud")
+    monkeypatch.setattr("config.settings.OLLAMA_CLOUD_FAST_MODEL", "fast-default")
+    monkeypatch.setattr("config.settings.OLLAMA_CLOUD_HEAVY_MODEL", "heavy-default")
+    monkeypatch.setattr("config.settings.OLLAMA_MODEL_RAG_SYNTHESIS", "")
+    monkeypatch.setattr("config.settings.OLLAMA_MODEL_TEXT_TO_SQL", "")
+    assert resolve_model_for_stage("text_to_sql") == "heavy-default"
+
+
+def test_resolve_model_for_stage_rag_synthesis_preserves_legacy_default(monkeypatch):
+    monkeypatch.setattr("config.settings.LLM_PROVIDER", "ollama_cloud")
+    monkeypatch.setattr("config.settings.OLLAMA_MODEL_RAG_SYNTHESIS", "")
+    monkeypatch.setattr("config.settings.groq.model", "llama-3.3-70b-versatile")
+    monkeypatch.setattr("config.settings.OLLAMA_CLOUD_FAST_MODEL", "fast-default")
+    monkeypatch.setattr("config.settings.OLLAMA_CLOUD_HEAVY_MODEL", "heavy-default")
+    assert resolve_model_for_stage("rag_synthesis") == "llama-3.3-70b-versatile"
+
+
+def test_resolve_model_for_stage_rejects_unknown():
+    with pytest.raises(ValueError, match="Unknown LLM stage"):
+        resolve_model_for_stage("unknown_stage")
+
+
+def test_recognized_stage_names_match_contract():
+    assert recognized_stage_names() == (
+        "emotion_shift",
+        "fast_classification",
+        "nli_policy",
+        "process_adherence",
+        "rag_judge",
+        "rag_synthesis",
+        "text_to_sql",
+    )

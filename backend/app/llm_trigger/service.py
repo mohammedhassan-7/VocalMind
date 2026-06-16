@@ -122,6 +122,18 @@ INSUFFICIENT_EVIDENCE_LABEL = "insufficient evidence"
 POLICY_PRIORITY_BUCKETS: tuple[str, ...] = ("regulatory", "legal")
 DEGRADED_MODE_SUFFIX = " [DEGRADED: LLM unavailable — heuristic fallback used]"
 
+_FRICTION_TITLES = {
+    "interruption": "Agent Interruption",
+    "dismissive_tone": "Dismissive Agent Tone",
+    "missing_acknowledgment": "Missing Acknowledgment",
+    "none": "No Agent Friction",
+}
+
+
+def _friction_title(dissonance_type: str | None) -> str:
+    key = (dissonance_type or "none").strip().lower().replace("-", "_").replace(" ", "_")
+    return _FRICTION_TITLES.get(key, "Agent Friction")
+
 
 def _log_step(interaction_id: UUID | str, step: str, **kwargs) -> None:
     extra = {"interaction_id": str(interaction_id), "pipeline_step": step, **kwargs}
@@ -194,6 +206,7 @@ class ResolvedPolicyContext:
     effective_at: str | None = None
     category: str | None = None
     conflict_resolution_applied: bool = False
+    retrieval_failed: bool = False
 
 
 def _join_retrieved_chunk_text(chunks: list[RetrievedChunk]) -> str:
@@ -933,6 +946,7 @@ async def _resolve_active_policy_context(
         )
 
     retrieval_query = query_text.strip() or fallback_sop.strip()
+    retrieval_failed = False
     if retrieval_query:
         try:
             retrieved_policy_chunks = retrieve_policy_chunks(
@@ -941,6 +955,13 @@ async def _resolve_active_policy_context(
                 top_k=2,
             )
         except Exception:
+            retrieval_failed = True
+            logger.warning(
+                "Policy retrieval failed [org=%s query_len=%d]",
+                org_filter or "<none>",
+                len(retrieval_query),
+                exc_info=True,
+            )
             retrieved_policy_chunks = []
 
         if retrieved_policy_chunks:
@@ -964,6 +985,7 @@ async def _resolve_active_policy_context(
                 version=f"retrieved:{reference_basis}",
                 category=str(primary_chunk.metadata.get("doc_type") or primary_chunk.metadata.get("category") or "retrieved"),
                 conflict_resolution_applied=len(unique_references) > 1,
+                retrieval_failed=False,
             )
 
     stmt = (
@@ -985,7 +1007,12 @@ async def _resolve_active_policy_context(
 
     if not rows:
         text = fallback_sop.strip() or "No ground truth policy context provided."
-        return ResolvedPolicyContext(text=text, version="fallback", category="fallback")
+        return ResolvedPolicyContext(
+            text=text,
+            version="fallback",
+            category="fallback",
+            retrieval_failed=retrieval_failed,
+        )
 
     sorted_rows = sorted(
         rows,
@@ -1006,6 +1033,7 @@ async def _resolve_active_policy_context(
         effective_at=_iso_or_none(version_basis),
         category=selected.policy_category,
         conflict_resolution_applied=conflict_applied,
+        retrieval_failed=retrieval_failed,
     )
 
 
@@ -1369,7 +1397,7 @@ def _build_emotion_trigger_attribution(
         attribution_id="emotion-dissonance",
         family="emotion",
         trigger_type="Acoustic-Transcript Dissonance",
-        title=emotion_shift.dissonance_type or "Cross-Modal Dissonance",
+        title=_friction_title(emotion_shift.dissonance_type),
         verdict=verdict,  # type: ignore[arg-type]
         confidence=emotion_shift.confidence_score or _emotion_signal_confidence(span, utterances),
         evidence_span=span,
@@ -1586,6 +1614,13 @@ def _build_claim_provenance_cards(
                     top_k=2,
                 )
             except Exception:
+                logger.warning(
+                    "Per-claim policy retrieval failed [org=%s claim_len=%d claim_index=%d]",
+                    org_filter or "<none>",
+                    len(claim_text),
+                    index,
+                    exc_info=True,
+                )
                 per_claim_chunks = []
         candidate_chunks = _filter_chunks_by_policy_context(
             per_claim_chunks or policy_chunks,
@@ -1816,7 +1851,9 @@ async def analyze_emotion_shift(
 ) -> EmotionShiftAnalysis:
     inferred_emotion = _normalize_acoustic_label(acoustic_emotion)
     _text_emotion, text_confidence = infer_text_emotion_with_provider(customer_text)
-    if not _detect_cross_modal_dissonance(customer_text, acoustic_emotion, text_emotion=_text_emotion):
+    negative_acoustic = inferred_emotion in {"anger", "frustrated", "frustration", "disgust", "fear", "sad"}
+    cross_modal = _detect_cross_modal_dissonance(customer_text, acoustic_emotion, text_emotion=_text_emotion)
+    if not cross_modal and not negative_acoustic:
         quotes = _quote_candidates(customer_text, max_quotes=2, target_emotion=inferred_emotion)
         return EmotionShiftAnalysis(
             is_dissonance_detected=False,
@@ -1847,6 +1884,7 @@ async def analyze_emotion_shift(
         result = await _invoke_chain_with_retry(
             chain,
             {
+                "detected_emotion": acoustic_emotion,
                 "agent_context": _sanitize_for_prompt(agent_context),
                 "customer_text": _sanitize_for_prompt(customer_text),
                 "acoustic_emotion": acoustic_emotion,
@@ -1874,9 +1912,7 @@ async def analyze_emotion_shift(
             insufficient_evidence=True,
             confidence_score=None,
         )
-    result.is_dissonance_detected = True
-    if result.dissonance_type.strip().lower() == "none":
-        result.dissonance_type = "Sarcasm"
+    result.is_dissonance_detected = result.dissonance_type.strip().lower() != "none"
     if not result.evidence_quotes:
         result.evidence_quotes = _quote_candidates(customer_text, max_quotes=3, target_emotion=inferred_emotion)
     if not result.root_cause.strip():
@@ -1919,7 +1955,19 @@ async def evaluate_process_adherence(
             )
             retrieved_sop = retrieved_sop_context.text
             retrieved_sop_chunks = retrieved_sop_context.chunks
+            if retrieved_sop_context.retrieval_failed:
+                logger.warning(
+                    "Process adherence SOP retrieval degraded [org=%s transcript_len=%d]",
+                    org_filter or "<none>",
+                    len(transcript_text or ""),
+                )
         except Exception:
+            logger.warning(
+                "Process adherence SOP retrieval threw [org=%s transcript_len=%d]",
+                org_filter or "<none>",
+                len(transcript_text or ""),
+                exc_info=True,
+            )
             retrieved_sop = ""
             retrieved_sop_chunks = []
 
@@ -2402,6 +2450,7 @@ async def evaluate_interaction_triggers(
     retrieved_sop_from_pinecone: str = "",
     ground_truth_policy: str = "",
     org_filter: str | None = None,
+    requester_organization_id: UUID | None = None,
     force_rerun: bool = False,
     commit_cache: bool = False,
 ) -> InteractionLLMTriggerReport:
@@ -2428,21 +2477,35 @@ async def evaluate_interaction_triggers(
             _log_step(interaction_id, "cache_hit")
             return cached_report
 
-    interaction_result = await session.exec(
-        select(Interaction).where(Interaction.id == interaction_id)
-    )
+    interaction_stmt = select(Interaction).where(Interaction.id == interaction_id)
+    if requester_organization_id is not None:
+        interaction_stmt = interaction_stmt.where(
+            Interaction.organization_id == requester_organization_id
+        )
+    interaction_result = await session.exec(interaction_stmt)
     interaction = interaction_result.first()
     if not interaction:
         raise ValueError("Interaction not found.")
 
+    scoped_org_id = interaction.organization_id
+    if requester_organization_id is not None and scoped_org_id != requester_organization_id:
+        raise ValueError("Interaction not found.")
+
     transcript_result = await session.exec(
-        select(Transcript).where(Transcript.interaction_id == interaction_id)
+        select(Transcript)
+        .join(Interaction, Transcript.interaction_id == Interaction.id)
+        .where(
+            Transcript.interaction_id == interaction_id,
+            Interaction.organization_id == scoped_org_id,
+        )
     )
     transcript = transcript_result.first()
 
     utterance_result = await session.exec(
         select(Utterance)
+        .join(Interaction, Utterance.interaction_id == Interaction.id)
         .where(Utterance.interaction_id == interaction_id)
+        .where(Interaction.organization_id == scoped_org_id)
         .order_by(Utterance.sequence_index)
     )
     utterances = list(utterance_result.all())
@@ -2491,7 +2554,19 @@ async def evaluate_interaction_triggers(
         )
         sop_context = sop_resolution.text
         sop_chunks = sop_resolution.chunks
+        if sop_resolution.retrieval_failed:
+            logger.warning(
+                "Trigger SOP retrieval degraded [interaction_id=%s org=%s]",
+                interaction_id,
+                org_filter or "<none>",
+            )
     except Exception:
+        logger.warning(
+            "Trigger SOP retrieval threw [interaction_id=%s org=%s]",
+            interaction_id,
+            org_filter or "<none>",
+            exc_info=True,
+        )
         sop_context = ""
         sop_chunks = []
 
@@ -2646,6 +2721,13 @@ async def evaluate_interaction_triggers(
             top_k=3,
         )
     except Exception:
+        logger.warning(
+            "Explainability policy retrieval failed [interaction_id=%s org=%s agent_statement_len=%d]",
+            interaction_id,
+            org_filter or "<none>",
+            len(agent_statement or ""),
+            exc_info=True,
+        )
         policy_chunks = []
     explainability = _build_explainability_layer(
         emotion_shift=emotion_shift,

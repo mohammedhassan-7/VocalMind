@@ -33,9 +33,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, FieldCondition, Filter, FilterSelector, MatchValue, PointStruct, VectorParams
 
 try:
-    from .config import settings
+    from .config import settings, embedding_http_base_url, embedding_http_headers
 except ImportError:  # pragma: no cover - allows direct script/test imports
-    from config import settings
+    from config import settings, embedding_http_base_url, embedding_http_headers
 
 
 logger = logging.getLogger(__name__)
@@ -156,8 +156,9 @@ class DocumentIngestionPipeline:
             for path, payload in payloads:
                 try:
                     response = httpx.post(
-                        f"{settings.embedding.base_url}{path}",
+                        f"{embedding_http_base_url()}{path}",
                         json=payload,
+                        headers=embedding_http_headers(),
                         timeout=settings.embedding.request_timeout,
                     )
                     response.raise_for_status()

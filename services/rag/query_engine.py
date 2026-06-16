@@ -20,7 +20,6 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-from groq import Groq
 from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.core.response_synthesizers import get_response_synthesizer
 from llama_index.llms.groq import Groq as LlamaGroq
@@ -28,9 +27,25 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue, ScoredPoint
 
 try:
-    from .config import settings
+    from .config import (
+        settings,
+        build_rag_llm_client,
+        embedding_http_base_url,
+        embedding_http_headers,
+        rag_synthesis_model,
+    )
+    from .prompt_safety import sanitize_prompt_text, with_injection_guard
+    from .llm_circuit_breaker import CircuitOpenError, get_breaker
 except ImportError:  # pragma: no cover - allows direct script/test imports
-    from config import settings
+    from config import (
+        settings,
+        build_rag_llm_client,
+        embedding_http_base_url,
+        embedding_http_headers,
+        rag_synthesis_model,
+    )
+    from prompt_safety import sanitize_prompt_text, with_injection_guard
+    from llm_circuit_breaker import CircuitOpenError, get_breaker
 
 
 logger = logging.getLogger(__name__)
@@ -62,8 +77,9 @@ class RAGQueryEngine:
 
     def _setup_llm(self) -> None:
         """Configure Groq LLM for response synthesis via LlamaIndex."""
+        synthesis_model = rag_synthesis_model()
         self.llm = LlamaGroq(
-            model=settings.groq.model,
+            model=synthesis_model,
             api_key=settings.groq.api_key.get_secret_value(),
             temperature=settings.groq.temperature,
             max_tokens=settings.groq.max_tokens,
@@ -73,13 +89,14 @@ class RAGQueryEngine:
             llm=self.llm,
             response_mode=settings.response_mode,
         )
-        # Also keep a raw Groq client for structured prompts (evaluator uses it)
-        self.groq_client = Groq(api_key=settings.groq.api_key.get_secret_value())
+        # Raw OpenAI-compatible client for structured prompts (evaluator uses it)
+        self.groq_client = build_rag_llm_client()
 
     # ── Embedding ─────────────────────────────────────────────────────────
 
     def _embed_query(self, text: str) -> list[float]:
         """Embed a query string via Ollama."""
+        breaker = get_breaker("embedding")
         retry_delays = (0.4, 1.0, 2.0)
         payloads = (
             ("/api/embed", {"model": settings.embedding.model, "input": text}),
@@ -93,10 +110,13 @@ class RAGQueryEngine:
 
             for path, payload in payloads:
                 try:
-                    response = httpx.post(
-                        f"{settings.embedding.base_url}{path}",
-                        json=payload,
-                        timeout=settings.embedding.request_timeout,
+                    response = breaker.call_sync(
+                        lambda: httpx.post(
+                            f"{embedding_http_base_url()}{path}",
+                            json=payload,
+                            headers=embedding_http_headers(),
+                            timeout=settings.embedding.request_timeout,
+                        )
                     )
                     response.raise_for_status()
                     data = response.json()
@@ -130,14 +150,16 @@ class RAGQueryEngine:
             (scored_points, retrieval_seconds)
         """
         top_k = top_k or settings.similarity_top_k
+        scoped_org = str(org_filter).strip() if org_filter is not None else ""
+        if not scoped_org:
+            # Deny-by-default: never issue unscoped multi-tenant vector queries.
+            scoped_org = "__missing_org_scope__"
 
         t0 = time.perf_counter()
         query_vector = self._embed_query(query_text)
 
         def _build_filter(include_doc_type: bool) -> Filter | None:
-            conditions = []
-            if org_filter:
-                conditions.append(FieldCondition(key="org", match=MatchValue(value=org_filter)))
+            conditions = [FieldCondition(key="org", match=MatchValue(value=scoped_org))]
             if include_doc_type and doc_type:
                 conditions.append(FieldCondition(key="doc_type", match=MatchValue(value=doc_type)))
             return Filter(must=conditions) if conditions else None
@@ -169,7 +191,7 @@ class RAGQueryEngine:
         """Convert Qdrant ScoredPoint results to LlamaIndex NodeWithScore."""
         nodes: list[NodeWithScore] = []
         for pt in points:
-            text = pt.payload.get("text", "")
+            text = sanitize_prompt_text(pt.payload.get("text", ""), max_length=2500)
             metadata = {k: v for k, v in pt.payload.items() if k != "text"}
             node = TextNode(text=text, metadata=metadata)
             nodes.append(NodeWithScore(node=node, score=pt.score))
@@ -183,8 +205,9 @@ class RAGQueryEngine:
         nodes: list[NodeWithScore],
     ) -> tuple[str, float]:
         """Run LlamaIndex response synthesis and return (response_text, seconds)."""
+        safe_question = with_injection_guard(question)
         t0 = time.perf_counter()
-        response = self.synthesizer.synthesize(question, nodes=nodes)
+        response = self.synthesizer.synthesize(safe_question, nodes=nodes)
         synthesis_time = time.perf_counter() - t0
         return str(response), synthesis_time
 
@@ -198,13 +221,22 @@ class RAGQueryEngine:
         response_text: str,
         timing: dict,
     ) -> None:
+        if not settings.RAG_QUERY_LOG_ENABLED:
+            logger.debug(
+                "RAG query log skipped [collection=%s question_len=%d chunk_count=%d response_len=%d]",
+                collection,
+                len(question or ""),
+                len(chunks),
+                len(response_text or ""),
+            )
+            return
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_file = self.logs_dir / f"query_{timestamp}.json"
         log_data = {
             "timestamp": datetime.now().isoformat(),
             "question": question,
             "collection": collection,
-            "model": settings.groq.model,
+            "model": rag_synthesis_model(),
             "similarity_top_k": settings.similarity_top_k,
             "timing_seconds": timing,
             "retrieved_chunks": chunks,
@@ -213,8 +245,8 @@ class RAGQueryEngine:
         try:
             with open(log_file, "w", encoding="utf-8") as f:
                 json.dump(log_data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"  Warning: Failed to log query: {e}")
+        except Exception:
+            logger.warning("Failed to persist RAG query audit log", exc_info=True)
 
     # ── Public API ────────────────────────────────────────────────────────
 

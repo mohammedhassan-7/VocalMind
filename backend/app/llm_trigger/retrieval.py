@@ -20,7 +20,7 @@ import threading
 from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
-from app.core.config import settings
+from app.core.config import settings, embedding_request_headers, resolve_embedding_base_url
 
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,7 @@ class ResolvedRetrievalContext:
     text: str
     chunks: list[RetrievedChunk] = field(default_factory=list)
     source: str = "unknown"
+    retrieval_failed: bool = False
 
 
 def _tokenize(text: str) -> set[str]:
@@ -165,8 +166,9 @@ class QdrantRetriever:
         for path, payload in payloads:
             try:
                 response = httpx.post(
-                    f"{settings.OLLAMA_BASE_URL}{path}",
+                    f"{resolve_embedding_base_url()}{path}",
                     json=payload,
+                    headers=embedding_request_headers(),
                     timeout=settings.EMBEDDING_TIMEOUT_SECONDS,
                 )
                 response.raise_for_status()
@@ -193,11 +195,13 @@ class QdrantRetriever:
         doc_type: str | None = None,
     ) -> list[RetrievedChunk]:
         query_vector = self._embed_query(query_text)
+        scoped_org = str(org_filter).strip() if org_filter is not None else ""
+        if not scoped_org:
+            # Deny-by-default: never run an unscoped multi-tenant query.
+            scoped_org = "__missing_org_scope__"
 
         def _build_filter(include_doc_type: bool) -> Filter | None:
-            conditions = []
-            if org_filter:
-                conditions.append(FieldCondition(key="org", match=MatchValue(value=org_filter)))
+            conditions = [FieldCondition(key="org", match=MatchValue(value=scoped_org))]
             if include_doc_type and doc_type:
                 conditions.append(FieldCondition(key="doc_type", match=MatchValue(value=doc_type)))
             return Filter(must=conditions) if conditions else None
@@ -461,7 +465,17 @@ def resolve_retrieved_sop_context(
         retriever = SOPRetriever()
         qdrant_chunks = retriever.retrieve_sop_chunks(transcript_text=transcript_text, org_filter=org_filter)
     except Exception:
-        qdrant_chunks = []
+        logger.warning(
+            "SOP retrieval failed for org=%s; continuing with empty context.",
+            org_filter or "<none>",
+            exc_info=True,
+        )
+        return ResolvedRetrievalContext(
+            text="",
+            chunks=[],
+            source="retrieval_error",
+            retrieval_failed=True,
+        )
 
     if qdrant_chunks:
         ranked_qdrant_chunks = _rank_chunks_by_query(
@@ -475,7 +489,7 @@ def resolve_retrieved_sop_context(
             source="qdrant",
         )
 
-    return ResolvedRetrievalContext(text="", chunks=[], source="none")
+    return ResolvedRetrievalContext(text="", chunks=[], source="none", retrieval_failed=False)
 
 
 def retrieve_policy_chunks(
