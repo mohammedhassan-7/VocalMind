@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -91,7 +90,7 @@ def test_out_of_bounds_symlink_path_is_rejected(tmp_path):
     except OSError:
         # Windows environments may block symlink creation without elevation;
         # fallback still validates an obvious out-of-bounds absolute path.
-        assert _is_path_within_org_dir(outside_file, org_dir) is False
+        assert watcher._is_path_within_org_dir(outside_file, org_dir) is False
         return
 
     assert watcher._is_path_within_org_dir(link_path, org_dir) is False

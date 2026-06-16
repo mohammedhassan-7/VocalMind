@@ -29,7 +29,8 @@ VocalMind is a modular AI ecosystem integrating speech processing (ASR, Diarizat
 - **Node.js 20+** (via [pnpm v10+](https://pnpm.io/)) — only needed for local frontend development
 - **Git LFS** — if your fork includes large test fixtures
 - **Hugging Face token** (`HF_TOKEN`) — required for WhisperX diarization (pyannote)
-- **Groq API key** (`GROQ_API_KEY`) — required for LLM chains and trigger evaluation
+- **Groq API key** (`GROQ_API_KEY`) — required when `LLM_PROVIDER=groq` (default); optional when using Ollama Cloud
+- **Ollama API key** (`OLLAMA_API_KEY`) — required when `LLM_PROVIDER=ollama_cloud`
 
 ### 1. Configure Environment Variables
 
@@ -42,7 +43,8 @@ Edit `backend/.env` and fill in the required secrets:
 
 | Variable | Required | Notes |
 |:---------|:--------|:------|
-| `GROQ_API_KEY` | **Yes** | Get from <https://console.groq.com> — LLM chains and trigger evaluation |
+| `GROQ_API_KEY` | When `LLM_PROVIDER=groq` | Get from <https://console.groq.com> — LLM chains and trigger evaluation |
+| `OLLAMA_API_KEY` | When `LLM_PROVIDER=ollama_cloud` | Get from <https://ollama.com/settings> — Ollama Cloud LLM + optional embeddings |
 | `HF_TOKEN` | **Yes** | Get from <https://huggingface.co/settings/tokens> — pyannote diarization |
 | `SECRET_KEY` | **Yes** | Generate with `openssl rand -hex 32` |
 | `IS_LOCAL` | No | `true` = Docker containers (default in docker-compose.yml); `false` = Kaggle remote |

@@ -13,7 +13,7 @@ import app.models  # noqa: F401
 from app.core import interaction_processing as ip
 from app.models.emotion_event import EmotionEvent
 from app.models.enums import ProcessingStatus, SpeakerRole
-from app.models.enums import JobStatus, JobStage
+from app.models.enums import JobStatus
 from app.models.interaction import Interaction
 from app.models.organization import Organization
 from app.models.processing import ProcessingJob

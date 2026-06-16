@@ -35,7 +35,7 @@ try:
         rag_synthesis_model,
     )
     from .prompt_safety import sanitize_prompt_text, with_injection_guard
-    from .llm_circuit_breaker import CircuitOpenError, get_breaker
+    from .llm_circuit_breaker import get_breaker
 except ImportError:  # pragma: no cover - allows direct script/test imports
     from config import (
         settings,
@@ -45,7 +45,7 @@ except ImportError:  # pragma: no cover - allows direct script/test imports
         rag_synthesis_model,
     )
     from prompt_safety import sanitize_prompt_text, with_injection_guard
-    from llm_circuit_breaker import CircuitOpenError, get_breaker
+    from llm_circuit_breaker import get_breaker
 
 
 logger = logging.getLogger(__name__)

@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
 
-from app.core import security
-from app.core.config import settings
+from app.core import security  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 
 MANAGER_ID = "b0000000-0000-0000-0000-000000000001"

@@ -6,6 +6,11 @@ a pre-configured TestClient and mocked database sessions to ensure tests
 remain isolated from production data.
 """
 
+import os
+
+# RAG service Settings() reads GROQ_API_KEY at import time during contract tests.
+os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
+
 import pytest
 import importlib
 from typing import Generator
@@ -64,6 +69,22 @@ def client_fixture(session: Session) -> Generator[TestClient, None, None]:
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()
+
+@pytest.fixture(autouse=True)
+def _mock_health_asyncpg(monkeypatch):
+    """Health checks should not require a live Postgres instance in unit tests."""
+
+    class _FakeConn:
+        async def execute(self, _sql):
+            return None
+
+        async def close(self):
+            return None
+
+    async def _fake_connect(**_kwargs):
+        return _FakeConn()
+
+    monkeypatch.setattr("app.main.asyncpg.connect", _fake_connect)
 
 @pytest.fixture(name="mock_user")
 def mock_user_fixture() -> dict:

@@ -789,7 +789,10 @@ async def process_interaction(interaction_id: UUID) -> None:
 
             if policy:
                 is_compliant = report.nli_policy.nli_category in {"Entailment", "Benign Deviation"}
-                transcript_policy_degraded = bool(getattr(transcript_policy_report, "degraded", False))
+                transcript_policy_degraded = bool(
+                    report.nli_policy.insufficient_evidence
+                    or report.process_adherence.insufficient_evidence
+                )
                 session.add(
                     PolicyCompliance(
                         interaction_id=interaction_id,

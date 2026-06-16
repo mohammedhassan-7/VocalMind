@@ -67,5 +67,6 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = [
-  "."
+  ".",
+  "../services",
 ]

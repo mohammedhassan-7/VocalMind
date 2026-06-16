@@ -6,7 +6,6 @@ from app.llm_trigger.prompt_constants import (
     INJECTION_GUARD,
     NLI_FEW_SHOT,
     NLI_POLICY_SYSTEM_CORE,
-    PROCESS_ADHERENCE_FEW_SHOT,
     PROCESS_ADHERENCE_SYSTEM_CORE,
 )
 

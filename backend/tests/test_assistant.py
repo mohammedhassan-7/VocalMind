@@ -346,9 +346,34 @@ async def test_groq_chat_complete_retries_transient_failure(monkeypatch):
 def test_process_assistant_query_sets_degraded_on_total_provider_failure(client, monkeypatch):
     from app.api.routes.assistant import IntentResolver
 
+    class _FakeResult:
+        def all(self):
+            return []
+
+        def scalar(self):
+            return None
+
+    class _FakeConn:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def execute(self, _statement, *_args, **_kwargs):
+            return _FakeResult()
+
+        async def commit(self):
+            return None
+
+    class _FakeEngine:
+        def connect(self):
+            return _FakeConn()
+
     async def _always_none(*_args, **_kwargs):
         return None
 
+    monkeypatch.setattr("app.api.routes.assistant.engine", _FakeEngine())
     monkeypatch.setattr(IntentResolver, "_generate_content_with_fallback", _always_none)
     response = client.post(
         "/api/v1/assistant/query",

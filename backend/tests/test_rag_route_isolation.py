@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 from uuid import UUID
 
 from app.api.deps import get_current_user
