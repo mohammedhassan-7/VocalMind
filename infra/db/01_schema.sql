@@ -215,6 +215,7 @@ CREATE TABLE policy_compliance (
     policy_id             UUID    NOT NULL REFERENCES company_policies(id) ON DELETE CASCADE,
     is_compliant          BOOLEAN NOT NULL,
     compliance_score      FLOAT   NOT NULL,
+    degraded              BOOLEAN NOT NULL DEFAULT FALSE,
     llm_reasoning         TEXT    NULL,
     evidence_text         TEXT    NULL,
     retrieved_policy_text TEXT    NULL
