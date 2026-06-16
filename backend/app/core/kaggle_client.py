@@ -9,6 +9,7 @@ from fastapi import HTTPException, UploadFile
 
 from app.core.config import settings
 from app.core.inference_contracts import audio_content_type, is_supported_audio_filename
+from app.core.request_context import outbound_request_headers
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,9 @@ class BaseKaggleClient:
         return f"{self.base_url.rstrip('/')}{self.endpoint}"
 
     def headers(self) -> dict[str, str]:
-        return {} if settings.IS_LOCAL else {"ngrok-skip-browser-warning": "true"}
+        headers = {} if settings.IS_LOCAL else {"ngrok-skip-browser-warning": "true"}
+        headers.update(outbound_request_headers())
+        return headers
 
     def normalize_response(self, data: dict[str, Any]) -> dict[str, Any]:
         return data
@@ -127,15 +130,29 @@ class BaseKaggleClient:
                     try:
                         return self.normalize_response(response.json())
                     except Exception as parse_exc:
+                        logger.error(
+                            "Invalid JSON from %s at %s [status=%s body_len=%d]",
+                            self.endpoint,
+                            url,
+                            response.status_code,
+                            len(response.text or ""),
+                            exc_info=True,
+                        )
                         raise HTTPException(
                             status_code=502,
-                            detail=f"Invalid JSON from {self.endpoint}: {parse_exc}",
+                            detail=f"Invalid JSON from {self.endpoint}.",
                         ) from parse_exc
 
-                logger.error("%s API error %s at %s: %s", self.endpoint, response.status_code, url, response.text)
+                logger.error(
+                    "%s API error at %s [status=%s body_len=%d]",
+                    self.endpoint,
+                    url,
+                    response.status_code,
+                    len(response.text or ""),
+                )
                 raise HTTPException(
                     status_code=502,
-                    detail=f"{self.endpoint} service error: {response.text}",
+                    detail=f"{self.endpoint} service error.",
                 )
 
         if isinstance(last_error, httpx.TimeoutException):

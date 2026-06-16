@@ -13,8 +13,10 @@ import app.models  # noqa: F401
 from app.core import interaction_processing as ip
 from app.models.emotion_event import EmotionEvent
 from app.models.enums import ProcessingStatus, SpeakerRole
+from app.models.enums import JobStatus, JobStage
 from app.models.interaction import Interaction
 from app.models.organization import Organization
+from app.models.processing import ProcessingJob
 from app.models.transcript import Transcript
 from app.models.utterance import Utterance
 from app.models.user import User
@@ -56,6 +58,9 @@ class _AsyncSessionAdapter:
 
     async def commit(self):
         self._wrapped.commit()
+
+    async def rollback(self):
+        self._wrapped.rollback()
 
 
 @pytest.mark.asyncio
@@ -293,3 +298,91 @@ def test_emotion_min_duration_gate_disabled_when_threshold_zero():
     ]
     out = ip.apply_emotion_min_duration_gate([dict(s) for s in segments], min_secs=0.0)
     assert [s["emotion"] for s in out] == ["happy", "neutral"]
+
+
+@pytest.mark.asyncio
+async def test_mark_interaction_failed_stage_status_transaction_rolls_back_on_mid_loop_failure(monkeypatch, tmp_path):
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'interaction-failed-rollback.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+
+    org_id = uuid4()
+    manager_id = uuid4()
+    agent_id = uuid4()
+    interaction_id = uuid4()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    session.add(Organization(id=org_id, name="Org", slug="org", created_at=now))
+    session.add(
+        User(
+            id=manager_id,
+            organization_id=org_id,
+            email="manager@org.local",
+            password_hash="hash",
+            name="Manager",
+            role=UserRole.manager,
+            is_active=True,
+        )
+    )
+    session.add(
+        User(
+            id=agent_id,
+            organization_id=org_id,
+            email="agent@org.local",
+            password_hash="hash",
+            name="Agent",
+            role=UserRole.agent,
+            is_active=True,
+        )
+    )
+    session.add(
+        Interaction(
+            id=interaction_id,
+            organization_id=org_id,
+            agent_id=agent_id,
+            uploaded_by=manager_id,
+            audio_file_path=str(Path(tmp_path / "call.wav")),
+            processing_status=ProcessingStatus.processing,
+            duration_seconds=1,
+            file_size_bytes=1,
+            file_format="wav",
+            interaction_date=now,
+        )
+    )
+    for stage in ip.STAGE_ORDER:
+        session.add(
+            ProcessingJob(
+                interaction_id=interaction_id,
+                stage=stage,
+                status=JobStatus.pending,
+            )
+        )
+    session.commit()
+
+    original_set_job_status = ip._set_job_status
+    call_counter = {"n": 0}
+
+    async def _exploding_set_job_status(session_obj, interaction_id_obj, stage, status, error_message=None):
+        await original_set_job_status(session_obj, interaction_id_obj, stage, status, error_message)
+        if status == JobStatus.failed:
+            call_counter["n"] += 1
+            if call_counter["n"] == 3:
+                raise RuntimeError("simulated mid-loop failure")
+
+    monkeypatch.setattr(
+        ip,
+        "AsyncSession",
+        lambda *args, **kwargs: _AsyncSessionAdapter(session),
+    )
+    monkeypatch.setattr(ip, "engine", SimpleNamespace())
+    monkeypatch.setattr(ip, "_set_job_status", _exploding_set_job_status)
+
+    with pytest.raises(RuntimeError, match="simulated mid-loop failure"):
+        await ip.mark_interaction_failed(interaction_id, "boom")
+
+    jobs = session.exec(
+        select(ProcessingJob).where(ProcessingJob.interaction_id == interaction_id)
+    ).all()
+    assert all(job.status == JobStatus.pending for job in jobs)

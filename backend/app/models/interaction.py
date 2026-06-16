@@ -2,12 +2,15 @@ from sqlmodel import SQLModel, Field
 from typing import Optional
 from datetime import datetime
 from uuid import UUID, uuid4
-from sqlalchemy import Column, SmallInteger, BigInteger, Enum as SAEnum
+from sqlalchemy import Column, SmallInteger, BigInteger, Enum as SAEnum, UniqueConstraint
 from app.models.enums import ProcessingStatus
 
 
 class Interaction(SQLModel, table=True):
     __tablename__ = "interactions"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "audio_file_path", name="uq_interaction_org_audio_path"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     organization_id: UUID = Field(foreign_key="organizations.id")

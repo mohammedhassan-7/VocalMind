@@ -12,11 +12,14 @@ from transformers import pipeline
 from starlette.concurrency import run_in_threadpool
 from contextlib import asynccontextmanager
 import asyncio
+import logging
+from fastapi import Request
 
 # Global dictionary to hold the loaded model
 ml_models = {}
 inference_lock = asyncio.Lock()
 MAX_INFERENCE_SECONDS = int(os.getenv("EMOTION_MAX_AUDIO_SECONDS", "30"))
+logger = logging.getLogger(__name__)
 
 class TextPredictRequest(BaseModel):
     text: str
@@ -25,18 +28,23 @@ class TextPredictRequest(BaseModel):
 async def lifespan(app: FastAPI):
     # Check if CUDA is available
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
+    logger.info(f"Using device: {device}")
 
     # Initialize the audio model
-    print("Loading model iic/emotion2vec_plus_base inside worker...")
+    logger.info("Loading model iic/emotion2vec_plus_base inside worker...")
+    # SECURITY NOTE: trust_remote_code=True allows arbitrary code execution from the
+    # model repository. This is intentional for this model but means the security
+    # posture of this service depends on the integrity of the upstream HF repo.
+    # Model should be pinned to a specific commit hash in production, not a tag.
+    # Reviewed and accepted: 2026-06-16 — revisit if model source changes.
     ml_models["emotion2vec"] = AutoModel(model="iic/emotion2vec_plus_base", trust_remote_code=True, disable_update=True, device=device)
-    print("Audio model loaded successfully.")
+    logger.info("Audio model loaded successfully.")
 
     # Initialize the text model. Failure to load must NOT break the container —
     # /predict_text will return 503 and callers fall back to the rule-based
     # text emotion provider in the backend (emotion_fusion._HF_PROVIDER_DISABLED_REASON).
     try:
-        print("Loading text emotion model j-hartmann/emotion-english-distilroberta-base...")
+        logger.info("Loading text emotion model j-hartmann/emotion-english-distilroberta-base...")
         hf_device = 0 if device == "cuda" else -1
         ml_models["text_emotion"] = pipeline(
             "text-classification",
@@ -44,9 +52,9 @@ async def lifespan(app: FastAPI):
             device=hf_device,
             top_k=None,
         )
-        print("Text emotion model loaded successfully.")
+        logger.info("Text emotion model loaded successfully.")
     except Exception as exc:
-        print(f"WARNING: text emotion model failed to load: {exc}. /predict_text will return 503.")
+        logger.warning(f"WARNING: text emotion model failed to load: {exc}. /predict_text will return 503.")
 
     yield
     # Clean up the ML models and release the resources
@@ -55,8 +63,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Emotion Recognition API", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID")
+    if request_id:
+        logger.info("[request_id=%s] Emotion request %s %s", request_id, request.method, request.url.path)
+    response = await call_next(request)
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+    return response
+
+
 def _run_inference(filepath):
-    print(f"Starting inference on file: {filepath}")
+    logger.info(f"Starting inference on file: {filepath}")
     return ml_models["emotion2vec"].generate(input=filepath, extract_embedding=False)
 
 @app.post("/predict")
@@ -101,7 +120,7 @@ async def predict(file: UploadFile = File(...)):
         # Run inference using the pre-loaded FunaSR model via threadpool
         async with inference_lock:
             results = await run_in_threadpool(_run_inference, inference_path)
-        print(f"Inference finished. Results: {results}")
+        logger.info(f"Inference finished. Results: {results}")
 
         # Parse result
         if results and len(results) > 0:

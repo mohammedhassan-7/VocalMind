@@ -38,6 +38,7 @@ class PolicyCompliance(SQLModel, table=True):
     policy_id: UUID = Field(foreign_key="company_policies.id")
     is_compliant: bool
     compliance_score: float
+    degraded: bool = Field(default=False)
     llm_reasoning: Optional[str] = None
     evidence_text: Optional[str] = None
     retrieved_policy_text: Optional[str] = None

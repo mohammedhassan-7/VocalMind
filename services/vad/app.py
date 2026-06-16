@@ -10,30 +10,50 @@ from pathlib import Path
 
 import torch
 import uvicorn
+import logging
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydub import AudioSegment
 from starlette.concurrency import run_in_threadpool
 from contextlib import asynccontextmanager
+from fastapi import Request
 
 # ── Model Loading ───────────────────────────────────────────────────────
 
 ml_models = {}
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Loading Silero VAD model...")
-    model, utils = torch.hub.load(
-        "snakers4/silero-vad", "silero_vad", trust_repo=True
-    )
-    ml_models["vad_model"] = model
-    ml_models["vad_utils"] = utils
-    print("Silero VAD ready.")
+    logger.info("VAD service started (lazy model loading enabled).")
     yield
     ml_models.clear()
 
 
 app = FastAPI(title="VAD Preprocessing Service", lifespan=lifespan)
+def _ensure_vad_model_loaded() -> None:
+    if "vad_model" in ml_models and "vad_utils" in ml_models:
+        return
+    # SECURITY NOTE: torch.hub.load may fetch code/weights from GitHub if cache
+    # is missing. We keep this lazy so startup/health does not block on network.
+    model, utils = torch.hub.load(
+        "snakers4/silero-vad", "silero_vad", trust_repo=True
+    )
+    ml_models["vad_model"] = model
+    ml_models["vad_utils"] = utils
+
+
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID")
+    if request_id:
+        logger.info("[request_id=%s] VAD request %s %s", request_id, request.method, request.url.path)
+    response = await call_next(request)
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+    return response
 
 
 # ── Sync inference (runs in threadpool) ─────────────────────────────────
@@ -77,6 +97,29 @@ def _split_audio(tmp_path: str):
 
 @app.post("/split")
 async def split_audio(file: UploadFile = File(...)):
+    if "vad_model" not in ml_models or "vad_utils" not in ml_models:
+        try:
+            await run_in_threadpool(_ensure_vad_model_loaded)
+            logger.info("Silero VAD model loaded on demand.")
+        except Exception as exc:
+            logger.exception("Silero VAD model bootstrap failed: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "VAD model failed to load (network/cache issue). "
+                    "Retry later or pre-cache Silero model."
+                ),
+            ) from exc
+
+    if "vad_model" not in ml_models or "vad_utils" not in ml_models:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "VAD model is not loaded. Check service logs for bootstrap "
+                "errors (network/cache) and restart once fixed."
+            ),
+        )
+
     if not file.filename.endswith(".wav"):
         raise HTTPException(status_code=400, detail="Only .wav files supported.")
 

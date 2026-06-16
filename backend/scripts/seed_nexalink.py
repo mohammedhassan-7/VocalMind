@@ -582,6 +582,8 @@ async def main():
         else:
             print("Skipping mock interaction seeding (SEED_MOCK_INTERACTIONS=false).")
 
+        # NOTE: printed credentials below are local-development bootstrap values only.
+        # Never use or keep these credentials in non-local environments.
         print("Seeding complete! You can login with:")
         print("Manager: manager@nexalink.com / password123")
         for email, _ in NEXALINK_AGENT_PROFILES:

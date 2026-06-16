@@ -10,6 +10,7 @@ from app.api.routes.emotion.service import emotion_client
 from app.api.routes.full.service import full_client
 from app.core.config import settings
 from app.core.inference_contracts import normalize_emotion_label
+from app.core.request_context import outbound_request_headers
 
 
 logger = logging.getLogger(__name__)
@@ -31,14 +32,19 @@ async def _process_local_audio(
             response = await client.post(
                 _local_vad_url(),
                 files={"file": (filename, audio_bytes, "audio/wav")},
+                headers=outbound_request_headers(),
             )
     except httpx.RequestError as exc:
         logger.error("VAD service unreachable (local service): %s", exc)
         raise HTTPException(status_code=503, detail="VAD service unreachable (local service).") from exc
 
     if response.status_code != 200:
-        logger.error("VAD service error %s: %s", response.status_code, response.text)
-        raise HTTPException(status_code=502, detail=f"VAD service error: {response.text}")
+        logger.error(
+            "VAD service error [status=%s body_len=%d]",
+            response.status_code,
+            len(response.text or ""),
+        )
+        raise HTTPException(status_code=502, detail="VAD service error.")
 
     segments = response.json().get("segments", [])
     if not segments:

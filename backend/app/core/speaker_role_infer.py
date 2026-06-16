@@ -99,6 +99,12 @@ class _SpeakerRoleClassifier:
 
 def relabel_segments_with_speaker_model(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Apply optional binary speaker-role classifier in-process."""
+    # Reconciliation policy: if this function runs after WhisperX role assignment,
+    # backend relabeler output overwrites WhisperX labels for non-empty-text segments.
+    # There is no merge/conflict arbitration — caller wins if enabled.
+    # speaker_meta.confidence from WhisperX is not used for conflict resolution.
+    # This is intentional: backend relabeler is opt-in and expected to supersede
+    # WhisperX labels when enabled.
     global _classifier
     if not settings.BACKEND_SPEAKER_RELABEL_ENABLED:
         return segments
@@ -108,4 +114,9 @@ def relabel_segments_with_speaker_model(segments: list[dict[str, Any]]) -> list[
     model_dir = Path(raw)
     if _classifier is None:
         _classifier = _SpeakerRoleClassifier(model_dir)
-    return _classifier.relabel_segments(segments)
+    relabeled = _classifier.relabel_segments(segments)
+    if not _classifier.is_available:
+        logger.warning(
+            "BACKEND_SPEAKER_RELABEL_ENABLED=true but model unavailable; WhisperX labels preserved unchanged."
+        )
+    return relabeled

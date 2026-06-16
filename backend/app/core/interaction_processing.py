@@ -435,16 +435,12 @@ async def _set_job_status(
         job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         job.error_message = error_message
 
-    await session.commit()
-
-
 async def _set_interaction_status(session: AsyncSession, interaction_id: UUID, status: ProcessingStatus) -> None:
     interaction = await session.get(Interaction, interaction_id)
     if not interaction:
         return
     interaction.processing_status = status
     session.add(interaction)
-    await session.commit()
 
 
 async def enqueue_interaction_processing(interaction_id: UUID) -> None:
@@ -624,10 +620,15 @@ async def process_interaction(interaction_id: UUID) -> None:
             logger.info("Skipping interaction %s (already completed)", interaction_id)
             return
 
-        await _set_job_status(session, interaction_id, JobStage.diarization, JobStatus.running)
-        await _set_job_status(session, interaction_id, JobStage.stt, JobStatus.running)
-        await _set_job_status(session, interaction_id, JobStage.emotion, JobStatus.running)
-        await _set_interaction_status(session, interaction_id, ProcessingStatus.processing)
+        try:
+            await _set_job_status(session, interaction_id, JobStage.diarization, JobStatus.running)
+            await _set_job_status(session, interaction_id, JobStage.stt, JobStatus.running)
+            await _set_job_status(session, interaction_id, JobStage.emotion, JobStatus.running)
+            await _set_interaction_status(session, interaction_id, ProcessingStatus.processing)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
         audio_path = interaction.audio_file_path
 
     audio_bytes, filename = await fetch_audio_bytes(audio_path)
@@ -737,6 +738,7 @@ async def process_interaction(interaction_id: UUID) -> None:
                         session=session,
                         interaction_id=interaction_id,
                         org_filter=organization.slug,
+                        requester_organization_id=interaction.organization_id,
                         force_rerun=True,
                     ),
                     timeout=float(os.getenv("LLM_TRIGGER_EVAL_TIMEOUT_SECONDS", "600")),
@@ -787,12 +789,14 @@ async def process_interaction(interaction_id: UUID) -> None:
 
             if policy:
                 is_compliant = report.nli_policy.nli_category in {"Entailment", "Benign Deviation"}
+                transcript_policy_degraded = bool(getattr(transcript_policy_report, "degraded", False))
                 session.add(
                     PolicyCompliance(
                         interaction_id=interaction_id,
                         policy_id=policy.id,
                         is_compliant=is_compliant,
                         compliance_score=compliance_score,
+                        degraded=transcript_policy_degraded,
                         llm_reasoning=report.nli_policy.justification or report.process_adherence.justification,
                         evidence_text=evidence_text,
                         retrieved_policy_text=policy.policy_text,
@@ -832,17 +836,26 @@ async def process_interaction(interaction_id: UUID) -> None:
 
         await session.commit()
 
-        for stage in STAGE_ORDER:
-            await _set_job_status(session, interaction_id, stage, JobStatus.completed)
+        try:
+            for stage in STAGE_ORDER:
+                await _set_job_status(session, interaction_id, stage, JobStatus.completed)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 async def mark_interaction_failed(interaction_id: UUID, error_message: str) -> None:
     async with AsyncSession(engine, expire_on_commit=False) as session:
-        interaction = await session.get(Interaction, interaction_id)
-        if interaction:
-            interaction.processing_status = ProcessingStatus.failed
-            session.add(interaction)
-            await session.commit()
+        try:
+            interaction = await session.get(Interaction, interaction_id)
+            if interaction:
+                interaction.processing_status = ProcessingStatus.failed
+                session.add(interaction)
 
-        for stage in STAGE_ORDER:
-            await _set_job_status(session, interaction_id, stage, JobStatus.failed, error_message)
+            for stage in STAGE_ORDER:
+                await _set_job_status(session, interaction_id, stage, JobStatus.failed, error_message)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

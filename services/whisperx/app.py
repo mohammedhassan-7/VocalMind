@@ -14,6 +14,7 @@ import time
 import tempfile
 import warnings
 import inspect
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 from contextlib import asynccontextmanager
@@ -85,9 +86,11 @@ except ImportError:
 import numpy as np
 import whisperx
 from whisperx.diarize import DiarizationPipeline
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 from speaker_role_classifier import SpeakerRoleClassifier
+
+logger = logging.getLogger(__name__)
 
 
 _ALIGNMENT_CHECKPOINT = Path("/root/.cache/torch/hub/checkpoints/wav2vec2_fairseq_base_ls960_asr_ls960.pth")
@@ -256,7 +259,7 @@ def detect_stereo_layout(path: str) -> Optional[dict]:
             "channels": 2,
         }
     except Exception as exc:
-        print(f"⚠ detect_stereo_layout failed: {exc.__class__.__name__}: {exc}")
+        logger.warning(f"⚠ detect_stereo_layout failed: {exc.__class__.__name__}: {exc}")
         return None
 
 
@@ -274,13 +277,13 @@ def assign_speakers_by_channel(
     try:
         import soundfile as sf
     except ImportError:
-        print("⚠ assign_speakers_by_channel: soundfile not available, falling back")
+        logger.warning("⚠ assign_speakers_by_channel: soundfile not available, falling back")
         return segments
     customer_channel = 1 - agent_channel
     try:
         info = sf.info(path)
     except Exception as exc:
-        print(f"⚠ assign_speakers_by_channel: sf.info failed ({exc.__class__.__name__}: {exc})")
+        logger.warning(f"⚠ assign_speakers_by_channel: sf.info failed ({exc.__class__.__name__}: {exc})")
         return segments
     if info.channels != 2:
         return segments
@@ -311,13 +314,13 @@ def assign_speakers_by_channel(
         except Exception as exc:
             relabel_failures += 1
             if relabel_failures <= 3:  # log up to 3, then suppress to avoid spam
-                print(
+                logger.warning(
                     f"⚠ assign_speakers_by_channel: segment {idx} relabel failed "
                     f"({exc.__class__.__name__}: {exc})"
                 )
             continue
     if relabel_failures:
-        print(
+        logger.warning(
             f"⚠ assign_speakers_by_channel: {relabel_failures}/{len(segments)} "
             f"segments failed channel relabel — those keep their pre-channel labels"
         )
@@ -339,11 +342,11 @@ class Models:
     )
 
 def load_models():
-    print(f"Loading WhisperX model ({WHISPER_MODEL_SIZE}) on {DEVICE} ({COMPUTE_TYPE})...")
+    logger.info(f"Loading WhisperX model ({WHISPER_MODEL_SIZE}) on {DEVICE} ({COMPUTE_TYPE})...")
     Models.asr_model = whisperx.load_model(
         WHISPER_MODEL_SIZE, DEVICE, compute_type=COMPUTE_TYPE
     )
-    print("[OK] WhisperX ASR loaded")
+    logger.info("[OK] WhisperX ASR loaded")
 
     if not HF_TOKEN:
         Models.diarize_model = None
@@ -351,7 +354,7 @@ def load_models():
         Models.diarization_reason = "hf_token_missing"
         if STRICT_DIARIZATION:
             raise RuntimeError("STRICT_DIARIZATION=true but HF_TOKEN is not configured")
-        print("⚠ WARNING: HF_TOKEN not set — diarization disabled")
+        logger.warning("⚠ WARNING: HF_TOKEN not set — diarization disabled")
         return
 
     diarize_kwargs = {"device": DEVICE}
@@ -373,14 +376,14 @@ def load_models():
             Models.diarize_model = DiarizationPipeline(device=DEVICE)
         Models.diarization_enabled = True
         Models.diarization_reason = "ready"
-        print("[OK] Diarization pipeline loaded")
+        logger.info("[OK] Diarization pipeline loaded")
     except Exception as exc:
         Models.diarize_model = None
         Models.diarization_enabled = False
         Models.diarization_reason = f"{exc.__class__.__name__}: {exc}"
         if STRICT_DIARIZATION:
             raise RuntimeError(f"STRICT_DIARIZATION=true and diarization failed: {exc}") from exc
-        print(f"⚠ WARNING: diarization unavailable ({exc.__class__.__name__}: {exc})")
+        logger.warning(f"⚠ WARNING: diarization unavailable ({exc.__class__.__name__}: {exc})")
 
 def unload_models():
     Models.asr_model = None
@@ -407,6 +410,17 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID")
+    if request_id:
+        logger.info("[request_id=%s] WhisperX request %s %s", request_id, request.method, request.url.path)
+    response = await call_next(request)
+    if request_id:
+        response.headers["X-Request-ID"] = request_id
+    return response
 
 
 @app.get("/health")
@@ -498,7 +512,7 @@ async def transcribe(
             if DEVICE == "cuda":
                 torch.cuda.empty_cache()
         except Exception as align_exc:
-            print(f"⚠ WARNING: alignment unavailable ({align_exc.__class__.__name__}: {align_exc})")
+            logger.warning(f"⚠ WARNING: alignment unavailable ({align_exc.__class__.__name__}: {align_exc})")
 
         # Step 3 — Diarize. Channel-aware path bypasses PyAnnote when the
         # source is split-channel telephony (agent on L, customer on R).
@@ -561,8 +575,9 @@ async def transcribe(
             "stereo_layout": stereo_layout,
         }))
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Internal transcription error")
+        raise HTTPException(status_code=500, detail="Internal transcription error")
 
     finally:
         os.unlink(tmp_path)

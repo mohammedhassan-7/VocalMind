@@ -85,6 +85,20 @@ def _build_audio_path_record(org_slug: str, file_path: Path) -> str:
     return (Path("..") / "storage" / "audio" / org_slug / file_path.name).as_posix()
 
 
+def _is_path_within_org_dir(path: Path, org_dir: Path) -> bool:
+    try:
+        return path.resolve().is_relative_to(org_dir.resolve())
+    except OSError:
+        return False
+
+
+def _safe_resolve(path: Path) -> str:
+    try:
+        return str(path.resolve())
+    except OSError:
+        return "<unresolvable>"
+
+
 async def _scan_organization_folder(
     session: AsyncSession,
     org: Organization,
@@ -127,6 +141,14 @@ async def _scan_organization_folder(
 
     enqueued_ids: list[UUID] = []
     for path in candidate_files:
+        if not _is_path_within_org_dir(path, org_dir):
+            logger.warning(
+                "Watcher skipping out-of-bounds path for org=%s: attempted=%s resolved=%s",
+                org.slug,
+                path,
+                _safe_resolve(path),
+            )
+            continue
         audio_file_path = _build_audio_path_record(org.slug, path)
 
         existing_result = await session.exec(
