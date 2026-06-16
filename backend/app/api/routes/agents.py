@@ -78,7 +78,10 @@ async def get_agent_profile(agent_id: UUID, session: SessionDep, current_user: C
             func.avg(InteractionScore.avg_response_time_seconds).label("avg_response"),
         )
         .join(InteractionScore, InteractionScore.interaction_id == Interaction.id)
-        .where(Interaction.agent_id == agent_id)
+        .where(
+            Interaction.agent_id == agent_id,
+            Interaction.organization_id == current_user.organization_id,
+        )
     )
     scores_result = await session.exec(scores_stmt)
     stats = scores_result.first()
@@ -94,7 +97,11 @@ async def get_agent_profile(agent_id: UUID, session: SessionDep, current_user: C
     res_result = await session.exec(
         select(func.count(InteractionScore.id))
         .join(Interaction, Interaction.id == InteractionScore.interaction_id)
-        .where(Interaction.agent_id == agent_id, InteractionScore.was_resolved == True)  # noqa: E712
+        .where(
+            Interaction.agent_id == agent_id,
+            Interaction.organization_id == current_user.organization_id,
+            InteractionScore.was_resolved == True,  # noqa: E712
+        )
     )
     resolved_count = res_result.one_or_none() or 0
     resolution_rate = round((resolved_count / total_calls) * 100, 0) if total_calls else 0
@@ -110,7 +117,10 @@ async def get_agent_profile(agent_id: UUID, session: SessionDep, current_user: C
             InteractionScore.was_resolved,
         )
         .outerjoin(InteractionScore, InteractionScore.interaction_id == Interaction.id)
-        .where(Interaction.agent_id == agent_id)
+        .where(
+            Interaction.agent_id == agent_id,
+            Interaction.organization_id == current_user.organization_id,
+        )
         .order_by(Interaction.interaction_date.desc())
         .limit(10)
     )
@@ -136,7 +146,10 @@ async def get_agent_profile(agent_id: UUID, session: SessionDep, current_user: C
             func.avg(InteractionScore.overall_score).label("avg_score"),
         )
         .join(InteractionScore, InteractionScore.interaction_id == Interaction.id)
-        .where(Interaction.agent_id == agent_id)
+        .where(
+            Interaction.agent_id == agent_id,
+            Interaction.organization_id == current_user.organization_id,
+        )
         .group_by("dow")
         .order_by("dow")
         .limit(7)
@@ -156,7 +169,11 @@ async def get_agent_profile(agent_id: UUID, session: SessionDep, current_user: C
     start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
     calls_this_week_res = await session.exec(
         select(func.count(Interaction.id))
-        .where(Interaction.agent_id == agent_id, Interaction.interaction_date >= start_of_week)
+        .where(
+            Interaction.agent_id == agent_id,
+            Interaction.organization_id == current_user.organization_id,
+            Interaction.interaction_date >= start_of_week,
+        )
     )
     calls_this_week = calls_this_week_res.one_or_none() or 0
 

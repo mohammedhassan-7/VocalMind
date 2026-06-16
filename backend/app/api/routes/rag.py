@@ -3,12 +3,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from uuid import uuid4
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.deps import CurrentUser
 from app.core.config import settings
+from app.core.request_context import outbound_request_headers
 
 
 logger = logging.getLogger(__name__)
@@ -39,7 +42,6 @@ def _ensure_rag_on_path() -> None:
 class RAGQueryRequest(BaseModel):
     query: str
     mode: str = "answer"
-    org_filter: str | None = None
 
 
 class RAGQueryResponse(BaseModel):
@@ -115,8 +117,9 @@ async def rag_health():
         checks["qdrant"] = "ok" if collections else "empty"
     except HTTPException:
         checks["engine"] = "unavailable"
-    except Exception as exc:
-        checks["qdrant"] = f"error: {exc}"
+    except Exception:
+        logger.warning("RAG health qdrant check failed", exc_info=True)
+        checks["qdrant"] = "error"
 
     if engine_available:
         try:
@@ -124,10 +127,12 @@ async def rag_health():
             _response = _httpx.get(
                 f"{settings.OLLAMA_BASE_URL}/api/tags",
                 timeout=5.0,
+                headers=outbound_request_headers(),
             )
             checks["ollama"] = "ok" if _response.status_code == 200 else f"status:{_response.status_code}"
-        except Exception as exc:
-            checks["ollama"] = f"error: {exc}"
+        except Exception:
+            logger.warning("RAG health ollama check failed", exc_info=True)
+            checks["ollama"] = "error"
 
     checks["groq_api_key"] = "configured" if settings.GROQ_API_KEY else "missing"
     overall = "ok" if all(v == "ok" or v == "configured" for v in checks.values()) else "degraded"
@@ -146,20 +151,25 @@ def _get_engine():
             from rag.query_engine import RAGQueryEngine
             _engine = RAGQueryEngine()
         except Exception as exc:
-            logger.error("Failed to initialize RAG engine: %s", exc)
-            raise HTTPException(status_code=500, detail=f"Failed to initialize RAG engine: {exc!s}") from exc
+            error_id = str(uuid4())
+            logger.error("Failed to initialize RAG engine [error_id=%s]", error_id, exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Internal error. Reference ID: {error_id}",
+            ) from exc
         return _engine
 
 
 @router.post("/query", response_model=RAGQueryResponse)
-async def query_rag_endpoint(request: RAGQueryRequest):
+async def query_rag_endpoint(request: RAGQueryRequest, current_user: CurrentUser):
     """Retrieve grounded context from RAG collections and expose provenance."""
     engine = _get_engine()
+    org_filter = str(current_user.organization_id)
     try:
         if request.mode == "compliance":
-            result = await asyncio.to_thread(engine.query_compliance, text=request.query, org_filter=request.org_filter)
+            result = await asyncio.to_thread(engine.query_compliance, text=request.query, org_filter=org_filter)
         else:
-            result = await asyncio.to_thread(engine.query_answer, question=request.query, org_filter=request.org_filter)
+            result = await asyncio.to_thread(engine.query_answer, question=request.query, org_filter=org_filter)
         retrieval_provenance = _build_retrieval_provenance(request.query, result.get("chunks", []))
         return RAGQueryResponse(
             response=result["response"],
@@ -170,5 +180,9 @@ async def query_rag_endpoint(request: RAGQueryRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("RAG query failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        error_id = str(uuid4())
+        logger.error("RAG query failed [error_id=%s]", error_id, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal error. Reference ID: {error_id}",
+        ) from exc

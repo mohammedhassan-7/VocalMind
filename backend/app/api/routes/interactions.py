@@ -981,11 +981,8 @@ def _map_llm_trigger_report(report) -> dict:
 async def _resolve_llm_org_filter(
     session: SessionDep,
     interaction_id: UUID,
-    llm_org_filter: str | None,
+    llm_org_filter: str | None = None,
 ) -> str | None:
-    if llm_org_filter and llm_org_filter.strip():
-        return llm_org_filter.strip()
-
     stmt = (
         select(Organization.slug)
         .join(Interaction, Interaction.organization_id == Organization.id)
@@ -1076,7 +1073,6 @@ async def get_interaction_detail(
     session: SessionDep,
     current_user: CurrentUser,
     include_llm_triggers: bool = False,
-    llm_org_filter: str | None = None,
     llm_force_rerun: bool = False,
 ):
     """Get a single interaction with utterances, emotion events, and policy violations."""
@@ -1195,6 +1191,7 @@ async def get_interaction_detail(
             PolicyCompliance.interaction_id,
             CompanyPolicy.policy_title,
             CompanyPolicy.policy_category,
+            PolicyCompliance.degraded,
             PolicyCompliance.llm_reasoning,
             PolicyCompliance.compliance_score,
             PolicyCompliance.evidence_text,
@@ -1219,6 +1216,7 @@ async def get_interaction_detail(
             "category": v.policy_category,
             "description": v.evidence_text or "",
             "reasoning": v.llm_reasoning or "",
+            "degraded": bool(v.degraded),
             "severity": "high" if v.compliance_score < 0.3 else ("medium" if v.compliance_score < 0.6 else "low"),
             "score": round(to_percentage(v.compliance_score), 0),
         }
@@ -1244,7 +1242,6 @@ async def get_interaction_detail(
             resolved_org_filter = await _resolve_llm_org_filter(
                 session=session,
                 interaction_id=interaction_id,
-                llm_org_filter=llm_org_filter,
             )
             # LLM trigger pipeline internally orchestrates:
             # 1) RAG retrieval context resolution,
@@ -1254,6 +1251,7 @@ async def get_interaction_detail(
                 session=session,
                 interaction_id=interaction_id,
                 org_filter=resolved_org_filter,
+                requester_organization_id=current_user.organization_id,
                 force_rerun=llm_force_rerun,
                 commit_cache=True,
             )
@@ -1342,7 +1340,11 @@ async def get_interaction_emotion_comparison(interaction_id: UUID, session: Sess
 
     utt_result = await session.exec(
         select(Utterance)
-        .where(Utterance.interaction_id == interaction_id)
+        .join(Interaction, Utterance.interaction_id == Interaction.id)
+        .where(
+            Utterance.interaction_id == interaction_id,
+            *_interaction_scope_filters(current_user),
+        )
         .order_by(Utterance.start_time_seconds)
     )
     utterances_rows = utt_result.all()

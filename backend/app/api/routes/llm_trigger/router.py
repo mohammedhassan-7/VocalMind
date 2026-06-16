@@ -1,11 +1,14 @@
 from uuid import UUID
 
+import logging
+
 from fastapi import APIRouter
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import SessionDep
+from app.api.deps import CurrentUser, SessionDep
 from app.core.config import settings
+from app.core.request_context import outbound_request_headers
 from app.llm_trigger.schemas import (
     EmotionShiftAnalysis,
     InteractionLLMTriggerReport,
@@ -20,6 +23,7 @@ from app.llm_trigger.service import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class EmotionShiftRequest(BaseModel):
@@ -76,18 +80,21 @@ async def llm_trigger_health():
         client = _get_shared_qdrant_client()
         collections = [c.name for c in client.get_collections().collections]
         checks["qdrant"] = "ok" if collections else "empty"
-    except Exception as exc:
-        checks["qdrant"] = f"error: {exc}"
+    except Exception:
+        logger.warning("LLM trigger health qdrant check failed", exc_info=True)
+        checks["qdrant"] = "error"
 
     try:
         import httpx
         response = httpx.get(
             f"{settings.OLLAMA_BASE_URL}/api/tags",
             timeout=5.0,
+            headers=outbound_request_headers(),
         )
         checks["ollama"] = "ok" if response.status_code == 200 else f"status:{response.status_code}"
-    except Exception as exc:
-        checks["ollama"] = f"error: {exc}"
+    except Exception:
+        logger.warning("LLM trigger health ollama check failed", exc_info=True)
+        checks["ollama"] = "error"
 
     checks["groq_api_key"] = "configured" if settings.GROQ_API_KEY else "missing"
 
@@ -142,6 +149,7 @@ async def run_interaction_trigger_endpoint(
     interaction_id: UUID,
     payload: InteractionTriggerRequest,
     session: SessionDep,
+    current_user: CurrentUser,
 ) -> InteractionLLMTriggerReport:
     try:
         return await evaluate_interaction_triggers(
@@ -150,6 +158,7 @@ async def run_interaction_trigger_endpoint(
             retrieved_sop_from_pinecone=payload.retrieved_sop_from_pinecone,
             ground_truth_policy=payload.ground_truth_policy,
             org_filter=payload.org_filter,
+            requester_organization_id=current_user.organization_id,
             force_rerun=payload.force_rerun,
             commit_cache=True,
         )
