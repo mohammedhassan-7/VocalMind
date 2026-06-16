@@ -101,7 +101,7 @@ def main():
     
     if args.list:
         list_runs(mlflow)
-    elif args.run-id:
+    elif args.run_id:
         download_model(mlflow, args.run_id, args.output_dir)
 
 if __name__ == "__main__":
