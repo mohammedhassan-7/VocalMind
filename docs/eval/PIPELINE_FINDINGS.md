@@ -138,7 +138,7 @@ Real production audio (real call-center recordings) is where both changes earn t
 ## Reproducing
 
 ```bash
-# infra (db on 5433 to avoid native Postgres conflict)
+# infra (db on host 5434 — see docker-compose.yml db ports)
 docker compose up -d db qdrant ollama frontend
 
 # native GPU services (each in its own shell)

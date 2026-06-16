@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
     cpus: 1.0
     ports:
-      - "5433:5432"
+      - "5434:5432"
     environment:
       POSTGRES_DB: vocalmind
       POSTGRES_USER: vocalmind
@@ -32,6 +32,7 @@ services:
       dockerfile: Dockerfile
     container_name: vocalmind-backend
     env_file:
+      - ./.env
       - ./backend/.env
     cpus: 2.0
     ports:
@@ -42,6 +43,7 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       - DATABASE_URL=postgresql+asyncpg://vocalmind:vocalmind_dev@db:5432/vocalmind
+      - ASSISTANT_DATABASE_URL=postgresql+asyncpg://vocalmind_readonly:vocalmind_readonly_dev@db:5432/vocalmind
       - SECRET_KEY=${SECRET_KEY:-vocalmind_local_dev_secret_change_in_env}
       - IS_LOCAL=true
       - EMOTION_API_URL=http://emotion:8000
@@ -61,7 +63,7 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_COLLECTION_PARENTS=${QDRANT_COLLECTION_PARENTS:-vocalmind_parents}
       - QDRANT_COLLECTION_SOP_PARENTS=${QDRANT_COLLECTION_SOP_PARENTS:-vocalmind_sop_parents}
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-snowflake-arctic-embed2}
       - SOP_RETRIEVAL_TOP_K=${SOP_RETRIEVAL_TOP_K:-3}
       # Text emotion
@@ -70,6 +72,23 @@ services:
       # Keep backend relabeling disabled to avoid double speaker-role assignment.
       - SPEAKER_ROLE_MODEL_DIR=/app/models/speaker_role/distilbert
       - BACKEND_SPEAKER_RELABEL_ENABLED=false
+      # Ollama Cloud (when LLM_PROVIDER=ollama_cloud)
+      - OLLAMA_CLOUD_API_KEY=${OLLAMA_CLOUD_API_KEY:-${OLLAMA_API_KEY:-}}
+      - OLLAMA_CLOUD_BASE_URL=${OLLAMA_CLOUD_BASE_URL:-https://ollama.com/v1}
+      - OLLAMA_CLOUD_HEAVY_MODEL=${OLLAMA_CLOUD_HEAVY_MODEL:-kimi-k2.6:cloud}
+      - OLLAMA_CLOUD_FAST_MODEL=${OLLAMA_CLOUD_FAST_MODEL:-ministral-3:8b}
+      - OLLAMA_MODEL_EMOTION_SHIFT=${OLLAMA_MODEL_EMOTION_SHIFT:-}
+      - OLLAMA_MODEL_PROCESS_ADHERENCE=${OLLAMA_MODEL_PROCESS_ADHERENCE:-}
+      - OLLAMA_MODEL_NLI_POLICY=${OLLAMA_MODEL_NLI_POLICY:-}
+      - OLLAMA_MODEL_RAG_JUDGE=${OLLAMA_MODEL_RAG_JUDGE:-}
+      - OLLAMA_MODEL_TEXT_TO_SQL=${OLLAMA_MODEL_TEXT_TO_SQL:-}
+      - OLLAMA_MODEL_FAST_CLASSIFICATION=${OLLAMA_MODEL_FAST_CLASSIFICATION:-}
+      - OLLAMA_MODEL_RAG_SYNTHESIS=${OLLAMA_MODEL_RAG_SYNTHESIS:-}
+      - OLLAMA_EMOTION_SHIFT_MODEL=${OLLAMA_EMOTION_SHIFT_MODEL:-}
+      - OLLAMA_PROCESS_ADHERENCE_MODEL=${OLLAMA_PROCESS_ADHERENCE_MODEL:-}
+      - OLLAMA_NLI_MODEL=${OLLAMA_NLI_MODEL:-}
+      - OLLAMA_CLOUD_EMBED_ENABLED=${OLLAMA_CLOUD_EMBED_ENABLED:-false}
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
     volumes:
       - ./backend/app:/app/app
       - ./backend/scripts:/app/scripts
@@ -106,22 +125,23 @@ services:
     command: ["sh", "-c", "if [ ! -f node_modules/.bin/vite ]; then pnpm install; fi && pnpm run dev"]
     restart: unless-stopped
 
-  # ── Ollama ──────────────────────────────────────────────────────────────────
-  ollama:
-    image: ollama/ollama:0.3.4
-    container_name: vocalmind-ollama
-    cpus: 4.0
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    healthcheck:
-      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11434'" ]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 30s
-    restart: unless-stopped
+  # ── Ollama Cloud migration: local Ollama service disabled ──
+  # Uncomment to revert to local inference.
+  # ollama:
+  #   image: ollama/ollama:0.3.4
+  #   container_name: vocalmind-ollama
+  #   cpus: 4.0
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   healthcheck:
+  #     test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11434'" ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 15
+  #     start_period: 30s
+  #   restart: unless-stopped
 
   # ── Qdrant ──────────────────────────────────────────────────────────────────
   qdrant:
@@ -149,22 +169,38 @@ services:
     container_name: vocalmind-ingestion
     cpus: 2.0
     depends_on:
-      ollama:
-        condition: service_healthy
       qdrant:
         condition: service_healthy
     volumes:
       - ./storage:/app/storage
+      - ./services/rag/config.py:/app/config.py:ro
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - QDRANT_URL=http://qdrant:6333
-      - EMBEDDING_MODEL=snowflake-arctic-embed2
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-snowflake-arctic-embed2}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-1024}
       - DOCS_DIR=/app/storage/docs
       - POLICY_DOCS_DIR=/app/storage/docs
       - KNOWLEDGE_DOCS_DIR=/app/storage/docs
       - PARSED_POLICY_DIR=/app/storage/docs
       - PARSED_SOP_DIR=/app/storage/docs
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OLLAMA_CLOUD_API_KEY=${OLLAMA_CLOUD_API_KEY:-${OLLAMA_API_KEY:-}}
+      - OLLAMA_CLOUD_BASE_URL=${OLLAMA_CLOUD_BASE_URL:-https://ollama.com/v1}
+      - OLLAMA_CLOUD_HEAVY_MODEL=${OLLAMA_CLOUD_HEAVY_MODEL:-kimi-k2.6:cloud}
+      - OLLAMA_CLOUD_FAST_MODEL=${OLLAMA_CLOUD_FAST_MODEL:-ministral-3:8b}
+      - OLLAMA_MODEL_EMOTION_SHIFT=${OLLAMA_MODEL_EMOTION_SHIFT:-}
+      - OLLAMA_MODEL_PROCESS_ADHERENCE=${OLLAMA_MODEL_PROCESS_ADHERENCE:-}
+      - OLLAMA_MODEL_NLI_POLICY=${OLLAMA_MODEL_NLI_POLICY:-}
+      - OLLAMA_MODEL_RAG_JUDGE=${OLLAMA_MODEL_RAG_JUDGE:-}
+      - OLLAMA_MODEL_TEXT_TO_SQL=${OLLAMA_MODEL_TEXT_TO_SQL:-}
+      - OLLAMA_MODEL_FAST_CLASSIFICATION=${OLLAMA_MODEL_FAST_CLASSIFICATION:-}
+      - OLLAMA_MODEL_RAG_SYNTHESIS=${OLLAMA_MODEL_RAG_SYNTHESIS:-}
+      - OLLAMA_EMOTION_SHIFT_MODEL=${OLLAMA_EMOTION_SHIFT_MODEL:-}
+      - OLLAMA_PROCESS_ADHERENCE_MODEL=${OLLAMA_PROCESS_ADHERENCE_MODEL:-}
+      - OLLAMA_NLI_MODEL=${OLLAMA_NLI_MODEL:-}
+      - OLLAMA_CLOUD_EMBED_ENABLED=${OLLAMA_CLOUD_EMBED_ENABLED:-false}
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
     restart: unless-stopped
 
   # ── VAD Preprocessing ──────────────────────────────────────────────────────
@@ -175,6 +211,9 @@ services:
     cpus: 2.0
     ports:
       - "8002:8002"
+    volumes:
+      - ./services/vad/app.py:/app/app.py:ro
+      - vad_torch_cache:/root/.cache/torch
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\" || exit 1"]
       interval: 10s
@@ -185,6 +224,7 @@ services:
 
   # ── Emotion Recognition ────────────────────────────────────────────────────
   emotion:
+    pull_policy: if_not_present
     build:
       context: ./services/emotion
     container_name: vocalmind-emotion
@@ -204,6 +244,7 @@ services:
 
   # ── WhisperX ASR ───────────────────────────────────────────────────────────
   whisperx:
+    pull_policy: if_not_present
     build:
       context: ./services/whisperx
       dockerfile: Dockerfile
@@ -248,3 +289,4 @@ volumes:
   vocalmind_frontend_node_modules:
   whisperx_cache:
   emotion_cache:
+  vad_torch_cache:

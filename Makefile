@@ -1,4 +1,4 @@
-.PHONY: help up up-gpu down build build-retry logs support-up support-up-gpu support-down be-dev be-test be-test-cov be-lint be-install fe-dev fe-build fe-lint fe-test fe-e2e-summary fe-e2e-cov fe-test-cov fe-install rag-lint rag-test rag-install llm-trigger-test quality-eval-transcript quality-eval-emotion quality-eval-policy quality-eval-rag quality-eval-resolution quality-eval-all e2e-local-audio seed-manager-supabase-audio seed migrate prepare-speaker-model clean test-all
+.PHONY: help up up-gpu down build build-retry logs support-up support-up-gpu support-down be-dev be-test be-test-cov be-lint be-install fe-dev fe-build fe-lint fe-test fe-e2e-summary fe-e2e-cov fe-test-cov fe-install rag-lint rag-test rag-install llm-trigger-test quality-eval-transcript quality-eval-emotion quality-eval-policy quality-eval-rag quality-eval-resolution quality-eval-all e2e-local-audio seed-manager-supabase-audio seed migrate prepare-speaker-model clean test-all audit audit-backend-rag audit-cuda-services
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -134,6 +134,20 @@ test-frontend:
 	$(MAKE) fe-test
 
 test-rag: rag-lint rag-test
+# ── Security Audit ────────────────────────────────────────────────────────
+
+audit: audit-backend-rag ## Run supply-chain audit gate for backend + RAG
+
+audit-backend-rag: ## Run pip-audit in backend and ingestion containers (fails on vulnerabilities)
+	docker compose run --rm backend sh -c "python -m ensurepip --upgrade >/tmp/ensurepip.log 2>&1 && python -m pip install pip-audit >/tmp/pip-audit-install.log 2>&1 && pip-audit"
+	docker compose run --rm ingestion sh -c "python -m ensurepip --upgrade >/tmp/ensurepip.log 2>&1 && python -m pip install pip-audit >/tmp/pip-audit-install.log 2>&1 && pip-audit"
+
+audit-cuda-services: ## Run pip-audit for whisperx/emotion after local image pull/build
+	@echo "NOTE: whisperx/emotion use large CUDA base images; pull/build first before auditing."
+	@echo "Run manually:"
+	@echo "  docker compose run --rm whisperx sh -c \"python3 -m ensurepip --upgrade && python3 -m pip install pip-audit && pip-audit\""
+	@echo "  docker compose run --rm emotion sh -c \"python -m ensurepip --upgrade && python -m pip install pip-audit && pip-audit\""
+
 # ── Database ──────────────────────────────────────────────────────────────
 
 seed: ## Seed the database
