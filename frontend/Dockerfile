@@ -1,5 +1,6 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:20 AS builder
+# pinned: node:20 (2026-06-16)
+FROM node:20@sha256:4232dd95f26d0e887f17756da8df31c4608cd53285f74f95ca0878e432ff6625 AS builder
 
 WORKDIR /app
 
@@ -25,7 +26,8 @@ COPY . .
 RUN pnpm run build
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM node:20-alpine
+# pinned: node:20-alpine (2026-06-16)
+FROM node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a770265435
 
 WORKDIR /app
 

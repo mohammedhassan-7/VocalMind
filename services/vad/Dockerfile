@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.12-slim
+# pinned: python:3.12-slim (2026-06-16)
+FROM python:3.12-slim@sha256:c2d8472b831337ab296a8ce652e1ba786e9e3034fc445dc58b50a7f5251f0003
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1

@@ -5,7 +5,8 @@
 # Run:     docker run --gpus all -p 8000:8000 --env-file ../../../../.env whisperx-service
 # ──────────────────────────────────────────────────────────────────────────────
 
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# pinned: nvidia/cuda:12.4.1-runtime-ubuntu22.04 (2026-06-16)
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04@sha256:cff3a0d82d2c2b47bab252d67fa9b34a20ef4c50781d98501b5c7367ea9afd10
 
 # Prevent interactive prompts during apt-get
 ENV DEBIAN_FRONTEND=noninteractive
@@ -33,8 +34,8 @@ WORKDIR /app
 # Copy dependency metadata first for better layer caching
 COPY pyproject.toml .
 
-# Install dependencies with uv
-RUN uv sync
+# Install dependencies with uv (runtime only)
+RUN uv sync --no-dev
 
 # Copy application code after dependencies are installed
 COPY app.py .

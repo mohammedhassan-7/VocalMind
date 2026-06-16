@@ -1,4 +1,5 @@
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+# pinned: nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04 (2026-06-16)
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04@sha256:f6913f3c02f297877f6859d12ff330043c0be668fdad86868c29a239a5a82151
 
 # Prevent interactive prompts during apt-get
 ENV DEBIAN_FRONTEND=noninteractive
