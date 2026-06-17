@@ -66,4 +66,6 @@ When the background worker pops an interaction ID from the async queue, it execu
 
 *   **Emotion Duration Gate**: Speech segments shorter than 1.0 second are ignored by the acoustic emotion classifier, inheriting the classification of the preceding segment to prevent false spikes.
 *   **Stereo Channel Diarization**: When a call is stereo, VocalMind bypasses pyannote diarization. It assigns speakers deterministically by audio channel, achieving 100% speaker division accuracy.
+*   **Speaker Role Classification**: WhisperX outputs arbitrary speaker IDs (e.g., `SPEAKER_00`). The backend maps these clusters to `agent` and `customer` roles using lexical phrase scoring, known agent names, and a first-speaker greeting prior (whoever answers within the first 8 seconds). If a pre-trained Logistic Regression model and TF-IDF vectorizer (`model.pkl` and `vectorizer.pkl`) are present in the backend core directory, they are loaded to classify speaker roles using ML probabilities, falling back to the phrase heuristics if unavailable.
 *   **Background Watcher Lifecycle**: `audio_folder_watcher.py` runs on a 15-second loop. It identifies files, parses their filenames (expects `CALL_<NN>_<agent>_<scenario>.<ext>`), creates the SQL records, and drops them into the queue.
+

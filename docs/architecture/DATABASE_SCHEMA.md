@@ -254,6 +254,20 @@ Runtime cache for expensive three-chain LLM reports.
 *   `report_payload` (JSONB): Fully detailed JSON reports.
 *   `computed_at` (TIMESTAMPTZ): Cache creation timestamp.
 
+#### `notifications`
+In-app notification records for system alerts and coaching updates.
+*   `id` (UUID, PK)
+*   `recipient_user_id` (UUID, FK -> `users` ON DELETE CASCADE): Target user.
+*   `organization_id` (UUID, FK -> `organizations` ON DELETE CASCADE): Tenant scope.
+*   `type` (notification_type_enum): Category (e.g. `interaction_processed`, `dispute_submitted`, `dispute_resolved`, `coaching_assigned`).
+*   `title` (VARCHAR): Short title of the alert.
+*   `body` (TEXT, Nullable): Long body details.
+*   `link_url` (VARCHAR, Nullable): Redirect link.
+*   `payload` (JSONB, Nullable): Free-form context payload dictionary.
+*   `is_read` (BOOLEAN): Read status flag. Defaults to `false`.
+*   `read_at` (TIMESTAMPTZ, Nullable): Timestamp when read.
+*   `created_at` (TIMESTAMPTZ): Notification generation timestamp.
+
 ---
 
 ## 3. Core Database Relationships (Entity Relationship Diagram)
@@ -268,10 +282,12 @@ erDiagram
     organizations ||--o{ interactions : records
     organizations ||--o{ agent_performance_snapshots : aggregates
     organizations ||--o{ assistant_queries : hosts
+    organizations ||--o{ notifications : hosts
     
     users ||--o{ interactions : handles
     users ||--o{ assistant_queries : performs
     users ||--o{ agent_performance_snapshots : scores
+    users ||--o{ notifications : receives
     
     company_policies ||--o{ organization_policies : activates
     faq_articles ||--o{ organization_faq_articles : activates
@@ -294,7 +310,7 @@ erDiagram
 
 ## 4. Database Indexes
 
-VocalMind defines 16 database indexes to accelerate multi-tenant filters and transactional lookups:
+VocalMind defines 20 database indexes to accelerate multi-tenant filters and transactional lookups:
 
 *   `idx_users_organization_id`: Speeds up org user lookups.
 *   `idx_interactions_organization_id`: Filters interactions by organization boundary.
@@ -307,9 +323,14 @@ VocalMind defines 16 database indexes to accelerate multi-tenant filters and tra
 *   `idx_emotion_events_agent_flagged`: Partial index on `agent_flagged_by` where not null, optimizing the manager's dispute review queue.
 *   `idx_organization_policies_org_id`: Speeds up active compliance policy resolution.
 *   `idx_policy_compliance_interaction_id`: Filters compliance checks.
+*   `idx_policy_compliance_agent_flagged`: Partial index on `agent_flagged_by` where not null, optimizing compliance dispute reviewer queues.
+*   `idx_notifications_recipient_unread`: Combined index on `recipient_user_id` and `is_read` to quickly fetch unread notifications.
+*   `idx_notifications_org`: Filters notifications by tenant boundary.
+*   `idx_notifications_created_at`: Orders notifications chronologically (descending).
 *   `idx_agent_snapshots_agent_id`: Speeds up agent KPI dashboard rendering.
 *   `idx_assistant_queries_user_id`: Filters manager assistant conversation histories.
 *   `idx_interaction_llm_trigger_cache_interaction_id`: Resolves LLM trigger caches.
 *   `idx_company_policies_organization_id`: Resolves organization policies.
 *   `idx_faq_articles_organization_id`: Filters FAQs by tenant.
+
 
