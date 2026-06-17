@@ -345,6 +345,7 @@ export function AgentCallDetail() {
               utterances={utterances}
               onJumpTo={handleJumpTo}
               variant="agent"
+              renderAgentFlag={(kind, id) => <FlagButton kind={kind} targetId={id} />}
             />
           ) : (
             <>
@@ -383,7 +384,12 @@ export function AgentCallDetail() {
       {/* ── Customer Emotion Journey ──────────────────────────────────── */}
       {emotionEvents.length > 0 && (
         <div className="bg-card rounded-2xl border border-border p-5">
-          <h3 className="text-[14px] font-bold text-foreground mb-3">Customer Emotion Journey</h3>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-[14px] font-bold text-foreground">Customer Emotion Journey</h3>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              Disagree? Flag any finding for your manager
+            </span>
+          </div>
           <div className="space-y-3">
             {emotionEvents.map((event) => {
               const fromStyle = getEmotionStyle(event.fromEmotion);

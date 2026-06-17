@@ -12,6 +12,8 @@ describe('Agent Call Detail', () => {
     cy.contains('Coaching Points').should('be.visible');
     cy.contains(/Hold Time Limit|Escalation Policy/).should('be.visible');
     cy.contains('Contradiction').should('exist');
+    // Agent can flag a policy finding for manager review from inside the analysis view.
+    cy.contains('Flag as incorrect').should('exist');
 
     cy.contains('button', 'Process').click();
     cy.contains('Needs follow-up').should('exist');

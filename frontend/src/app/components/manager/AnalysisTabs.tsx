@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Brain, Shield, FileWarning, Activity, Info, AlertCircle,
   XCircle, BookOpen, Flag, AlertTriangle as AlertTriangleIcon,
@@ -135,6 +135,8 @@ interface AnalysisTabsProps {
   feedbackDone?: Set<string>;
   onToggleFlag?: (id: string) => void;
   onSubmitFeedback?: (id: string) => void;
+  /* agent variant: render a "flag for manager review" control per finding */
+  renderAgentFlag?: (kind: "emotion" | "compliance", id: string) => ReactNode;
 }
 
 /* ── Soft labels for agent variant ─────────────────────────────────── */
@@ -151,6 +153,7 @@ export function AnalysisTabs({
   emotionComparison, utterances, onJumpTo,
   variant = "manager",
   flaggedItems, feedbackDone, onToggleFlag, onSubmitFeedback,
+  renderAgentFlag,
 }: AnalysisTabsProps) {
   const [tab, setTab] = useState("emotion");
   const L = LABELS[variant];
@@ -380,6 +383,11 @@ export function AnalysisTabs({
                         <span className={`text-[11px] font-bold ${variant === "agent" ? "text-amber-500" : "text-red-400"}`}>{v.score}%</span>
                       </div>
                       <p className="text-[12px] text-muted-foreground leading-relaxed">{v.reasoning}</p>
+                      {variant === "agent" && renderAgentFlag && (
+                        <div className="flex justify-end pt-2 border-t border-border/50">
+                          {renderAgentFlag("compliance", v.id)}
+                        </div>
+                      )}
                       {variant === "manager" && onToggleFlag && onSubmitFeedback && (
                         <>
                           {feedbackDone?.has(v.id) ? (
