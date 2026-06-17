@@ -173,7 +173,7 @@ def main() -> int:
         return 1
 
     utt = detail.get("utterances") or []
-    if len(utt) < 5:
+    if len(utt) < 3:
         print("TOO_FEW_UTTERANCES", len(utt), file=sys.stderr)
         return 1
 

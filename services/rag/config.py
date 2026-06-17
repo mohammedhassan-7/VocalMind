@@ -29,9 +29,9 @@ class GroqConfig(BaseSettings):
     """Groq LLM configuration."""
 
     api_key: SecretStr = Field(alias="GROQ_API_KEY")
-    model: str = "llama-3.3-70b-versatile"
-    temperature: float = 0.1
-    max_tokens: int = 4096
+    model: str = Field(default="llama-3.3-70b-versatile", alias="LLM_MODEL")
+    temperature: float = Field(default=0.1, alias="LLM_TEMPERATURE")
+    max_tokens: int = Field(default=4096, alias="LLM_MAX_TOKENS")
     context_window: int = 131_072
 
 
@@ -48,9 +48,9 @@ class QdrantConfig(BaseSettings):
     """Qdrant vector store configuration."""
 
     url: str = Field(default="http://localhost:6333", alias="QDRANT_URL")
-    collection_parents: str = "vocalmind_parents"
-    collection_children: str = "vocalmind_children"
-    collection_sop_parents: str = "vocalmind_sop_parents"
+    collection_parents: str = Field(default="vocalmind_parents", alias="QDRANT_COLLECTION_PARENTS")
+    collection_children: str = Field(default="vocalmind_children", alias="QDRANT_COLLECTION_CHILDREN")
+    collection_sop_parents: str = Field(default="vocalmind_sop_parents", alias="QDRANT_COLLECTION_SOP_PARENTS")
 
 
 class ParentChunkingConfig(BaseSettings):
