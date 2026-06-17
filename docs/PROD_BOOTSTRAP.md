@@ -1,27 +1,31 @@
 # Production bootstrap & schema management
 
+> **Important context.** `infra/db/01_schema.sql` is the *current*
+> snapshot of the full schema, including every Alembic-managed change
+> that's been merged. Alembic migrations exist so that **existing**
+> databases on older schemas can catch up incrementally. For a
+> brand-new DB you bootstrap from `01_schema.sql` and then *stamp*
+> Alembic at head — you do not run the migrations, because the schema
+> they would build is already there.
+
 Two scenarios. Pick the one that matches your DB's state.
 
 ## A. Brand-new Supabase / Postgres
 
-1. **Apply the baseline schema.**
+1. **Apply the current full schema.**
    ```bash
    psql "$DATABASE_URL_SYNC" < infra/db/01_schema.sql
    ```
    (`$DATABASE_URL_SYNC` is the same connection without the `+asyncpg`.)
 
-2. **Tell Alembic the DB is at the pre-Alembic baseline.**
+2. **Mark Alembic as already-at-head** (do *not* `upgrade` — the schema
+   is already there):
    ```bash
    cd backend
-   uv run alembic stamp 0001_baseline
+   uv run alembic stamp head
    ```
 
-3. **Apply every Alembic migration on top.**
-   ```bash
-   uv run alembic upgrade head
-   ```
-
-4. **Configure the env:**
+3. **Configure the env:**
    ```env
    DATABASE_URL=postgresql+asyncpg://postgres.<ref>:<pw>@<pooler-host>:6543/postgres
    SEED_DEMO_DATA=true   # only for the first boot — flip to false after
@@ -29,11 +33,11 @@ Two scenarios. Pick the one that matches your DB's state.
    SUPABASE_SERVICE_KEY=...        # rotate any key you ever pasted in chat
    ```
 
-5. **Boot the backend once.** With `SEED_DEMO_DATA=true`, lifespan calls
+4. **Boot the backend once.** With `SEED_DEMO_DATA=true`, lifespan calls
    `seed_nexalink` + `seed_meridian` and creates the two demo orgs +
    their users.
 
-6. **Flip `SEED_DEMO_DATA=false` and redeploy.** Subsequent boots no
+5. **Flip `SEED_DEMO_DATA=false` and redeploy.** Subsequent boots no
    longer touch demo data.
 
 ## B. Existing Supabase that was hand-managed before this PR
@@ -62,7 +66,7 @@ falls into this bucket. Steps to convert it to the canonical
    ```bash
    uv run alembic upgrade head
    ```
-   Migration `0002_notifications_and_compliance_dispute` adds the
+   Migration `0002_notif_and_dispute` adds the
    `notifications` table, the `notification_type_enum`, and the four
    agent-dispute columns on `policy_compliance`. It's safe to re-run
    (`IF NOT EXISTS` guards on the type and indexes).
