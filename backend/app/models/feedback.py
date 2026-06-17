@@ -22,7 +22,7 @@ class EmotionFeedback(SQLModel, table=True):
         sa_type=SAEnum(FeedbackStatus, name="feedback_status_enum", create_constraint=False, native_enum=True),
     )
     is_used_in_training: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class ComplianceFeedback(SQLModel, table=True):
@@ -42,4 +42,4 @@ class ComplianceFeedback(SQLModel, table=True):
         sa_type=SAEnum(FeedbackStatus, name="feedback_status_enum", create_constraint=False, native_enum=True),
     )
     is_used_in_training: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

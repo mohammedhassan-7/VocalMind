@@ -24,4 +24,4 @@ class AgentPerformanceSnapshot(SQLModel, table=True):
     avg_policy_score: Optional[float] = None
     avg_resolution_score: Optional[float] = None
     resolution_rate: Optional[float] = None
-    computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

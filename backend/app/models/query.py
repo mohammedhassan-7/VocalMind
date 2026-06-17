@@ -10,8 +10,8 @@ class AssistantQuery(SQLModel, table=True):
     __tablename__ = "assistant_queries"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: UUID = Field(foreign_key="users.id")
-    organization_id: UUID = Field(foreign_key="organizations.id")
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    organization_id: UUID = Field(foreign_key="organizations.id", index=True)
     query_mode: QueryMode = Field(
         sa_type=SAEnum(QueryMode, name="query_mode_enum", create_constraint=False, native_enum=True),
     )

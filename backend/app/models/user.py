@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from sqlalchemy import Enum as SAEnum
 from app.models.enums import UserRole, AgentType
@@ -13,15 +13,19 @@ class User(SQLModel, table=True):
     __tablename__ = "users"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    organization_id: UUID = Field(foreign_key="organizations.id")
+    organization_id: UUID = Field(foreign_key="organizations.id", index=True)
     email: str = Field(max_length=320, unique=True, index=True)
-    password_hash: str
+    password_hash: str = Field(exclude=True)
     name: str = Field(max_length=255)
     role: UserRole = Field(
         sa_type=SAEnum(UserRole, name="user_role_enum", create_constraint=False, native_enum=True),
     )
     is_active: bool = Field(default=True)
     last_login_at: Optional[datetime] = None
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_column_kwargs={"server_default": "now()"}
+    )
     agent_type: Optional[AgentType] = Field(
         default=None,
         sa_type=SAEnum(AgentType, name="agent_type_enum", create_constraint=False, native_enum=True),

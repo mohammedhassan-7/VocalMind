@@ -8,7 +8,7 @@ class FAQArticle(SQLModel, table=True):
     __tablename__ = "faq_articles"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    organization_id: UUID = Field(foreign_key="organizations.id")
+    organization_id: UUID = Field(foreign_key="organizations.id", index=True)
     question: str
     answer: str
     category: str = Field(max_length=100)
@@ -22,7 +22,7 @@ class OrganizationFAQArticle(SQLModel, table=True):
     __tablename__ = "organization_faq_articles"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    organization_id: UUID = Field(foreign_key="organizations.id")
-    article_id: UUID = Field(foreign_key="faq_articles.id")
+    organization_id: UUID = Field(foreign_key="organizations.id", index=True)
+    article_id: UUID = Field(foreign_key="faq_articles.id", index=True)
     is_active: bool = Field(default=True)
     assigned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

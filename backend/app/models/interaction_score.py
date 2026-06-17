@@ -9,7 +9,7 @@ class InteractionScore(SQLModel, table=True):
     __tablename__ = "interaction_scores"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    interaction_id: UUID = Field(foreign_key="interactions.id", unique=True)
+    interaction_id: UUID = Field(foreign_key="interactions.id", unique=True, index=True)
     overall_score: Optional[float] = None  # 0.0–10.0
     empathy_score: Optional[float] = None
     policy_score: Optional[float] = None

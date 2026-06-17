@@ -186,6 +186,7 @@ def test_reprocess_resets_artifacts_and_jobs(client, seed_org_and_auth):
     utterance = Utterance(
         interaction_id=interaction_id,
         transcript_id=transcript.id,
+        speaker_role=SpeakerRole.agent,
         sequence_index=0,
         start_time_seconds=0.0,
         end_time_seconds=1.0,

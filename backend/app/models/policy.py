@@ -9,7 +9,7 @@ class CompanyPolicy(SQLModel, table=True):
     __tablename__ = "company_policies"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    organization_id: UUID = Field(foreign_key="organizations.id")
+    organization_id: UUID = Field(foreign_key="organizations.id", index=True)
     policy_category: str = Field(max_length=100)
     policy_title: str = Field(max_length=255)
     policy_text: str
@@ -23,8 +23,8 @@ class OrganizationPolicy(SQLModel, table=True):
     __tablename__ = "organization_policies"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    organization_id: UUID = Field(foreign_key="organizations.id")
-    policy_id: UUID = Field(foreign_key="company_policies.id")
+    organization_id: UUID = Field(foreign_key="organizations.id", index=True)
+    policy_id: UUID = Field(foreign_key="company_policies.id", index=True)
     is_active: bool = Field(default=True)
     assigned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
@@ -41,8 +41,8 @@ class PolicyCompliance(SQLModel, table=True):
     __tablename__ = "policy_compliance"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    interaction_id: UUID = Field(foreign_key="interactions.id")
-    policy_id: UUID = Field(foreign_key="company_policies.id")
+    interaction_id: UUID = Field(foreign_key="interactions.id", index=True)
+    policy_id: UUID = Field(foreign_key="company_policies.id", index=True)
     is_compliant: bool
     compliance_score: float
     degraded: bool = Field(default=False)
