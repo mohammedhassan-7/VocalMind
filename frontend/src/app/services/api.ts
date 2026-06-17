@@ -1663,6 +1663,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  avatar_url?: string | null;
   role: "manager" | "agent";
   agent_type?: "human" | "ai" | null;
   organization_id: string;
@@ -1677,6 +1678,25 @@ export async function getUserMe(): Promise<User> {
     return currentUser;
   }
   return apiFetch<User>("/users/me");
+}
+
+export async function updateProfile(payload: { name?: string; avatar_url?: string | null }): Promise<User> {
+  if (USE_MOCK_AUTH) {
+    if (currentUser) currentUser = { ...currentUser, ...payload };
+    return currentUser ?? MOCK_MANAGER;
+  }
+  return apiFetch<User>("/users/me", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changePassword(payload: { current_password?: string; new_password: string }): Promise<void> {
+  if (USE_MOCK_AUTH) return;
+  await apiFetch<{ status: string }>("/users/me/change-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function logoutUser(): Promise<void> {

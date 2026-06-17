@@ -14,12 +14,13 @@ describe('Manager Settings', () => {
     // Notifications tab
     cy.contains('button', 'Notifications').click();
     cy.contains('h3', 'Notification Preferences').should('be.visible');
-    cy.contains('Configure how you receive alerts').should('be.visible');
+    cy.contains('delivered to the bell').should('be.visible');
 
-    // Security tab
+    // Security tab (functional password form)
     cy.contains('button', 'Privacy & Security').click();
     cy.contains('h3', 'Privacy & Security').should('be.visible');
-    cy.contains('Manage passwords').should('be.visible');
+    cy.contains('label', 'New Password').should('be.visible');
+    cy.contains('button', 'Change Password').should('be.visible');
 
     // API Keys tab
     cy.contains('button', 'API Keys').click();

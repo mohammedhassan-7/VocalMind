@@ -17,6 +17,7 @@ class User(SQLModel, table=True):
     email: str = Field(max_length=320, unique=True, index=True)
     password_hash: str = Field(exclude=True)
     name: str = Field(max_length=255)
+    avatar_url: Optional[str] = Field(default=None)
     role: UserRole = Field(
         sa_type=SAEnum(UserRole, name="user_role_enum", create_constraint=False, native_enum=True),
     )

@@ -148,13 +148,21 @@ function TriggerCard({ attribution, onJumpTo }: { attribution: TriggerAttributio
           {attribution.evidenceChain.length > 0 && (
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Evidence Chain</p>
-              <div className="mt-2 space-y-1.5">
-                {attribution.evidenceChain.map((step) => (
-                  <div key={step} className="rounded-lg bg-card px-3 py-2 text-[12px] font-medium text-foreground/80">
-                    {cleanEvidenceText(step)}
-                  </div>
+              <ol className="mt-3">
+                {attribution.evidenceChain.map((step, i) => (
+                  <li key={step} className="relative flex gap-3 pb-3 last:pb-0">
+                    {i < attribution.evidenceChain.length - 1 && (
+                      <span className="absolute left-[11px] top-7 bottom-0 w-px bg-border" aria-hidden />
+                    )}
+                    <span className="z-10 mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-[10px] font-extrabold text-primary">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 rounded-lg bg-card px-3 py-2 text-[12px] font-medium leading-relaxed text-foreground/80">
+                      {cleanEvidenceText(step)}
+                    </div>
+                  </li>
                 ))}
-              </div>
+              </ol>
             </div>
           )}
         </div>
@@ -290,8 +298,13 @@ export function EvidenceAnchoredExplainabilityPanel({
             Findings grouped by type as a compact review deck for supervisor evidence review.
           </p>
         </div>
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-          {triggerAttributions.length} trigger / {claimProvenance.length} provenance
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-primary">
+            <span className="text-sm leading-none">{triggerAttributions.length}</span> Triggers
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/20 bg-teal-500/5 px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-teal-400">
+            <span className="text-sm leading-none">{claimProvenance.length}</span> Provenance
+          </span>
         </div>
       </div>
 

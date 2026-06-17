@@ -49,9 +49,13 @@ export function UserNav() {
         <DropdownMenuTrigger asChild>
           <button
             data-cy="user-menu-trigger"
-            className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-[11px] font-bold ring-2 ring-primary/20 hover:ring-primary/40 transition-all focus:outline-none"
+            className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground text-[11px] font-bold ring-2 ring-primary/20 hover:ring-primary/40 transition-all focus:outline-none"
           >
-            {getInitials(user?.name || "User")}
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} alt={user?.name || "User"} className="h-full w-full object-cover" />
+            ) : (
+              getInitials(user?.name || "User")
+            )}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56 bg-popover/95 backdrop-blur-xl border-border" align="end" forceMount>

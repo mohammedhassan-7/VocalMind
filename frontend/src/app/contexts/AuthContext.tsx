@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<User>;
   googleLogin: (idToken: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,6 +61,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem(AUTH_COOKIE_HINT_KEY, "1");
   };
 
+  const refreshUser = async () => {
+    const userData = await getUserMe();
+    setUser(userData);
+  };
+
   const logout = async () => {
     try {
       await logoutUser();
@@ -82,6 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         googleLogin,
         logout,
+        refreshUser,
       }}
     >
       {children}

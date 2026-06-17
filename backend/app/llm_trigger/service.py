@@ -1635,18 +1635,25 @@ def _build_claim_provenance_cards(
             version=policy_context.version,
             category=policy_context.category,
         )
-        if not policy_reference and fallback_policy_text.strip():
+        if not policy_reference:
+            # Always anchor the claim to *some* policy reference so the
+            # "Retrieval Provenance Scoring" deck is never empty — even when
+            # vector retrieval is degraded (e.g. embedding service offline) and
+            # only the NLI justification is available.
+            clause = (
+                _clean_display_text(fallback_policy_text)
+                or _clean_display_text(nli_policy.justification)
+                or "No policy context could be retrieved for this claim (retrieval degraded)."
+            )
             policy_reference = PolicyReference(
                 source="policy",  # type: ignore[arg-type]
                 reference=f"{policy_context.category or 'Policy'} reference",
-                clause=_truncate_text(_clean_display_text(fallback_policy_text), 260) or "Active policy context",
+                clause=_truncate_text(clause, 260) or "Active policy context",
                 doc_type="policy",  # type: ignore[arg-type]
                 policy_ref=[],
                 version=policy_context.version,
                 category=policy_context.category,
             )
-        if not policy_reference:
-            continue
 
         provenance = " | ".join(
             part
