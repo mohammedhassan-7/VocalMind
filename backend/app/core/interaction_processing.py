@@ -274,19 +274,34 @@ _CUSTOMER_PHRASE_WEIGHTS: tuple[tuple[str, int], ...] = (
 )
 
 
+_lr_model = None
+_lr_vectorizer = None
+
+
+def _load_lr_model_and_vectorizer():
+    global _lr_model, _lr_vectorizer
+    if _lr_model is None:
+        try:
+            import joblib
+            core_dir = Path(__file__).parent
+            model_path = core_dir / "model.pkl"
+            vectorizer_path = core_dir / "vectorizer.pkl"
+            if model_path.exists() and vectorizer_path.exists():
+                _lr_model = joblib.load(model_path)
+                _lr_vectorizer = joblib.load(vectorizer_path)
+                logger.info("Successfully loaded Logistic Regression model and vectorizer for speaker classification.")
+        except Exception as e:
+            logger.warning("Failed to load Logistic Regression model or vectorizer: %s", e)
+
+
 def assign_cluster_roles_from_text(
     segments: list[dict[str, Any]],
     agent_name: str | None = None,
 ) -> dict[str, SpeakerRole]:
     """Decide which raw diarization clusters are agent vs customer based on content.
 
-    WhisperX/PyAnnote returns cluster labels (SPEAKER_00, SPEAKER_01, ...) that
-    are arbitrary IDs; only what each cluster *says* reveals its role. We
-    aggregate per-cluster text, score it against phrase tables, and assign roles
-    by net agent score.
-
-    Returns a mapping ``{raw_label: SpeakerRole}``. Segments with explicit
-    "agent"/"customer" labels are skipped (they are honored verbatim later).
+    Uses a trained Logistic Regression model and TF-IDF vectorizer if available,
+    falling back to heuristic phrase-matching.
     """
     cluster_texts: dict[str, list[str]] = {}
     cluster_first_seen: dict[str, float] = {}
@@ -302,14 +317,26 @@ def assign_cluster_roles_from_text(
     if not cluster_texts:
         return {}
 
+    _load_lr_model_and_vectorizer()
+    if _lr_model is not None and _lr_vectorizer is not None:
+        if len(cluster_texts) == 1:
+            cluster, texts = next(iter(cluster_texts.items()))
+            probabilities = []
+            for text in texts:
+                text_clean = text.strip()
+                if not text_clean:
+                    continue
+                feat = _lr_vectorizer.transform([text_clean])
+                prob_agent = float(_lr_model.predict_proba(feat)[0][1])
+                probabilities.append(prob_agent)
+            prob = sum(probabilities) / len(probabilities) if probabilities else 0.5
+            return {cluster: SpeakerRole.agent if prob >= 0.5 else SpeakerRole.customer}
+
     name_norm = (agent_name or "").strip().lower()
 
     # First-speaker prior: in inbound call-center audio, the agent answers
     # the line first. Whichever cluster owns the earliest segment within the
-    # first 8s of audio gets a strong agent prior regardless of what they say
-    # — this anchors cluster assignment even when WhisperX mistranscribes the
-    # scripted greeting. The 8s window is wide enough to cover a slow
-    # greeting but tight enough to never cover a customer reply.
+    # first 8s of audio gets a strong agent prior regardless of what they say.
     earliest_cluster: str | None = None
     earliest_start: float = float("inf")
     for cluster, start in cluster_first_seen.items():
@@ -317,18 +344,39 @@ def assign_cluster_roles_from_text(
             earliest_start = start
             earliest_cluster = cluster
     if earliest_cluster is not None and earliest_start >= 8.0:
-        earliest_cluster = None  # no segment in the first 8s — don't apply prior
+        earliest_cluster = None
 
-    scores: dict[str, tuple[int, int]] = {}
+    scores: dict[str, tuple[float, float]] = {}
     for cluster, texts in cluster_texts.items():
         joined = " ".join(texts)
-        agent_score = sum(weight for phrase, weight in _AGENT_PHRASE_WEIGHTS if phrase in joined)
-        customer_score = sum(weight for phrase, weight in _CUSTOMER_PHRASE_WEIGHTS if phrase in joined)
+        
+        # 1. Base scores from ML and/or phrase weights
+        a_base = 0.0
+        c_base = 0.0
+        if _lr_model is not None and _lr_vectorizer is not None:
+            probabilities = []
+            for text in texts:
+                text_clean = text.strip()
+                if not text_clean:
+                    continue
+                feat = _lr_vectorizer.transform([text_clean])
+                prob_agent = float(_lr_model.predict_proba(feat)[0][1])
+                probabilities.append(prob_agent)
+            a_base += sum(5.0 * p for p in probabilities)
+            c_base += sum(5.0 * (1.0 - p) for p in probabilities)
+
+        # Always add phrase weights as reinforcement
+        a_base += float(sum(weight for phrase, weight in _AGENT_PHRASE_WEIGHTS if phrase in joined))
+        c_base += float(sum(weight for phrase, weight in _CUSTOMER_PHRASE_WEIGHTS if phrase in joined))
+
+        # 2. Heuristic rules adjustments
+        agent_score = a_base
+        customer_score = c_base
 
         # Self-introduction with the known agent name is a near-decisive signal.
         if name_norm and name_norm not in {"agent", "customer"}:
             if f"my name is {name_norm}" in joined or f"this is {name_norm}" in joined:
-                agent_score += 15
+                agent_score += 15.0
 
         # Whoever opens the call with the scripted greeting is the agent.
         if cluster_first_seen.get(cluster, float("inf")) < 15.0 and (
@@ -336,11 +384,11 @@ def assign_cluster_roles_from_text(
             or "thanks for calling" in joined
             or "welcome to" in joined
         ):
-            agent_score += 10
+            agent_score += 10.0
 
         # First-speaker prior — anchors agent role even on mistranscribed greetings.
         if cluster == earliest_cluster:
-            agent_score += 12
+            agent_score += 12.0
 
         scores[cluster] = (agent_score, customer_score)
 
@@ -349,12 +397,9 @@ def assign_cluster_roles_from_text(
         cluster, (a, c) = next(iter(scores.items()))
         return {cluster: SpeakerRole.agent if a >= c else SpeakerRole.customer}
 
-    # Multi-cluster: cluster with lowest net agent score is the customer; the
-    # rest are agents. Handles handovers (CALL_02 / CALL_04 Tier 2 transfer)
-    # where there are 2+ agent voices and one customer voice.
+    # Multi-cluster: cluster with lowest net agent score is the customer; the rest are agents.
     nets = {cluster: a - c for cluster, (a, c) in scores.items()}
-    # Tie-break: cluster speaking earlier wins agent (call-center convention),
-    # i.e. for the customer label we prefer the *later* speaker on a tie.
+    # Tie-break: cluster speaking earlier wins agent, i.e., prefer the later speaker for customer.
     customer_cluster = min(
         nets,
         key=lambda k: (nets[k], -cluster_first_seen.get(k, 0.0)),
@@ -364,7 +409,6 @@ def assign_cluster_roles_from_text(
         cluster: SpeakerRole.customer if cluster == customer_cluster else SpeakerRole.agent
         for cluster in cluster_texts
     }
-
 
 def _speaker_role_from_label(
     label: str | None,
