@@ -10,11 +10,12 @@ VocalMind utilizes Qdrant as its vector database, isolating documents across two
 
 | Collection | Granularity | Encodings | Primary Consumers |
 | :--- | :--- | :--- | :--- |
-| **`vocalmind_parents`** | Parent headers (H1/H2/H3 splits) | 1024-dim dense vectors (`snowflake-arctic-embed2`) | Compliance evaluations, NLI policy checks, and SOP step analysis. Surfaced as *Provenance Cards*. |
-| **`vocalmind_children`** | 400-character child segments with 80-character overlap | 1024-dim dense vectors (`snowflake-arctic-embed2`) | Text-to-SQL Manager Assistant Q&A answer synthesis. |
+| **`vocalmind_parents`** | Parent headers (H1/H2/H3 splits) | 1024-dim dense vectors (`snowflake-arctic-embed2`) | Compliance evaluations, NLI policy checks. Surfaced as *Provenance Cards*. |
+| **`vocalmind_children`** | 400-character child segments with 80-character overlap | 1024-dim dense vectors (`snowflake-arctic-embed2`) | Text-to-SQL Manager Assistant Q&A answer synthesis (precise span quoting). |
+| **`vocalmind_sop_parents`** | Parent header splits of SOP, KB, and procedure docs | 1024-dim dense vectors (`snowflake-arctic-embed2`) | SOP process-adherence checks and KB claim-validation lookups in LLM trigger chains. |
 
 > [!NOTE]
-> Policy documents are indexed at both parent and child levels. SOP and KB documents are only indexed at the parent level, as compliance evaluations require the entire context (exceptions, rules) of a step.
+> **Policy documents** are indexed at both parent (`vocalmind_parents`) and child (`vocalmind_children`) levels. **SOP and KB documents** are indexed only at parent level (`vocalmind_sop_parents`) — compliance evaluations need the entire rule with all conditions. The consumer type determines which collection to query: **parents/sop-parents** for compliance/SOP/KB, **children** for Q&A answer synthesis.
 
 ---
 

@@ -30,13 +30,19 @@ Clicking a call opens the **Call Coaching** interface:
 
 ---
 
-## 4. Emotion Dispute Workflow
+## 4. Agent Dispute Workflow (Emotion & Compliance)
 
-If you believe the acoustic emotion model incorrectly classified a segment of your call (e.g., classifying a neutral response as "angry", or a polite greeting as "frustrated"):
+If you believe an AI-generated verdict on your call is incorrect, you can submit a dispute for manager review:
 
-1.  Open the call detail page and find the incorrect utterance turn.
-2.  Click the **Dispute** button.
-3.  Enter an explanation note (e.g., *"I was speaking calmly and searching the database, not sounding frustrated"*).
-4.  Submit the dispute. This sets the event's status to `is_flagged = TRUE`, routing it to the **Manager Review Queue**.
-5.  Once the manager reviews and corrects the label, the corrected data is logged.
-6.  **Retraction**: You can delete/retract your dispute at any time before it is reviewed.
+### 4.1 Emotion Disputes
+*   **Trigger**: If the acoustic emotion model incorrectly labels an utterance (e.g., labeling calm search time as "frustrated").
+*   **Action**: Click the **Dispute** button next to the utterance turn, enter an explanation note (e.g., *"Static noise caused false anger label"*), and submit.
+*   **Result**: Flags the emotion event (`is_flagged = TRUE`), routing it to the manager's review queue.
+
+### 4.2 Policy Compliance Disputes
+*   **Trigger**: If the compliance evaluator flags a policy violation that does not apply to the call scenario (e.g., late fee warning not needed for a billing inquiry).
+*   **Action**: Click the **Dispute Compliance** button next to the flagged policy warning card, write your reasoning, and submit.
+*   **Result**: Flags the compliance verdict (`is_flagged = TRUE`) and routes it to the manager's review queue.
+
+### 4.3 Retracting Disputes
+*   You can delete or retract a dispute at any time before a manager reviews it. Simply click **Retract Dispute** on the detail page.

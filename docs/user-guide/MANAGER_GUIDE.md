@@ -58,3 +58,21 @@ Managers upload and manage documents used to ground RAG retrievals:
 *   **Company Policies**: Upload compliance PDFs. Toggling a policy active/inactive controls whether NLI trigger evaluations check it.
 *   **SOP Procedures**: Ingest step-by-step resolution workflows. The system maps these to expected step graphs to calculate process adherence.
 *   **FAQ & Knowledge Base**: Manage FAQ question/answer pairs and reference documents for Q&A query synthesis.
+
+---
+
+## 6. Manager Review Queue (Dispute Management)
+
+Managers act as the final authority on agent disputes. The **Review Queue** lists all pending disputes:
+*   **Emotion Review**: Shows agent disputes on segment-level acoustic emotions. Managers can **Accept** the dispute (and select the corrected emotion label/write a justification) or **Reject** the dispute.
+*   **Compliance Review**: Shows agent disputes on policy compliance verdicts. Managers can **Accept** (correcting the compliance score and boolean status) or **Reject** the dispute.
+*   **Training Loop Integration**: Accepting a dispute automatically updates the database and creates a review feedback record. Approved changes are queued to be exported to the model fine-tuning dataset.
+
+---
+
+## 7. Manager Direct Feedback & Corrections
+
+Managers can make direct corrections to any call evaluation even if the agent has not disputed it:
+*   **Direct Emotion Correction**: Click **Correct Emotion** on any utterance, select the correct label, and enter the reason.
+*   **Direct Compliance Correction**: Click **Correct Compliance** on any policy card, specify if the agent was compliant, and enter a note.
+*   These actions bypass the dispute queue and immediately log a `reviewed` feedback record for model retraining.

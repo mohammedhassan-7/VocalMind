@@ -6,7 +6,7 @@ This guide details the test suites, execution commands, and verification benchma
 
 ## 1. Backend API Test Suite (pytest)
 
-The backend gateway contains 23 testing files built with `pytest` using an asynchronous driver (`pytest-asyncio`) and an in-memory SQLite database.
+The backend gateway contains 36 test files (35 test_*.py files + 1 conftest.py) built with `pytest` using an asynchronous driver (`pytest-asyncio`) and an in-memory SQLite database.
 
 ### 1.1 Core Test Files
 

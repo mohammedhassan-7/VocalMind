@@ -71,14 +71,12 @@ out: 1,300  / 1,000,000 × $0.79 = $0.0010
 
 ## 4. Manager Assistant (separate from per-call)
 
-The Manager Assistant uses **Gemini 2.0-flash** primary + **Qwen2.5:7b
-Ollama** fallback. It's not invoked per call — it's invoked when a
-manager asks the assistant a question.
+The Manager Assistant uses a 4-level fallback chain: **Gemini 2.0-flash** primary → **Groq (Llama-3)** → **Ollama Cloud** → **Local Ollama (Qwen2.5:7b)**. It is invoked on-demand when a manager asks the assistant a question.
 
-- Gemini 2.0-flash list `[VERIFY]`: ~$0.075 / 1 M input, ~$0.30 / 1 M
-  output. A typical assistant query ≈ 4,000 in / 500 out → ~$0.0005.
-- Ollama fallback runs on the host (Qwen2.5:7b) — $0 marginal cost but
-  ~5 GB RAM permanently reserved.
+- **Gemini 2.0-flash** list `[VERIFY]`: ~$0.075 / 1 M input, ~$0.30 / 1 M output. A typical query (4k in / 500 out) costs ~$0.0005.
+- **Groq (Llama 3)** list `[VERIFY]`: ~$0.59 / 1 M input, ~$0.79 / 1 M output. A typical query costs ~$0.0028.
+- **Ollama Cloud**: Part of the flat $20 monthly subscription.
+- **Local Ollama (Qwen2.5:7b)**: Runs on the host — $0 marginal cost but ~5 GB RAM permanently reserved.
 
 Negligible against per-call cost.
 

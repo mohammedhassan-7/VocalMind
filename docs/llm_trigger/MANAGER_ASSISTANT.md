@@ -16,10 +16,12 @@ graph TD
     
     Provider -- gemini --> Gemini[Google GenAI Client]
     Provider -- groq --> Groq[Groq Chat Client]
+    Provider -- ollama_cloud --> OllamaCloud[Ollama Cloud Client]
     Provider -- ollama --> Ollama[Local Ollama Client]
     
     Gemini --> SQL[Generate raw SQL query]
     Groq --> SQL
+    OllamaCloud --> SQL
     Ollama --> SQL
     
     SQL --> Security{Read-Only Check & Sanitizer}
@@ -35,11 +37,14 @@ graph TD
 
 ## 2. LLM Provider Fallbacks
 
-Assistant generation is managed via GenAI endpoints:
+Assistant generation is managed via GenAI endpoints depending on `ASSISTANT_LLM_PROVIDER`:
 
 1.  **Google GenAI (Gemini)**: The primary engine if `GOOGLE_API_KEY` is set. Candidates are tried in order: `gemini-2.0-flash`, `gemini-2.5-flash`, `gemini-1.5-flash`.
 2.  **Groq (Llama-3)**: The secondary cloud provider if Gemini is disabled or credentials are missing.
-3.  **Ollama (qwen2.5:7b)**: The local fallback engine. If cloud models fail or return rate-limit errors, the backend routes generation locally to Ollama, ensuring continuous service availability.
+3.  **Ollama Cloud (Ollama Cloud Pro)**: The tertiary cloud provider mapping to `OLLAMA_CLOUD_HEAVY_MODEL` (e.g. `kimi-k2.6:cloud` or custom `OLLAMA_MODEL_TEXT_TO_SQL`).
+4.  **Local Ollama (qwen2.5:7b)**: The local fallback engine. If cloud models fail or return rate-limit errors, the backend routes generation locally to Ollama, ensuring continuous service availability.
+
+In `auto` mode, the provider fallback order is: **Gemini → Groq → Ollama Cloud → Local Ollama**.
 
 ---
 

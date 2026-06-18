@@ -2,7 +2,7 @@
 
 VocalMind utilizes PostgreSQL as its primary transactional database. The schema is defined and managed via **SQLModel** (an ORM wrapping SQLAlchemy and Pydantic) on the backend and mapped directly via PostgreSQL DDL script in `infra/db/01_schema.sql`.
 
-This document serves as the data dictionary and relationship guide for the 18 tables and 10 custom enum types.
+This document serves as the data dictionary and relationship guide for the 19 tables and 11 custom enum types.
 
 ---
 
@@ -20,6 +20,7 @@ Custom PostgreSQL enum types isolate state values, guaranteeing database-level c
 *   `query_mode_enum`: `('voice', 'chat')` - Assistant conversation modes.
 *   `feedback_status_enum`: `('pending', 'reviewed', 'applied')` - Lifecycle states of agent compliance/emotion disputes.
 *   `period_type_enum`: `('daily', 'weekly', 'monthly')` - Aggregation periods for performance snapshots.
+*   `notification_type_enum`: `('evaluation_complete', 'agent_flag_pending', 'flag_approved', 'flag_rejected', 'manager_correction', 'feedback_applied')` - In-app notification categories.
 
 ---
 
@@ -42,11 +43,14 @@ Defines managers and agents.
 *   `email` (VARCHAR, Unique)
 *   `password_hash` (TEXT)
 *   `name` (VARCHAR)
+*   `avatar_url` (TEXT, Nullable): Optional profile photo URL.
 *   `role` (user_role_enum): Manager or Agent.
 *   `agent_type` (agent_type_enum, Nullable): Human or AI (must be null if user role is 'manager').
 *   `is_active` (BOOLEAN): Defaults to True.
 *   `last_login_at` (TIMESTAMPTZ, Nullable): Timestamp of the last user login.
 *   `created_at` (TIMESTAMPTZ): User registration timestamp.
+
+**Constraint:** `users_agent_type_role_check` — enforces that `agent_type` is `NULL` when `role = 'manager'`.
 
 ---
 
@@ -68,6 +72,9 @@ Represents an uploaded call recording or one auto-ingested by the folder watcher
 *   `has_overlap` (BOOLEAN): Defaults to False. Set True if overlapping voices are detected.
 *   `channel_count` (SMALLINT): Number of audio channels (mono=1, stereo=2).
 
+**Constraint:** `uq_interaction_org_audio_path` — enforces uniqueness of `(organization_id, audio_file_path)`, preventing duplicate audio uploads within an organization.
+**Note:** `agent_id` FK is ON DELETE CASCADE; `uploaded_by` FK has no cascade.
+
 #### `processing_jobs`
 Traces execution of the six stage pipeline for each interaction.
 *   `id` (UUID, PK)
@@ -86,7 +93,7 @@ Traces execution of the six stage pipeline for each interaction.
 Holds the centralized full text representation of a call.
 *   `id` (UUID, PK)
 *   `interaction_id` (UUID, Unique, FK -> `interactions` ON DELETE CASCADE)
-*   `full_text` (TEXT): Aggregated transcript text.
+*   `full_text` (TEXT, Nullable): Aggregated transcript text.
 *   `overall_confidence` (FLOAT, Nullable): Speech-to-text accuracy confidence.
 
 #### `utterances`
@@ -119,30 +126,39 @@ Emotion shifts detected in a call. Used for explainability.
 *   `jump_to_seconds` (FLOAT): Timestamp to jump to in the audio file.
 *   `confidence_score` (FLOAT, Nullable): Speech-to-text or acoustic classification confidence.
 *   `is_flagged` (BOOLEAN): True if disputed by the agent.
-*   `agent_flagged_by` (UUID, FK -> `users`): Agent who disputed.
-*   `agent_flagged_at` (TIMESTAMPTZ)
-*   `agent_flag_note` (TEXT): Dispute reasoning text.
+*   `agent_flagged_by` (UUID, FK -> `users`, Nullable): Agent who disputed.
+*   `agent_flagged_at` (TIMESTAMPTZ, Nullable): When the dispute was submitted.
+*   `agent_flag_note` (TEXT, Nullable): Dispute reasoning text.
+
+**Constraint:** `emotion_events_agent_flag_consistency` — enforces that `agent_flagged_by` and `agent_flagged_at` are both set or both NULL.
 
 #### `interaction_scores`
 Overall and dimensional scores calculated at completion of pipeline.
 *   `id` (UUID, PK)
 *   `interaction_id` (UUID, Unique, FK -> `interactions` ON DELETE CASCADE)
-*   `overall_score` (FLOAT): General weighted percentage.
-*   `empathy_score` / `policy_score` / `resolution_score` (FLOAT)
-*   `was_resolved` (BOOLEAN): Heuristic-derived outcome state.
-*   `total_silence_seconds` / `avg_response_time_seconds` (FLOAT)
-*   `scored_at` (TIMESTAMPTZ): When scores were computed.
+*   `overall_score` (FLOAT, Nullable): General weighted percentage.
+*   `empathy_score` / `policy_score` / `resolution_score` (FLOAT, Nullable): Dimensional KPI scores.
+*   `was_resolved` (BOOLEAN, Nullable): Heuristic-derived outcome state.
+*   `total_silence_seconds` / `avg_response_time_seconds` (FLOAT, Nullable): Timing metrics.
+*   `scored_at` (TIMESTAMPTZ): When scores were computed. NOT NULL.
 
 #### `policy_compliance`
-Stores the results of policy evaluations against the transcript.
+Stores the results of policy evaluations against the transcript. Mirrors the agent-dispute workflow of `emotion_events`.
 *   `id` (UUID, PK)
 *   `interaction_id` (UUID, FK -> `interactions` ON DELETE CASCADE)
 *   `policy_id` (UUID, FK -> `company_policies` ON DELETE CASCADE)
-*   `is_compliant` (BOOLEAN)
-*   `compliance_score` (FLOAT)
+*   `is_compliant` (BOOLEAN, NOT NULL)
+*   `compliance_score` (FLOAT, NOT NULL)
+*   `degraded` (BOOLEAN): True when the verdict was downgraded by the LLM (e.g. partial compliance). Defaults to False.
 *   `llm_reasoning` (TEXT)
 *   `evidence_text` (TEXT)
 *   `retrieved_policy_text` (TEXT)
+*   `is_flagged` (BOOLEAN): True if an agent has disputed this verdict. Defaults to False.
+*   `agent_flagged_by` (UUID, FK -> `users`, Nullable): Agent who submitted the dispute.
+*   `agent_flagged_at` (TIMESTAMPTZ, Nullable): When the dispute was submitted.
+*   `agent_flag_note` (TEXT, Nullable): Agent's written explanation for the dispute.
+
+**Constraint:** `policy_compliance_agent_flag_consistency` — enforces that `agent_flagged_by`/`agent_flagged_at` are both set when `is_flagged = TRUE`.
 
 ---
 
@@ -259,7 +275,7 @@ In-app notification records for system alerts and coaching updates.
 *   `id` (UUID, PK)
 *   `recipient_user_id` (UUID, FK -> `users` ON DELETE CASCADE): Target user.
 *   `organization_id` (UUID, FK -> `organizations` ON DELETE CASCADE): Tenant scope.
-*   `type` (notification_type_enum): Category (e.g. `interaction_processed`, `dispute_submitted`, `dispute_resolved`, `coaching_assigned`).
+*   `type` (notification_type_enum): Category — one of `evaluation_complete`, `agent_flag_pending`, `flag_approved`, `flag_rejected`, `manager_correction`, `feedback_applied`.
 *   `title` (VARCHAR): Short title of the alert.
 *   `body` (TEXT, Nullable): Long body details.
 *   `link_url` (VARCHAR, Nullable): Redirect link.

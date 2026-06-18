@@ -51,7 +51,7 @@ make build           # Builds all service images
 make up              # Launches all containers in the background
 # Initialize embedding models:
 docker exec vocalmind-ollama ollama pull snowflake-arctic-embed2
-make seed            # Seeds mock NileTech and Meridian organizations
+make seed            # Seeds NileTech/CairoConnect (SQL) + Nexalink/Meridian (Python scripts)
 ```
 
 ### 3.2 Option B: Local Developer Mode (Hybrid)

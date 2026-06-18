@@ -64,6 +64,7 @@ Provides user profile retrieval and configuration.
       "id": "b0000000-0000-0000-0000-000000000001",
       "email": "manager@nexalink.com",
       "name": "Galal Manager",
+      "avatar_url": null,
       "role": "manager",
       "organization_id": "a0000000-0000-0000-0000-000000000001",
       "is_active": true,
@@ -71,6 +72,32 @@ Provides user profile retrieval and configuration.
       "agent_type": null
     }
     ```
+
+### `PATCH /users/me`
+*   **Description**: Updates the current user's display name and/or avatar URL.
+*   **Headers**: `Authorization: Bearer <token>`
+*   **Request Body**:
+    ```json
+    {
+      "name": "New Name",
+      "avatar_url": "https://example.com/avatar.png"
+    }
+    ```
+    Both fields are optional. Set `avatar_url` to `""` to clear the avatar.
+*   **Response**: Full updated User object (same shape as `GET /users/me`).
+
+### `POST /users/me/change-password`
+*   **Description**: Changes the current user's password. Google-OAuth accounts that have no password set can skip `current_password`.
+*   **Headers**: `Authorization: Bearer <token>`
+*   **Request Body**:
+    ```json
+    {
+      "current_password": "old-password",
+      "new_password": "new-password-min-8-chars"
+    }
+    ```
+    `current_password` is optional for accounts without an existing password.
+*   **Response**: `{ "status": "ok" }`
 
 ---
 
@@ -137,8 +164,8 @@ The core endpoints for uploading, listing, detailing, and reprocessing customer-
 ### `GET /interactions/{interaction_id}`
 *   **Description**: Retrieves the complete details of a single interaction, including transcription metadata, utterances list, compliance checks, and explainability payloads.
 *   **Query Parameters**:
-    *   `llm_org_filter` (string, optional): Restricts evaluation details.
-    *   `llm_force_rerun` (boolean, default false): Forces trigger rerun.
+    *   `include_llm_triggers` (boolean, default `false`): When true, includes the full 3-chain LLM trigger evaluation payload in the response.
+    *   `llm_force_rerun` (boolean, default `false`): Forces a fresh trigger evaluation even if a cached result exists.
 *   **Response**: Renders a comprehensive structure containing:
     *   `interaction`: Core interaction fields.
     *   `utterances`: Array of segment transcriptions.
@@ -147,11 +174,28 @@ The core endpoints for uploading, listing, detailing, and reprocessing customer-
     *   `emotionComparison`: Comparison payload between acoustic and text emotion.
     *   `ragCompliance`: Compliance evaluations retrieved from vector store.
     *   `emotionTriggers`: Shift triggers.
+    *   `llmTriggers`: Full 3-chain LLM trigger evaluation payload (present when `include_llm_triggers=true`).
     *   `processingFailures`: Logged errors.
 
 ### `GET /interactions/{interaction_id}/processing-status`
 *   **Description**: Retrieves status of the 6 stages of processing jobs for this call.
-*   **Response**: Array of jobs containing `id`, `stage`, `status`, `startedAt`, `completedAt`, `errorMessage`, `retryCount`.
+*   **Response**: Wrapper object:
+    ```json
+    {
+      "interactionId": "uuid",
+      "status": "completed",
+      "jobs": [
+        {
+          "stage": "stt",
+          "status": "completed",
+          "retryCount": 0,
+          "errorMessage": null,
+          "startedAt": "2026-06-18T12:00:00Z",
+          "completedAt": "2026-06-18T12:01:00Z"
+        }
+      ]
+    }
+    ```
 
 ### `GET /interactions/{interaction_id}/emotion-comparison`
 *   **Description**: Retrieves segment-level comparison data between acoustic emotion predictions and text-based emotion predictions.
@@ -167,8 +211,11 @@ The core endpoints for uploading, listing, detailing, and reprocessing customer-
 *   **Response**:
     ```json
     {
+      "interactionId": "d0000000-0000-0000-0000-000000000001",
+      "status": "pending",
+      "processingJobs": [...],
       "queued": true,
-      "status": "pending"
+      "forced": false
     }
     ```
 
@@ -180,29 +227,31 @@ The core endpoints for uploading, listing, detailing, and reprocessing customer-
 
 ## 4. Emotion Events & Disputes
 
-These endpoints are mounted under `/interactions` but are tagged under `emotion-events`.
+Agent-dispute endpoints are under `/interactions` (emotion) and `/policy-compliance` (compliance). Auth uses standard JWT/cookie — no `token` query parameter is needed.
 
 ### `POST /interactions/emotion-events/{event_id}/dispute`
-*   **Description**: Flags an emotion event as disputed by the agent who handled the call.
-*   **Query Parameters**:
-    *   `token` (string, required): The Supabase user access token.
+*   **Description**: Agent disputes an AI-generated emotion verdict on one of their own calls.
 *   **Request Body**:
     ```json
-    {
-      "agent_flag_note": "Acoustic was loud due to static, not sarcasm."
-    }
+    { "agent_flag_note": "Acoustic was loud due to static, not sarcasm." }
     ```
-*   **Response**: Returns details of the flagged dispute with timestamp and agent name.
+*   **Response**: `{ "event_id", "is_flagged": true, "agent_flagged_at", "message" }`
 
 ### `DELETE /interactions/emotion-events/{event_id}/dispute`
-*   **Description**: Retracts a previously submitted dispute.
-*   **Query Parameters**:
-    *   `token` (string, required): The Supabase user access token.
+*   **Description**: Agent (or manager) retracts a previously submitted emotion dispute.
+*   **Response**: `{ "event_id", "message": "Dispute retracted." }`
 
-### `GET /interactions/emotion-events/flagged`
-*   **Description**: Returns all flagged emotion events within the organization, serving as the manager's review queue.
-*   **Query Parameters**:
-    *   `token` (string, required): The Supabase manager access token.
+### `POST /policy-compliance/{compliance_id}/dispute`
+*   **Description**: Agent disputes a policy compliance verdict on one of their own calls. (Agent-only)
+*   **Request Body**:
+    ```json
+    { "agent_flag_note": "This policy does not apply to this call type." }
+    ```
+*   **Response**: `{ "compliance_id", "is_flagged": true, "agent_flagged_at", "message" }`
+
+### `DELETE /policy-compliance/{compliance_id}/dispute`
+*   **Description**: Agent or manager retracts a compliance dispute.
+*   **Response**: `{ "compliance_id", "message": "Dispute retracted." }`
 
 ---
 
@@ -253,7 +302,7 @@ Manages the ingestion, modification, and toggling of documents and rules.
 *   **Description**: Lists policy records, FAQs, or KB references.
 
 ### `POST /knowledge/policies` | `POST /knowledge/faqs`
-*   **Description**: Manual creation of a single text-based policy or FAQ.
+*   **Description**: Manual creation of a single text-based policy or FAQ entry. (No equivalent for KB — KB articles are created exclusively via file upload.)
 
 ### `POST /knowledge/policies/upload` | `POST /knowledge/faqs/upload` | `POST /knowledge/kb/upload`
 *   **Description**: Uploads a PDF file (DOCX is not supported by these endpoints) to be processed by direct PDF reading and ingested into Qdrant vector databases.
@@ -280,13 +329,12 @@ Manages the ingestion, modification, and toggling of documents and rules.
 ## 8. RAG Retrieval (`/rag`)
 
 ### `POST /rag/query`
-*   **Description**: Standalone entry point to execute search queries against Qdrant collections.
+*   **Description**: Standalone entry point to execute search queries against Qdrant collections. The org filter is automatically derived from the authenticated user's organization.
 *   **Request Body**:
     ```json
     {
       "query": "What is the policy on late fees?",
-      "mode": "answer",
-      "org_filter": "nexalink"
+      "mode": "answer"
     }
     ```
 *   **Response**: Returns synthesized response and a `retrieval_provenance` list.
@@ -347,3 +395,189 @@ Run evaluations directly or verify model settings.
 
 ### `POST /internal/set-kaggle-url`
 *   **Description**: Dynamically overrides backend configuration for Kaggle remote tunnels.
+
+---
+
+## 13. Notifications (`/notifications`)
+
+In-app notification delivery via polling. Phase 1 is pull-based; Phase 2 will add Server-Sent Events.
+
+### `GET /notifications`
+*   **Description**: Returns notifications for the authenticated user, ordered by `created_at DESC`.
+*   **Query Parameters**:
+    *   `unread` (boolean, default `false`): If `true`, returns only unread notifications.
+    *   `limit` (integer, default `50`, max `200`): Page size.
+    *   `offset` (integer, default `0`): Pagination offset.
+*   **Response**:
+    ```json
+    [
+      {
+        "id": "uuid",
+        "type": "evaluation_complete",
+        "title": "Call evaluation ready",
+        "body": "Interaction CALL_15 has finished processing.",
+        "link_url": "/manager/sessions/uuid",
+        "payload": { "interaction_id": "uuid" },
+        "is_read": false,
+        "read_at": null,
+        "created_at": "2026-06-18T15:00:00Z"
+      }
+    ]
+    ```
+
+### `GET /notifications/unread-count`
+*   **Description**: Lightweight badge-count endpoint. Returns the number of unread notifications for the current user.
+*   **Response**: `{ "unread": 5 }`
+
+### `POST /notifications/{notification_id}/read`
+*   **Description**: Marks a single notification as read.
+*   **Response**: `{ "id": "uuid", "is_read": true }`
+
+### `POST /notifications/read-all`
+*   **Description**: Marks all unread notifications for the current user as read.
+*   **Response**: `{ "updated": 5 }`
+
+**Notification `type` values:**
+
+| Value | Triggered when |
+|---|---|
+| `evaluation_complete` | A call finishes the full processing pipeline |
+| `agent_flag_pending` | An agent submits an emotion or compliance dispute |
+| `flag_approved` | A manager approves an agent's dispute |
+| `flag_rejected` | A manager rejects an agent's dispute |
+| `manager_correction` | A manager directly corrects a call verdict |
+| `feedback_applied` | A feedback row is exported to the training dataset |
+
+---
+
+## 14. Manager Review Queue (`/reviews`)
+
+Single endpoint group for manager decisions on agent-disputed AI evaluations (both emotion and compliance).
+
+### `GET /reviews/queue`
+*   **Description**: Returns all pending emotion and compliance flags for the manager's organization. **Manager-only.**
+*   **Response**:
+    ```json
+    {
+      "emotion": [
+        {
+          "kind": "emotion",
+          "review_id": "uuid",
+          "interaction_id": "uuid",
+          "agent_id": "uuid",
+          "agent_name": "Sara Agent",
+          "agent_flagged_at": "2026-06-18T12:00:00Z",
+          "agent_flag_note": "Static noise caused false anger label",
+          "previous_emotion": "neutral",
+          "new_emotion": "angry",
+          "llm_justification": "...",
+          "confidence_score": 0.72,
+          "jump_to_seconds": 45.3
+        }
+      ],
+      "compliance": [
+        {
+          "kind": "compliance",
+          "review_id": "uuid",
+          "interaction_id": "uuid",
+          "agent_id": "uuid",
+          "agent_name": "Sara Agent",
+          "agent_flagged_at": "2026-06-18T12:00:00Z",
+          "agent_flag_note": "Policy does not apply here",
+          "policy_id": "uuid",
+          "policy_title": "Late Fee Policy",
+          "is_compliant": false,
+          "compliance_score": 0.3,
+          "llm_reasoning": "...",
+          "evidence_text": "..."
+        }
+      ]
+    }
+    ```
+
+### `POST /reviews/emotion/{event_id}`
+*   **Description**: Manager accepts or rejects an agent's emotion dispute. **Manager-only.**
+*   **Request Body**:
+    ```json
+    {
+      "decision": "accept",
+      "corrected_emotion": "neutral",
+      "corrected_justification": "Background noise caused false detection.",
+      "manager_note": "Reviewed audio at 45s — clearly not anger."
+    }
+    ```
+    `corrected_emotion` is required when `decision == "accept"`. `decision` is `"accept"` or `"reject"`.
+*   **Response**: `{ "review_id": "uuid", "decision": "accept", "feedback_id": "uuid" }`
+
+### `POST /reviews/compliance/{compliance_id}`
+*   **Description**: Manager accepts or rejects an agent's compliance dispute. **Manager-only.**
+*   **Request Body**:
+    ```json
+    {
+      "decision": "accept",
+      "corrected_is_compliant": true,
+      "corrected_score": 0.85,
+      "manager_note": "Policy does not apply to this call type."
+    }
+    ```
+    `corrected_is_compliant` is required when `decision == "accept"`.
+*   **Response**: `{ "review_id": "uuid", "decision": "accept", "feedback_id": "uuid" }`
+
+---
+
+## 15. Manager Direct Feedback (`/feedback`)
+
+Manager-initiated corrections that do not require a prior agent dispute flag. Creates a feedback row immediately at `reviewed` status for training export.
+
+### `POST /feedback/emotion`
+*   **Description**: Manager directly corrects an AI emotion verdict. **Manager-only.**
+*   **Request Body**:
+    ```json
+    {
+      "emotion_event_id": "uuid",
+      "corrected_emotion": "neutral",
+      "corrected_justification": "Speaker was calm throughout.",
+      "correction_reason": "False positive from background noise."
+    }
+    ```
+*   **Response** (201 Created): `{ "feedback_id": "uuid" }`
+
+### `POST /feedback/compliance`
+*   **Description**: Manager directly corrects a compliance verdict. **Manager-only.**
+*   **Request Body**:
+    ```json
+    {
+      "policy_compliance_id": "uuid",
+      "corrected_is_compliant": true,
+      "corrected_score": 0.9,
+      "correction_reason": "Policy does not apply to this call scenario."
+    }
+    ```
+*   **Response** (201 Created): `{ "feedback_id": "uuid" }`
+
+---
+
+## 16. Emotion Analysis (`/emotion`)
+
+Proxy and fusion endpoints for the emotion microservice.
+
+### `POST /emotion/analyze`
+*   **Description**: Upload an audio file, get back dominant emotion prediction from the FunASR emotion2vec model.
+*   **Content-Type**: `multipart/form-data`
+*   **Request**: `file` (binary, required) — audio file.
+*   **Response**: `{ "emotion": "happy", "confidence": 0.87, "all_scores": { ... } }`
+
+### `POST /emotion/analyze-local`
+*   **Description**: Analyze from a local file path on the server.
+*   **Request Body**: `{ "file_path": "/path/to/audio.wav" }`
+
+### `POST /emotion/fuse`
+*   **Description**: Fuse text-based and acoustic emotion signals into a single fused result using the weighted fusion algorithm (acoustic×0.55 + text×0.45).
+*   **Request Body**: Text + acoustic emotion labels and confidence scores.
+*   **Response**: `{ "fused_emotion": "...", "fused_confidence": 0.82, "model": "..." }`
+
+### `POST /emotion/process`
+*   **Description**: Full VAD → emotion pipeline. Returns utterance-shaped list with per-segment emotion predictions.
+*   **Content-Type**: `multipart/form-data`
+*   **Request**: `file` (binary, required).
+

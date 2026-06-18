@@ -45,6 +45,8 @@ VocalMind utilizes `react-router` v7 to enforce path configurations, guarding ag
 | ├── `(index)` | `ManagerDashboard` | manager | Rolls up overall KPIs and leaderboard. |
 | ├── `/inspector` | `SessionInspector` | manager | Searchable call table with reprocessing/filters. |
 | ├── `/inspector/:id` | `SessionDetail` | manager | Comprehensive call transcription & explainability detail. |
+| ├── `/reviews` | `ReviewQueue` | manager | Queue of pending agent compliance & emotion disputes. |
+| ├── `/notifications` | `NotificationsPage` | manager | Pull-based notifications dashboard for evaluations & disputes. |
 | ├── `/assistant` | `ManagerAssistant` | manager | NL-to-SQL conversational query agent. |
 | ├── `/knowledge` | `KnowledgeBase` | manager | PDF ingestion, active rules lists, and FAQ editing. |
 | ├── `/settings` | `ManagerSettings` | manager | Organization status and general configs. |
@@ -52,6 +54,7 @@ VocalMind utilizes `react-router` v7 to enforce path configurations, guarding ag
 | ├── `(index)` | `AgentDashboard` | agent | Personal score trends and summary metrics. |
 | ├── `/calls` | `AgentCalls` | agent | List of calls processed for this agent. |
 | ├── `/calls/:id` | `AgentCallDetail` | agent | Personal call transcript review and coaching triggers. |
+| ├── `/notifications` | `NotificationsPage` | agent | Pull-based notifications dashboard for coaching and flags. |
 | ├── `/settings` | `SettingsPage` | agent | Personal user profile configurations. |
 
 ---

@@ -80,7 +80,7 @@ Compose orchestrates them; the backend fans out via async HTTP.
 | No service mesh / circuit breaker yet | LLM trigger has retry + degraded fallback; ML services have timeouts; good enough for the load we serve |
 | One Postgres for everything | Simplifies transactions, FK integrity, manager dashboards; revisit when traffic forces a split |
 | `audio_folder_watcher` + `processing_worker` are in-process | Limits backend to 1 replica today. Migration path: move queue to Redis / Postgres `LISTEN/NOTIFY` when we need to scale horizontally — model layer already supports it |
-| No Alembic | Schema bootstraps from [`infra/db/01_schema.sql`](../infra/db/01_schema.sql). Acceptable while the team is two devs on one branch at a time; introduce Alembic before bringing on a third contributor |
+| ~~No Alembic~~ → **Alembic adopted** | Schema bootstraps from [`infra/db/01_schema.sql`](../infra/db/01_schema.sql) (source of truth for fresh installs). Alembic migrations in `backend/alembic/` (3 versions: `0001_baseline`, `0002_notif_and_dispute`, `0003_user_avatar`) handle incremental upgrades on existing databases. Run `alembic upgrade head` before starting the backend when upgrading an existing deployment. |
 
 ## Failure modes & responses
 
