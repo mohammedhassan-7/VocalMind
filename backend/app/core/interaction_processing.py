@@ -319,19 +319,6 @@ def assign_cluster_roles_from_text(
         return {}
 
     _load_lr_model_and_vectorizer()
-    if _lr_model is not None and _lr_vectorizer is not None:
-        if len(cluster_texts) == 1:
-            cluster, texts = next(iter(cluster_texts.items()))
-            probabilities = []
-            for text in texts:
-                text_clean = text.strip()
-                if not text_clean:
-                    continue
-                feat = _lr_vectorizer.transform([text_clean])
-                prob_agent = float(_lr_model.predict_proba(feat)[0][1])
-                probabilities.append(prob_agent)
-            prob = sum(probabilities) / len(probabilities) if probabilities else 0.5
-            return {cluster: SpeakerRole.agent if prob >= 0.5 else SpeakerRole.customer}
 
     name_norm = (agent_name or "").strip().lower()
 
@@ -355,16 +342,13 @@ def assign_cluster_roles_from_text(
         a_base = 0.0
         c_base = 0.0
         if _lr_model is not None and _lr_vectorizer is not None:
-            probabilities = []
-            for text in texts:
-                text_clean = text.strip()
-                if not text_clean:
-                    continue
-                feat = _lr_vectorizer.transform([text_clean])
+            # Classify the full cluster document — short utterances ("okay", "sure",
+            # "thanks") are individually uninformative but collectively meaningful.
+            if joined:
+                feat = _lr_vectorizer.transform([joined])
                 prob_agent = float(_lr_model.predict_proba(feat)[0][1])
-                probabilities.append(prob_agent)
-            a_base += sum(5.0 * p for p in probabilities)
-            c_base += sum(5.0 * (1.0 - p) for p in probabilities)
+                a_base += 5.0 * prob_agent
+                c_base += 5.0 * (1.0 - prob_agent)
 
         # Always add phrase weights as reinforcement
         a_base += float(sum(weight for phrase, weight in _AGENT_PHRASE_WEIGHTS if phrase in joined))
