@@ -4,7 +4,7 @@ import {
   Loader2, AlertTriangle as AlertTriangleIcon, RefreshCw,
   Flag, ChevronDown, ChevronRight, Activity,
   Brain, Shield, FileWarning, CheckCircle2, XCircle, Volume2, VolumeX,
-  Quote, Info, Gauge, BookOpen, GitBranch, AlertCircle,
+  Quote, Info, Gauge, BookOpen, GitBranch, AlertCircle, Square,
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import {
   getInteractionDetail, getAudioUrl, reprocessInteraction,
-  getInteractionProcessingStatus,
+  getInteractionProcessingStatus, fetchAuthenticatedBlob,
   type InteractionDetail, type UtteranceData, type EmotionEventData,
   type LLMEvidenceCitation, type ProcessingStatusResult,
 } from "../../services/api";
@@ -21,6 +21,12 @@ import { EvidenceAnchoredExplainabilityPanel } from "./EvidenceAnchoredExplainab
 import { AnalysisTabs } from "./AnalysisTabs";
 import { EmotionComparisonPanel } from "./EmotionComparisonPanel";
 import { ManagerCorrectionSheet } from "./ManagerCorrectionSheet";
+import {
+  activeUtteranceAtTime,
+  findUtteranceByIndex,
+  parseDurationLabel,
+  resolveJumpSeconds,
+} from "../../utils/utteranceNavigation";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -86,7 +92,7 @@ function buildEmotionChartData(utterances: UtteranceData[]): EmotionPoint[] {
   return [...utterances]
     .sort((a, b) => a.startTime - b.startTime)
     .map((u) => {
-      const score = EMOTION_SCORE[normalizeEmotion(u.emotion)] ?? 3;
+      const score = EMOTION_SCORE[normalizeEmotion(u.fusedEmotion ?? u.emotion)] ?? 3;
       return {
         time: u.startTime,
         ...(u.speaker === "agent" ? { agent: score } : { customer: score }),
@@ -186,7 +192,11 @@ function CitationsList({ citations, onJumpTo, utterances }: {
       </button>
       {visible.map((c, i) => {
         const icon = CITATION_ICONS[c.source] ?? { char: "?", color: "bg-muted text-muted-foreground" };
-        const utt = c.utteranceIndex != null ? utterances[c.utteranceIndex] : null;
+        const utt = findUtteranceByIndex(utterances, c.utteranceIndex);
+        const jumpSeconds = resolveJumpSeconds(utterances, {
+          utteranceIndex: c.utteranceIndex,
+          startSeconds: utt?.startTime,
+        });
         return (
           <div key={i} className="flex items-start gap-2 text-[11px]">
             <span className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5 ${icon.color}`}>
@@ -196,10 +206,10 @@ function CitationsList({ citations, onJumpTo, utterances }: {
               <span className="text-foreground/70 italic">&ldquo;{c.quote}&rdquo;</span>
               {c.speaker && <span className="text-muted-foreground ml-1">— {c.speaker}</span>}
             </div>
-            {utt && (
-              <button type="button" onClick={() => onJumpTo(utt.startTime)}
+            {jumpSeconds != null && (
+              <button type="button" onClick={() => onJumpTo(jumpSeconds)}
                 className="text-[9px] text-primary font-bold hover:underline shrink-0">
-                {utt.timestamp}
+                {utt?.timestamp ?? formatSeconds(jumpSeconds)}
               </button>
             )}
           </div>
@@ -286,10 +296,13 @@ export function SessionDetail() {
   const { id } = useParams();
   const [data, setData] = useState<InteractionDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [llmLoading, setLlmLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const [audioEpoch, setAudioEpoch] = useState(0);
 
   // Audio player state
@@ -310,8 +323,6 @@ export function SessionDetail() {
   // Transcript state
   const [followAudio, setFollowAudio] = useState(true);
   const transcriptRef = useRef<HTMLDivElement>(null);
-  const [flaggedItems, setFlaggedItems] = useState<Set<string>>(new Set());
-  const [feedbackDone, setFeedbackDone] = useState<Set<string>>(new Set());
 
   // Processing poll state
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatusResult | null>(null);
@@ -319,10 +330,35 @@ export function SessionDetail() {
   // ── Data fetch ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
-    getInteractionDetail(id, { includeLLMTriggers: true })
-      .then(setData)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    setLoading(true);
+    setLlmLoading(true);
+    setError(null);
+
+    getInteractionDetail(id)
+      .then((core) => {
+        if (!cancelled) {
+          setData(core);
+          setLoading(false);
+        }
+        return getInteractionDetail(id, { includeLLMTriggers: true })
+          .then((full) => { if (!cancelled) setData(full); })
+          .catch((err) => {
+            if (!cancelled) {
+              console.warn("LLM analysis load failed:", err);
+            }
+          })
+          .finally(() => { if (!cancelled) setLlmLoading(false); });
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err.message);
+          setLoading(false);
+          setLlmLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
   }, [id]);
 
   // ── Processing status poll ─────────────────────────────────────────────
@@ -350,7 +386,7 @@ export function SessionDetail() {
 
   // ── Audio fetch ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!id) { setAudioSrc(null); return; }
+    if (!id) { setAudioSrc(null); setAudioError(null); setAudioLoading(false); return; }
     let cancelled = false;
     const revoke = () => {
       if (audioObjectUrlRef.current) {
@@ -360,46 +396,69 @@ export function SessionDetail() {
     };
     revoke();
     setAudioSrc(null);
+    setAudioError(null);
+    setAudioLoading(true);
+    setDuration(0);
+    setCurrentTime(0);
+    setIsPlaying(false);
 
-    void fetch(getAudioUrl(id), { credentials: "include" })
-      .then((res) => { if (!res.ok) throw new Error(`audio ${res.status}`); return res.blob(); })
+    void fetchAuthenticatedBlob(getAudioUrl(id))
       .then((blob) => {
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         audioObjectUrlRef.current = url;
         setAudioSrc(url);
       })
-      .catch(() => { if (!cancelled) setAudioSrc(null); });
+      .catch((err) => {
+        if (!cancelled) {
+          setAudioSrc(null);
+          setAudioError(err instanceof Error ? err.message : "Failed to load audio");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAudioLoading(false);
+      });
 
     return () => { cancelled = true; revoke(); };
   }, [id, audioEpoch]);
 
   // ── Audio event listeners ───────────────────────────────────────────────
+  const syncAudioTimes = useCallback(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    setCurrentTime(a.currentTime || 0);
+    const metaDuration = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : 0;
+    setDuration(metaDuration);
+  }, []);
+
   useEffect(() => {
     const a = audioEl;
     if (!a) return;
     const onTime = () => setCurrentTime(a.currentTime);
-    const onDur = () => setDuration(a.duration || 0);
+    const onMeta = () => syncAudioTimes();
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onEnd = () => setIsPlaying(false);
     a.addEventListener("timeupdate", onTime);
-    a.addEventListener("loadedmetadata", onDur);
+    a.addEventListener("loadedmetadata", onMeta);
+    a.addEventListener("durationchange", onMeta);
+    a.addEventListener("canplay", onMeta);
     a.addEventListener("play", onPlay);
     a.addEventListener("pause", onPause);
     a.addEventListener("ended", onEnd);
     // Resync state in case the element remounted mid-playback.
-    if (a.duration) setDuration(a.duration);
-    setCurrentTime(a.currentTime);
+    syncAudioTimes();
     setIsPlaying(!a.paused);
     return () => {
       a.removeEventListener("timeupdate", onTime);
-      a.removeEventListener("loadedmetadata", onDur);
+      a.removeEventListener("loadedmetadata", onMeta);
+      a.removeEventListener("durationchange", onMeta);
+      a.removeEventListener("canplay", onMeta);
       a.removeEventListener("play", onPlay);
       a.removeEventListener("pause", onPause);
       a.removeEventListener("ended", onEnd);
     };
-  }, [audioEl]);
+  }, [audioEl, syncAudioTimes]);
 
   // ── Auto-scroll transcript ──────────────────────────────────────────────
   useEffect(() => {
@@ -408,30 +467,19 @@ export function SessionDetail() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [currentTime, followAudio, data]);
 
-  // ── Handlers ────────────────────────────────────────────────────────────
-  const handleJumpTo = useCallback((seconds: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = seconds;
-      audioRef.current.play().catch(() => {});
+  // ── Handlers (audio transport) ─────────────────────────────────────────
+  const refreshDetail = useCallback(async () => {
+    if (!id) return;
+    setLlmLoading(true);
+    try {
+      const core = await getInteractionDetail(id, { skipCache: true });
+      setData(core);
+      const full = await getInteractionDetail(id, { skipCache: true, includeLLMTriggers: true });
+      setData(full);
+    } finally {
+      setLlmLoading(false);
     }
-  }, []);
-
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) audioRef.current.pause();
-    else audioRef.current.play().catch(() => {});
-  };
-
-  const skip = (delta: number) => {
-    if (!audioRef.current) return;
-    audioRef.current.currentTime = Math.max(0, Math.min(duration, audioRef.current.currentTime + delta));
-  };
-
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
-  };
+  }, [id]);
 
   const handleReprocess = async () => {
     if (!id || reprocessing) return;
@@ -439,16 +487,28 @@ export function SessionDetail() {
     setReprocessing(true);
     try {
       await reprocessInteraction(id);
-      const refreshed = await getInteractionDetail(id, { skipCache: true, includeLLMTriggers: true });
-      setData(refreshed);
+      const core = await getInteractionDetail(id, { skipCache: true });
+      setData(core);
+      const full = await getInteractionDetail(id, {
+        skipCache: true,
+        includeLLMTriggers: true,
+        llmForceRerun: true,
+      });
+      setData(full);
       setAudioEpoch((n) => n + 1);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to reprocess";
       if (msg.includes("409")) {
         try {
           await reprocessInteraction(id, { force: true });
-          const refreshed = await getInteractionDetail(id, { skipCache: true, includeLLMTriggers: true });
-          setData(refreshed);
+          const core = await getInteractionDetail(id, { skipCache: true });
+          setData(core);
+          const full = await getInteractionDetail(id, {
+            skipCache: true,
+            includeLLMTriggers: true,
+            llmForceRerun: true,
+          });
+          setData(full);
           setAudioEpoch((n) => n + 1);
           return;
         } catch { setActionError("Already processing. Please wait."); }
@@ -456,8 +516,6 @@ export function SessionDetail() {
     } finally { setReprocessing(false); }
   };
 
-  const toggleFlag = (itemId: string) => setFlaggedItems((s) => { const n = new Set(s); n.add(itemId); return n; });
-  const submitFeedback = (itemId: string) => setFeedbackDone((s) => { const n = new Set(s); n.add(itemId); return n; });
 
   // ── Computed ────────────────────────────────────────────────────────────
   const interaction = data?.interaction;
@@ -465,16 +523,65 @@ export function SessionDetail() {
   const emotionEvents = data?.emotionEvents ?? [];
   const policyViolations = data?.policyViolations ?? [];
 
+  const fallbackDuration = useMemo(
+    () => parseDurationLabel(interaction?.duration),
+    [interaction?.duration],
+  );
+  const effectiveDuration = duration > 0 ? duration : fallbackDuration;
+
   const timeline = useMemo(() => buildTimeline(utterances, emotionEvents), [utterances, emotionEvents]);
   const chartData = useMemo(() => buildEmotionChartData(utterances), [utterances]);
 
   const activeUtteranceId = useMemo(() => {
     if (!followAudio || !utterances.length) return null;
-    for (let i = utterances.length - 1; i >= 0; i--) {
-      if (currentTime >= utterances[i].startTime) return utterances[i].id;
-    }
-    return null;
+    return activeUtteranceAtTime(utterances, currentTime)?.id ?? null;
   }, [currentTime, followAudio, utterances]);
+
+  const scrollTranscriptToTime = useCallback((seconds: number) => {
+    if (!transcriptRef.current || !utterances.length) return;
+    let target = utterances[0];
+    for (const utterance of utterances) {
+      if (utterance.startTime <= seconds + 0.05) target = utterance;
+      else break;
+    }
+    const el = transcriptRef.current.querySelector(`[data-utterance-id="${target.id}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [utterances]);
+
+  const handleJumpTo = useCallback((seconds: number) => {
+    scrollTranscriptToTime(seconds);
+    if (audioRef.current) {
+      audioRef.current.currentTime = seconds;
+      setCurrentTime(seconds);
+      void audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  }, [scrollTranscriptToTime]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) audioRef.current.pause();
+    else void audioRef.current.play().catch(() => {});
+  };
+
+  const stopPlayback = () => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    setCurrentTime(0);
+    setIsPlaying(false);
+  };
+
+  const skip = (delta: number) => {
+    if (!audioRef.current || !effectiveDuration) return;
+    audioRef.current.currentTime = Math.max(0, Math.min(effectiveDuration, audioRef.current.currentTime + delta));
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !effectiveDuration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * effectiveDuration;
+    setCurrentTime(audioRef.current.currentTime);
+  };
 
   const emotionTrigger = data?.emotionTriggers ?? data?.llmTriggers ?? null;
   const ragCompliance = data?.ragCompliance ?? null;
@@ -617,7 +724,14 @@ export function SessionDetail() {
 
         {/* ── Audio Player ───────────────────────────────────────────────── */}
         <div className="mt-4 pt-4 border-t border-border">
-          {audioSrc ? (
+          {audioLoading ? (
+            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              Loading audio...
+            </div>
+          ) : audioError ? (
+            <p className="text-[12px] text-destructive">{audioError}</p>
+          ) : audioSrc ? (
             <>
               <audio ref={setAudioRef} src={audioSrc} preload="metadata" className="hidden" />
               <div className="flex items-center gap-3">
@@ -632,15 +746,19 @@ export function SessionDetail() {
                   <button type="button" onClick={() => skip(10)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
                     <SkipForward className="w-3.5 h-3.5" />
                   </button>
+                  <button type="button" onClick={stopPlayback} title="Stop"
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                    <Square className="w-3 h-3 fill-current" />
+                  </button>
                 </div>
 
                 <span className="text-[11px] tabular-nums text-muted-foreground w-[80px] text-center shrink-0">
-                  {formatSeconds(currentTime)} / {formatSeconds(duration || 0)}
+                  {formatSeconds(currentTime)} / {formatSeconds(effectiveDuration || 0)}
                 </span>
 
                 <div className="flex-1 h-1.5 bg-muted rounded-full cursor-pointer group relative" onClick={handleSeek}>
                   <div className="h-full bg-primary rounded-full transition-all relative"
-                    style={{ width: duration ? `${(currentTime / duration) * 100}%` : "0%" }}>
+                    style={{ width: effectiveDuration ? `${(currentTime / effectiveDuration) * 100}%` : "0%" }}>
                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow" />
                   </div>
                 </div>
@@ -651,6 +769,8 @@ export function SessionDetail() {
                 </button>
               </div>
             </>
+          ) : audioError ? (
+            <p className="text-[12px] text-destructive">{audioError}</p>
           ) : (
             <p className="text-[12px] text-muted-foreground">Loading audio...</p>
           )}
@@ -753,6 +873,7 @@ export function SessionDetail() {
                       currentEmotion={e.toEmotion}
                       currentJustification={e.justification}
                       triggerLabel="Correct"
+                      onSaved={() => void refreshDetail()}
                     />
                     <div className="flex-1 h-px bg-border" />
                   </div>
@@ -765,7 +886,7 @@ export function SessionDetail() {
               const isActive = u.id === activeUtteranceId;
 
               return (
-                <div key={u.id} data-active={isActive}
+                <div key={u.id} data-utterance-id={u.id} data-active={isActive}
                   className={`flex gap-2.5 py-1.5 rounded-lg transition-colors ${isActive ? "bg-primary/5" : ""} ${isAgent ? "" : "flex-row-reverse"}`}>
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                     isAgent ? "bg-primary/15 text-primary" : "bg-emerald-500/15 text-emerald-500"
@@ -779,8 +900,8 @@ export function SessionDetail() {
                       <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-foreground/80 text-[12px]">{isAgent ? interaction.agentName : "Customer"}</span>
                         <span className="rounded-full px-1.5 py-px text-[9px] font-semibold"
-                          style={{ backgroundColor: `color-mix(in srgb, ${emotionStyle.color} 12%, transparent)`, color: emotionStyle.color }}>
-                          {emotionStyle.label}
+                          style={{ backgroundColor: `color-mix(in srgb, ${getEmotionStyle(u.fusedEmotion ?? u.emotion).color} 12%, transparent)`, color: getEmotionStyle(u.fusedEmotion ?? u.emotion).color }}>
+                          {getEmotionStyle(u.fusedEmotion ?? u.emotion).label}
                         </span>
                       </div>
                       <button type="button" onClick={() => handleJumpTo(u.startTime)}
@@ -798,6 +919,12 @@ export function SessionDetail() {
 
         {/* ── Analysis Sidebar (right) ─────────────────────────────────── */}
         <div className="lg:col-span-5 space-y-3 lg:sticky lg:top-6 self-start">
+          {llmLoading && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              Loading AI analysis...
+            </div>
+          )}
           {!hasAnalysisData ? (
             <div className="bg-card rounded-xl border border-border p-6 text-center space-y-3">
               <Brain className="w-8 h-8 text-muted-foreground/40 mx-auto" />
@@ -831,10 +958,7 @@ export function SessionDetail() {
               utterances={utterances}
               onJumpTo={handleJumpTo}
               variant="manager"
-              flaggedItems={flaggedItems}
-              feedbackDone={feedbackDone}
-              onToggleFlag={toggleFlag}
-              onSubmitFeedback={submitFeedback}
+              onSaved={() => void refreshDetail()}
             />
           )}
         </div>
@@ -849,7 +973,7 @@ export function SessionDetail() {
 
       {/* ── Explainability Panel (full width) ────────────────────────────── */}
       {explainability && (
-        <EvidenceAnchoredExplainabilityPanel explainability={explainability} onJumpTo={handleJumpTo} />
+        <EvidenceAnchoredExplainabilityPanel explainability={explainability} utterances={utterances} onJumpTo={handleJumpTo} />
       )}
     </div>
   );

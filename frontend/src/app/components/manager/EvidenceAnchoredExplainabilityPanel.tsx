@@ -3,7 +3,9 @@ import type {
   ClaimProvenance,
   EvidenceAnchoredExplainability,
   TriggerAttribution,
+  UtteranceData,
 } from "../../services/api";
+import { resolveJumpSeconds } from "../../utils/utteranceNavigation";
 
 const verdictTheme: Record<string, string> = {
   Supported: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
@@ -47,18 +49,21 @@ function VerdictBadge({ verdict }: { verdict: string }) {
 }
 
 function JumpButton({
-  timestamp, startSeconds, onJumpTo,
+  timestamp, startSeconds, utteranceIndex, utterances, onJumpTo,
 }: {
   timestamp?: string | null;
   startSeconds?: number | null;
+  utteranceIndex?: number | null;
+  utterances: UtteranceData[];
   onJumpTo?: (seconds: number) => void;
 }) {
-  if (!onJumpTo || startSeconds == null) {
+  const jumpSeconds = resolveJumpSeconds(utterances, { utteranceIndex, startSeconds, timestamp });
+  if (!onJumpTo || jumpSeconds == null) {
     return timestamp ? <span className="text-[11px] font-bold text-muted-foreground">{timestamp}</span> : null;
   }
   return (
-    <button type="button" onClick={() => onJumpTo(startSeconds)}
-      className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+    <button type="button" onClick={() => onJumpTo(jumpSeconds)}
+      className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-primary cursor-pointer">
       {timestamp || "Jump"}
     </button>
   );
@@ -83,7 +88,7 @@ function Pager({ count, index, onChange }: { count: number; index: number; onCha
   );
 }
 
-function TriggerCard({ attribution, onJumpTo }: { attribution: TriggerAttribution; onJumpTo?: (seconds: number) => void }) {
+function TriggerCard({ attribution, utterances, onJumpTo }: { attribution: TriggerAttribution; utterances: UtteranceData[]; onJumpTo?: (seconds: number) => void }) {
   return (
     <article className="rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -111,7 +116,13 @@ function TriggerCard({ attribution, onJumpTo }: { attribution: TriggerAttributio
                 <p className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
                   Evidence Span{attribution.evidenceSpan.speaker ? ` - ${cleanEvidenceText(attribution.evidenceSpan.speaker)}` : ""}
                 </p>
-                <JumpButton timestamp={attribution.evidenceSpan.timestamp} startSeconds={attribution.evidenceSpan.startSeconds} onJumpTo={onJumpTo} />
+                <JumpButton
+                  timestamp={attribution.evidenceSpan.timestamp}
+                  startSeconds={attribution.evidenceSpan.startSeconds}
+                  utteranceIndex={attribution.evidenceSpan.utteranceIndex}
+                  utterances={utterances}
+                  onJumpTo={onJumpTo}
+                />
               </div>
               <p className="mt-2 text-[13px] italic leading-relaxed text-foreground/80">
                 &ldquo;{cleanEvidenceText(attribution.evidenceSpan.quote)}&rdquo;
@@ -171,7 +182,7 @@ function TriggerCard({ attribution, onJumpTo }: { attribution: TriggerAttributio
   );
 }
 
-function ClaimCard({ claim, onJumpTo }: { claim: ClaimProvenance; onJumpTo?: (seconds: number) => void }) {
+function ClaimCard({ claim, utterances, onJumpTo }: { claim: ClaimProvenance; utterances: UtteranceData[]; onJumpTo?: (seconds: number) => void }) {
   return (
     <article className="rounded-xl border border-teal-500/20 bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -193,7 +204,13 @@ function ClaimCard({ claim, onJumpTo }: { claim: ClaimProvenance; onJumpTo?: (se
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Agent Claim</p>
-                <JumpButton timestamp={claim.claimSpan.timestamp} startSeconds={claim.claimSpan.startSeconds} onJumpTo={onJumpTo} />
+                <JumpButton
+                  timestamp={claim.claimSpan.timestamp}
+                  startSeconds={claim.claimSpan.startSeconds}
+                  utteranceIndex={claim.claimSpan.utteranceIndex}
+                  utterances={utterances}
+                  onJumpTo={onJumpTo}
+                />
               </div>
               <p className="mt-2 text-[13px] italic leading-relaxed text-foreground/80">
                 &ldquo;{cleanEvidenceText(claim.claimSpan.quote)}&rdquo;
@@ -245,11 +262,13 @@ function PagedSection({
 }
 
 export function EvidenceAnchoredExplainabilityPanel({
-  explainability, onJumpTo,
+  explainability, utterances, onJumpTo,
 }: {
   explainability?: EvidenceAnchoredExplainability | null;
+  utterances?: UtteranceData[];
   onJumpTo?: (seconds: number) => void;
 }) {
+  const transcriptUtterances = utterances ?? [];
   const triggerAttributions = explainability?.triggerAttributions ?? [];
   const claimProvenance = explainability?.claimProvenance ?? [];
   const [pages, setPages] = useState<Record<string, number>>({});
@@ -330,8 +349,8 @@ export function EvidenceAnchoredExplainabilityPanel({
           count={currentSection.items.length} index={currentIndex}
           onChange={(next) => setIndex(currentSection.key, next)} cardKey={`${currentSection.key}-${currentIndex}`}>
           {currentSection.kind === "claim"
-            ? <ClaimCard claim={currentItem as ClaimProvenance} onJumpTo={onJumpTo} />
-            : <TriggerCard attribution={currentItem as TriggerAttribution} onJumpTo={onJumpTo} />}
+            ? <ClaimCard claim={currentItem as ClaimProvenance} utterances={transcriptUtterances} onJumpTo={onJumpTo} />
+            : <TriggerCard attribution={currentItem as TriggerAttribution} utterances={transcriptUtterances} onJumpTo={onJumpTo} />}
         </PagedSection>
       </div>
     </section>

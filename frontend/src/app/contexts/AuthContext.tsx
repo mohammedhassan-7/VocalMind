@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { loginWithEmail, loginWithGoogle, getUserMe, logoutUser, User } from "../services/api";
+import { getDashboardPathForRole } from "../utils/authRouting";
 
 interface AuthContextType {
   token: string | null;
@@ -75,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setToken(null);
     setUser(null);
     localStorage.removeItem(AUTH_COOKIE_HINT_KEY);
-    window.location.href = "/login";
+    window.location.href = getDashboardPathForRole(null);
   };
 
   return (

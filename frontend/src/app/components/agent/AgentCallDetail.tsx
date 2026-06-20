@@ -83,7 +83,7 @@ export function AgentCallDetail() {
     getInteractionDetail(id)
       .then((baseDetail) => {
         if (!isCancelled) { setData(baseDetail); setLoading(false); }
-        return getInteractionDetail(id, { includeLLMTriggers: true, skipCache: true })
+        return getInteractionDetail(id, { includeLLMTriggers: true })
           .then((d) => { if (!isCancelled) setData(d); })
           .catch(() => {});
       })
@@ -438,7 +438,7 @@ export function AgentCallDetail() {
 
       {/* ── Explainability Panel ──────────────────────────────────────── */}
       {explainability && (
-        <EvidenceAnchoredExplainabilityPanel explainability={explainability} onJumpTo={handleJumpTo} />
+        <EvidenceAnchoredExplainabilityPanel explainability={explainability} utterances={utterances} onJumpTo={handleJumpTo} />
       )}
     </div>
   );

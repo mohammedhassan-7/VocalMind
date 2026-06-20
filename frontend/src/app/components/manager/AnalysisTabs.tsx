@@ -1,12 +1,15 @@
 import { useState, type ReactNode } from "react";
 import {
   Brain, Shield, FileWarning, Activity, Info, AlertCircle,
-  XCircle, BookOpen, Flag, AlertTriangle as AlertTriangleIcon,
+  XCircle, BookOpen, AlertTriangle as AlertTriangleIcon,
 } from "lucide-react";
 import type {
   EmotionTriggerReport, LLMProcessAdherence, LLMNliPolicy,
   UtteranceData, EmotionComparison, PolicyViolationData,
 } from "../../services/api";
+import { findUtteranceByIndex, resolveJumpSeconds } from "../../utils/utteranceNavigation";
+import { stripRedundantEvidenceNarrative, uniqueByQuote } from "../../utils/evidenceDisplay";
+import { ManagerCorrectionSheet } from "./ManagerCorrectionSheet";
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -64,36 +67,33 @@ function InsufficientEvidenceWarning({ flag }: { flag?: boolean }) {
   );
 }
 
-function EvidenceQuotes({ quotes }: { quotes?: string[] }) {
-  if (!quotes?.length) return null;
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Evidence ({quotes.length})</p>
-      {quotes.map((q, i) => (
-        <p key={i} className="text-[12px] text-foreground/80 italic border-l-2 border-border pl-2 leading-relaxed">&ldquo;{q}&rdquo;</p>
-      ))}
-    </div>
-  );
-}
-
 function CitationsList({ citations, onJumpTo, utterances }: {
   citations?: Array<{ source?: string; speaker?: string; quote?: string; utteranceIndex?: number | null }>;
   onJumpTo: (s: number) => void;
   utterances: UtteranceData[];
 }) {
   if (!citations?.length) return null;
+  const uniqueCitations = uniqueByQuote(citations);
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Citations ({citations.length})</p>
-      {citations.map((c, i) => {
-        const utt = c.utteranceIndex != null ? utterances[c.utteranceIndex] : null;
+      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        Transcript References ({uniqueCitations.length})
+      </p>
+      {uniqueCitations.map((c, i) => {
+        const utt = findUtteranceByIndex(utterances, c.utteranceIndex);
+        const jumpSeconds = resolveJumpSeconds(utterances, {
+          utteranceIndex: c.utteranceIndex,
+          startSeconds: utt?.startTime,
+        });
         return (
           <div key={i} className="rounded-lg bg-muted/30 border border-border/40 p-2 text-[11px] space-y-0.5">
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-muted-foreground">{c.source}{c.speaker ? ` · ${c.speaker}` : ""}</span>
-              {utt && (
-                <button type="button" onClick={() => onJumpTo(utt.startTime)}
-                  className="text-[10px] font-bold text-primary hover:underline">{utt.timestamp}</button>
+              {jumpSeconds != null && (
+                <button type="button" onClick={() => onJumpTo(jumpSeconds)}
+                  className="text-[10px] font-bold text-primary hover:underline cursor-pointer">
+                  {utt?.timestamp ?? `${Math.floor(jumpSeconds / 60)}:${String(Math.floor(jumpSeconds % 60)).padStart(2, "0")}`}
+                </button>
               )}
             </div>
             {c.quote && <p className="text-foreground/70 italic leading-relaxed">&ldquo;{c.quote}&rdquo;</p>}
@@ -130,12 +130,7 @@ interface AnalysisTabsProps {
   utterances: UtteranceData[];
   onJumpTo: (seconds: number) => void;
   variant?: "manager" | "agent";
-  /* feedback / flag callbacks (manager only) */
-  flaggedItems?: Set<string>;
-  feedbackDone?: Set<string>;
-  onToggleFlag?: (id: string) => void;
-  onSubmitFeedback?: (id: string) => void;
-  /* agent variant: render a "flag for manager review" control per finding */
+  onSaved?: () => void;
   renderAgentFlag?: (kind: "emotion" | "compliance", id: string) => ReactNode;
 }
 
@@ -151,9 +146,7 @@ const LABELS = {
 export function AnalysisTabs({
   emotionTrigger, ragProcess, ragNli, policyViolations,
   emotionComparison, utterances, onJumpTo,
-  variant = "manager",
-  flaggedItems, feedbackDone, onToggleFlag, onSubmitFeedback,
-  renderAgentFlag,
+  variant = "manager", renderAgentFlag, onSaved,
 }: AnalysisTabsProps) {
   const [tab, setTab] = useState("emotion");
   const L = LABELS[variant];
@@ -222,7 +215,12 @@ export function AnalysisTabs({
                 <span className="text-[11px] font-semibold text-foreground">{emotionTrigger.emotionShift.dissonanceType}</span>
               </div>
             )}
-            <p className="text-[12px] text-muted-foreground leading-relaxed">{emotionTrigger.emotionShift.rootCause}</p>
+            <p className="text-[12px] text-muted-foreground leading-relaxed">
+              {stripRedundantEvidenceNarrative(
+                emotionTrigger.emotionShift.rootCause,
+                (emotionTrigger.emotionShift.citations?.length ?? 0) > 0,
+              )}
+            </p>
             {emotionTrigger.emotionShift.counterfactualCorrection && (
               <div className="rounded-lg bg-muted/40 border border-border/50 p-2.5">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
@@ -231,7 +229,6 @@ export function AnalysisTabs({
                 <p className="text-[12px] text-foreground italic leading-relaxed">{emotionTrigger.emotionShift.counterfactualCorrection}</p>
               </div>
             )}
-            <EvidenceQuotes quotes={emotionTrigger.emotionShift.evidenceQuotes} />
             <CitationsList citations={emotionTrigger.emotionShift.citations} onJumpTo={onJumpTo} utterances={utterances} />
             {emotionTrigger.derived && (
               <div className="rounded-lg bg-muted/20 border border-border/40 p-2.5 space-y-2">
@@ -280,7 +277,12 @@ export function AnalysisTabs({
               <span className="text-[11px] font-semibold text-foreground">{ragProcess.detectedTopic}</span>
             </div>
             <EfficiencyGauge score={ragProcess.efficiencyScore} />
-            <p className="text-[12px] text-muted-foreground leading-relaxed">{ragProcess.justification}</p>
+            <p className="text-[12px] text-muted-foreground leading-relaxed">
+              {stripRedundantEvidenceNarrative(
+                ragProcess.justification,
+                (ragProcess.citations?.length ?? 0) > 0,
+              )}
+            </p>
             {ragProcess.missingSopSteps.length > 0 && (
               <div className={`rounded-lg p-2.5 ${variant === "agent" ? "bg-amber-500/5 border border-amber-500/10" : "bg-red-500/5 border border-red-500/10"}`}>
                 <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${variant === "agent" ? "text-amber-500" : "text-red-400"}`}>{L.missing}</p>
@@ -294,7 +296,6 @@ export function AnalysisTabs({
                 </ul>
               </div>
             )}
-            <EvidenceQuotes quotes={ragProcess.evidenceQuotes} />
             <CitationsList citations={ragProcess.citations} onJumpTo={onJumpTo} utterances={utterances} />
           </div>
         ) : <div className="p-8 text-center text-[12px] text-muted-foreground">No process data yet.</div>)}
@@ -352,7 +353,12 @@ export function AnalysisTabs({
                     )}
                   </div>
                 )}
-                <p className="text-[12px] text-muted-foreground leading-relaxed">{ragNli.justification}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">
+                  {stripRedundantEvidenceNarrative(
+                    ragNli.justification,
+                    (ragNli.citations?.length ?? 0) > 0,
+                  )}
+                </p>
                 {ragNli.policyAlignmentScore != null && (() => {
                   const alignment = formatAlignmentPercent(ragNli.policyAlignmentScore);
                   return (
@@ -364,7 +370,6 @@ export function AnalysisTabs({
                     </div>
                   );
                 })()}
-                <EvidenceQuotes quotes={ragNli.evidenceQuotes} />
                 <CitationsList citations={ragNli.citations} onJumpTo={onJumpTo} utterances={utterances} />
               </div>
             )}
@@ -388,25 +393,21 @@ export function AnalysisTabs({
                           {renderAgentFlag("compliance", v.id)}
                         </div>
                       )}
-                      {variant === "manager" && onToggleFlag && onSubmitFeedback && (
-                        <>
-                          {feedbackDone?.has(v.id) ? (
-                            <p className="text-[11px] text-emerald-500 font-semibold pt-2 border-t border-border/50">Feedback recorded</p>
-                          ) : flaggedItems?.has(v.id) ? (
-                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
-                              <span className="text-[11px] text-muted-foreground">Accurate?</span>
-                              <button type="button" onClick={() => onSubmitFeedback(v.id)} className="text-[11px] font-bold text-emerald-500 hover:underline">Yes</button>
-                              <button type="button" onClick={() => onSubmitFeedback(v.id)} className="text-[11px] font-bold text-red-400 hover:underline">No</button>
-                            </div>
-                          ) : (
-                            <div className="flex justify-end pt-2 border-t border-border/50">
-                              <button type="button" onClick={() => onToggleFlag(v.id)}
-                                className="text-[11px] font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1">
-                                <Flag className="w-3 h-3" /> Dispute
-                              </button>
-                            </div>
-                          )}
-                        </>
+                      {variant === "manager" && (
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+                          <p className="text-[10px] text-muted-foreground leading-snug">
+                            Agent disputes appear in <span className="font-semibold">Reviews</span>.
+                            Use Correct to override the AI verdict directly.
+                          </p>
+                          <ManagerCorrectionSheet
+                            kind="compliance"
+                            policyComplianceId={v.id}
+                            currentIsCompliant={false}
+                            currentScore={(v.score ?? 0) / 100}
+                            triggerLabel="Correct"
+                            onSaved={onSaved}
+                          />
+                        </div>
                       )}
                     </div>
                   ))}
@@ -451,7 +452,7 @@ export function AnalysisTabs({
                 </span>
               </div>
             )}
-            <p className="text-[11px] text-muted-foreground">{emotionComparison.totalUtterances} utterances analyzed</p>
+            <p className="text-[11px] text-muted-foreground">{emotionComparison.totalUtterances} utterances · emotion-label agreement (not ASR/diarization)</p>
           </div>
         ) : <div className="p-8 text-center text-[12px] text-muted-foreground">No quality data yet.</div>)}
       </div>

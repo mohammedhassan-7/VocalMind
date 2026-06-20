@@ -1,11 +1,12 @@
 import { Wrench, ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useAuth } from "../../contexts/AuthContext";
+import { getDashboardPathForRole } from "../../utils/authRouting";
 
 export function UnderDevelopment() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const homePath = user?.role === "agent" ? "/agent" : user?.role === "manager" ? "/manager" : "/login";
+  const homePath = user?.role ? getDashboardPathForRole(user.role) : "/";
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-4 animate-in fade-in zoom-in-95 duration-500">

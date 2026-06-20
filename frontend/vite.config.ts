@@ -40,6 +40,14 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
     open: false,
+    // Allow ngrok and other tunnel hosts (Vite 6 blocks unknown Host headers by default).
+    allowedHosts: ['.ngrok-free.dev', '.ngrok.io', '.ngrok.app'],
+    proxy: {
+      '/api': {
+        target: process.env.VITE_DEV_PROXY_TARGET || 'http://backend:8000',
+        changeOrigin: true,
+      },
+    },
     watch: {
       usePolling: true,
       ignored: [
