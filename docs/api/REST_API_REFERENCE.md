@@ -19,7 +19,7 @@ Handles user login, callback processing, token generation, and logout.
 *   **Response**:
     ```json
     {
-      "access_token": "mock_access_token_jwt_string",
+      "access_token": "<your-access-token-here>",
       "token_type": "bearer"
     }
     ```

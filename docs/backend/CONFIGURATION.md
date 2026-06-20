@@ -117,7 +117,7 @@ VocalMind reads settings from `backend/.env` using Pydantic `BaseSettings`. Belo
 ### 1.11 General / Misc Settings
 *   **`ASSISTANT_OLLAMA_TIMEOUT_SECONDS`** (float): Timeout for Assistant Ollama requests. Defaults to `120.0`.
 *   **`OPENAI_API_KEY`** (string, Optional): API key for OpenAI fallback assistant.
-*   **`SEED_MOCK_INTERACTIONS`** (boolean): Flag to toggle mock interaction seeding. Defaults to `false`.
+*   **`SEED_EVALUATION_SESSIONS`** (boolean): Flag to toggle evaluation session seeding from the bundled export. Defaults to `false`.
 *   **`SEED_DEMO_DATA`** (boolean): When `True`, the backend runs `seed_nexalink` and `seed_meridian` on every boot, seeding the Nexalink and Meridian demo organizations and their sample data. **Must be set to `False` for any shared or production database** — otherwise every restart re-seeds the demo orgs alongside real data. **Default:** `True`. For production, set `SEED_DEMO_DATA=false`.
 *   **`AUDIO_FOLDER_WATCHER_ENABLED`** (boolean): Set to `false` to disable the background storage-folder auto-ingestion watcher scanner. Defaults to `true`.
 
