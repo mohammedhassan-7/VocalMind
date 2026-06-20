@@ -20,7 +20,7 @@ services:
 
   whisperx:
     deploy:
-      resources:
+      resources:                           
         reservations:
           devices:
             - driver: nvidia
@@ -33,15 +33,6 @@ services:
       - WHISPER_COMPUTE_TYPE=int8_float16
 
   emotion:
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  ollama:
     deploy:
       resources:
         reservations:
