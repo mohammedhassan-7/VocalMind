@@ -1,4 +1,4 @@
-import { buildInteractionDetail, buildInteractionSummary } from '../support/mockApi';
+import { buildInteractionDetail, buildInteractionSummary } from '../support/e2eApiFixtures';
 
 describe("Session Detail", () => {
   beforeEach(() => {
@@ -72,13 +72,19 @@ describe("Session Detail", () => {
     cy.contains("h3", "Emotion Timeline").should("be.visible");
   });
 
-  it("renders the dispute flow under the Policy tab", () => {
+  it("renders the manager correction flow under the Policy tab", () => {
     cy.wait('@getInteractionDetail');
     cy.contains("button", "Policy").click();
-    cy.contains("button", "Dispute").first().click();
-    cy.contains("Accurate?").should("be.visible");
-    cy.contains("button", "Yes").should("be.visible");
-    cy.contains("button", "No").should("be.visible");
+    cy.contains("Policy Violations").should("be.visible");
+    cy.contains("Use Correct to override the AI verdict directly.")
+      .parent()
+      .contains("button", "Correct")
+      .click();
+    cy.get('[data-slot="sheet-content"]').within(() => {
+      cy.contains("Correct compliance verdict").should("be.visible");
+      cy.contains("Corrected verdict").should("be.visible");
+      cy.contains("button", "Save correction").should("be.visible");
+    });
   });
 
   it("navigates back to session inspector", () => {
@@ -89,7 +95,7 @@ describe("Session Detail", () => {
   });
 
   it("renders Evidence-Anchored Explainability with tabs and badges", () => {
-    // Visit with mock data containing explainability
+    // Visit with E2E fixture data containing explainability
     cy.visitAs("manager", "/manager/inspector/int-002", {
       interactionDetails: {
         'int-002': {

@@ -176,7 +176,7 @@ async def seed_policies_and_faqs(session: AsyncSession, org_id):
     
     if not storage_docs_dir.exists():
         print(f"Docs directory not found: {storage_docs_dir}")
-        if settings.SEED_MOCK_INTERACTIONS:
+        if settings.SEED_EVALUATION_SESSIONS:
             return await seed_dummy_policy(session, org_id)
         return None
 
@@ -201,7 +201,7 @@ async def seed_policies_and_faqs(session: AsyncSession, org_id):
 
     if not policy_files and not sop_files and not kb_files:
         print("No policy, SOP, or KB documents found in storage/docs/nexalink.")
-        if settings.SEED_MOCK_INTERACTIONS:
+        if settings.SEED_EVALUATION_SESSIONS:
             return await seed_dummy_policy(session, org_id)
         return None
 
@@ -402,7 +402,7 @@ async def seed_policies_and_faqs(session: AsyncSession, org_id):
     )
 
     if not first_policy:
-        if settings.SEED_MOCK_INTERACTIONS:
+        if settings.SEED_EVALUATION_SESSIONS:
             return await seed_dummy_policy(session, org_id)
         return None
 
@@ -584,10 +584,10 @@ async def main():
 
         policy = await seed_policies_and_faqs(session, org.id)
 
-        if settings.SEED_MOCK_INTERACTIONS:
+        if settings.SEED_EVALUATION_SESSIONS:
             await seed_interactions(session, org, agents, manager, policy)
         else:
-            print("Skipping mock interaction seeding (SEED_MOCK_INTERACTIONS=false).")
+            print("Skipping evaluation session seeding (SEED_EVALUATION_SESSIONS=false).")
 
         # NOTE: printed credentials below are local-development bootstrap values only.
         # Never use or keep these credentials in non-local environments.

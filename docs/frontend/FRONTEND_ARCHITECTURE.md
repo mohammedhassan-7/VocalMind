@@ -18,7 +18,7 @@ frontend/
 │   │   ├── App.tsx        # Integrates AuthProvider, ThemeProvider, and Router
 │   │   ├── routes.tsx     # Centralized react-router v7 path mappings
 │   │   ├── contexts/      # AuthContext and ThemeContext state managers
-│   │   ├── data/          # richMockData.ts supplying demo client layers
+│   │   ├── data/          # sessionExportBundle.ts — bundled session export for offline demo mode
 │   │   ├── services/
 │   │   │   └── api.ts     # The 60KB typed API client and fetch wrapper
 │   │   ├── components/
@@ -70,9 +70,11 @@ VocalMind utilizes `react-router` v7 to enforce path configurations, guarding ag
 
 The API client orchestrates REST calls to the backend (`http://localhost:8000/api/v1`), adding Bearer tokens in headers. 
 
-### 4.1 Mock Mode Toggle
-To facilitate rapid offline demonstrations and serverless preview builds (e.g. Vercel), `api.ts` features a dual execution mode controlled by configuration flags:
-*   `USE_MOCK_API` / `USE_MOCK_AUTH`: If the backend is unavailable or the variables are enabled, the client routes requests through a client-side in-memory mock store (`richMockData.ts`) preserved via `sessionStorage`.
+### 4.1 Offline Demo Mode (opt-in)
+
+For serverless preview builds or local UI work without a backend, `api.ts` supports an opt-in offline mode controlled by environment flags:
+
+*   `VITE_USE_OFFLINE_DEMO` / `VITE_USE_OFFLINE_AUTH`: When set to `"true"`, the client routes requests through a client-side in-memory store backed by `sessionExportBundle.ts`, persisted via `sessionStorage`. **Default (unset or false): live API / Supabase-backed backend.**
 
 ### 4.2 Key Exported Functions
 *   `getDashboardStats()`: Retrieves organizational averages.
@@ -103,4 +105,4 @@ Plots comparative charts mapping the acoustic emotion predictions against text-b
 
 *   **Responsive layouts**: Sidebars collapse to mobile layouts. Flex grids automatically adapt tables to narrower viewports.
 *   **Shadcn/Radix Wrapper Usage**: All modals, popovers, tooltips, and drop menus must use Radix-wrapped components in `components/ui/` to ensure accessibility and consistent theme transitions.
-*   **Unit Tests**: Located under `src/tests/` (e.g., `SessionDetail.test.tsx`), verifying UI updates based on mock API states using Vitest.
+*   **Unit Tests**: Located under `src/tests/` (e.g., `SessionDetail.test.tsx`), verifying UI updates with stubbed API responses using Vitest.

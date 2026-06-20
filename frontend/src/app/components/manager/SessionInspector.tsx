@@ -6,29 +6,43 @@ import {
   RefreshCw, MoreHorizontal, Eye, RotateCcw, Trash2,
 } from "lucide-react";
 import {
-  getInteractionDetail,
   getInteractions,
   reprocessInteraction,
   deleteInteraction,
   type InteractionSummary,
 } from "../../services/api";
 
-function scoreColor(score: number): string {
-  if (score >= 85) return "#10B981";
-  if (score >= 70) return "var(--primary)";
-  if (score >= 50) return "#F59E0B";
-  return "#EF4444";
+type ScoreTier = "excellent" | "good" | "fair" | "poor";
+
+function scoreTier(score: number): ScoreTier {
+  if (score >= 85) return "excellent";
+  if (score >= 70) return "good";
+  if (score >= 50) return "fair";
+  return "poor";
 }
 
-function ScoreChip({ score, suffix }: { score: number; suffix?: string }) {
-  const color = scoreColor(score);
+const SCORE_TIER_CLASS: Record<ScoreTier, string> = {
+  excellent: "text-emerald-500 bg-emerald-500/10 border-emerald-500/25",
+  good: "text-primary bg-primary/10 border-primary/25",
+  fair: "text-amber-500 bg-amber-500/10 border-amber-500/25",
+  poor: "text-destructive bg-destructive/10 border-destructive/25",
+};
+
+function ScoreChip({ score }: { score: number }) {
   return (
     <span
-      className="inline-flex items-center justify-center min-w-[3.5rem] rounded-lg px-3 py-1.5 text-[15px] font-bold tabular-nums"
-      style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}30` }}
+      className={`inline-flex items-center justify-center min-w-[2.75rem] rounded-md border px-2 py-0.5 text-[13px] font-bold tabular-nums ${SCORE_TIER_CLASS[scoreTier(score)]}`}
     >
       {score}
-      {suffix && <span className="text-[12px] font-semibold opacity-70 ml-0.5">{suffix}</span>}
+      <span className="text-[11px] font-semibold opacity-80">%</span>
+    </span>
+  );
+}
+
+function MetaValue({ children }: { children: string }) {
+  return (
+    <span className="text-[13px] font-medium text-foreground tabular-nums">
+      {children}
     </span>
   );
 }
@@ -359,14 +373,16 @@ export function SessionInspector() {
                       </div>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <div className="text-[13px] font-medium text-foreground">{row.date}</div>
-                      <div className="text-[11px] text-muted-foreground">{row.time}</div>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-[13px] text-muted-foreground">
-                      {row.duration}
+                      <div className="flex flex-col gap-0.5">
+                        <MetaValue>{row.date}</MetaValue>
+                        <MetaValue>{row.time}</MetaValue>
+                      </div>
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <ScoreChip score={row.overallScore} suffix="%" />
+                      <MetaValue>{row.duration}</MetaValue>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <ScoreChip score={row.overallScore} />
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap"><ScoreChip score={row.empathyScore} /></td>
                     <td className="px-4 py-4 whitespace-nowrap"><ScoreChip score={row.policyScore} /></td>
@@ -405,9 +421,6 @@ export function SessionInspector() {
                       <div className="flex items-center justify-center gap-1.5">
                         <Link
                           to={`/manager/inspector/${row.id}`}
-                          onMouseEnter={() => {
-                            void getInteractionDetail(row.id).catch(() => undefined);
-                          }}
                           className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary/10 px-3 text-[12px] font-semibold text-primary hover:bg-primary/20 transition-colors"
                         >
                           Inspect

@@ -32,6 +32,10 @@ build-retry: ## Build/start with retry logic for transient Docker daemon EOF/500
 logs: ## Follow logs for all services
 	docker compose logs -f
 
+ollama-pull-embed: ## Pull the RAG embedding model into the compose Ollama service
+	docker compose up -d ollama
+	docker compose exec ollama ollama pull snowflake-arctic-embed2
+
 # ── Backend ───────────────────────────────────────────────────────────────
 
 be-dev: ## Run backend in dev mode

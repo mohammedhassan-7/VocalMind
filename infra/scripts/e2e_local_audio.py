@@ -36,17 +36,43 @@ def request(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Local E2E verification for one audio path.")
     parser.add_argument("--base", default="http://localhost:8000/api/v1", help="API base URL")
-    parser.add_argument("--email", default="manager@niletech.com")
-    parser.add_argument("--password", default="password")
+    parser.add_argument("--email", default=None)
+    parser.add_argument("--password", default=None)
     parser.add_argument(
         "--storage-path",
-        default="/app/storage/audio/easy_no_overlap.mp3",
+        default=None,
         help="Path as stored in interaction (mounted in backend container)",
     )
-    parser.add_argument("--poll-interval", type=float, default=2.0)
-    parser.add_argument("--poll-max", type=int, default=120)
+    parser.add_argument("--poll-interval", type=float, default=None)
+    parser.add_argument("--poll-max", type=int, default=None)
     parser.add_argument("--include-llm", action="store_true", help="Request LLM/RAG trigger payload on detail")
+    parser.add_argument(
+        "--call04",
+        action="store_true",
+        help="Use CALL_04/nexalink defaults instead of the easy_no_overlap/niletech stub",
+    )
     args = parser.parse_args()
+
+    _PRESETS = {
+        "default": {
+            "email": "manager@niletech.com",
+            "password": "password",
+            "storage_path": "/app/storage/audio/easy_no_overlap.mp3",
+            "poll_interval": 2.0,
+            "poll_max": 120,
+        },
+        "call04": {
+            "email": "manager@nexalink.com",
+            "password": "password123",
+            "storage_path": "/app/storage/audio/nexalink/CALL_04_aisha_access_recovery_fraud.wav",
+            "poll_interval": 20.0,
+            "poll_max": 60,
+        },
+    }
+    preset = _PRESETS["call04"] if args.call04 else _PRESETS["default"]
+    for field, value in preset.items():
+        if getattr(args, field) is None:
+            setattr(args, field, value)
     base = args.base.rstrip("/")
     health_url = base.replace("/api/v1", "").rstrip("/") + "/health"
     for _ in range(90):
@@ -201,6 +227,7 @@ def main() -> int:
         inter.get("resolved"),
     )
 
+    llm_failures: list[str] = []
     if args.include_llm:
         llm = detail.get("llmTriggers")
         rag = detail.get("ragCompliance")
@@ -209,8 +236,19 @@ def main() -> int:
             if isinstance(block, dict) and block.get("available") is False:
                 err = block.get("error", "")
                 print(f"WARNING_{name}", err, file=sys.stderr)
+        if isinstance(llm, dict) and llm.get("available") is not False:
+            for sub_field in ("emotionShift", "processAdherence", "nliPolicy"):
+                if llm.get(sub_field) is None:
+                    llm_failures.append(f"MISSING_{sub_field}")
+                    print(f"MISSING_{sub_field}", file=sys.stderr)
+        else:
+            llm_failures.append("LLM_TRIGGERS_UNAVAILABLE")
 
+    if llm_failures:
+        print("SUMMARY: FAIL", ",".join(llm_failures), file=sys.stderr)
+        return 1
     print("E2E_OK")
+    print("SUMMARY: PASS")
     return 0
 
 

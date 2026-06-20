@@ -1,12 +1,22 @@
 import React, { useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
+import { getDashboardPathForRole, isPathAllowedForRole, type AppRole } from "../utils/authRouting";
 import { Mail, Lock, LogIn, AlertCircle } from "lucide-react";
 import logoSrc from "../../assets/logo/logo.svg";
+
+function resolvePostLoginPath(role: AppRole, fromPath?: string): string {
+  if (fromPath && isPathAllowedForRole(fromPath, role)) {
+    return fromPath;
+  }
+  return getDashboardPathForRole(role);
+}
 
 export default function Login() {
   const { login, user, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,8 +33,8 @@ export default function Login() {
   }
 
   // If already logged in, redirect away
-  if (isAuthenticated) {
-    return <Navigate to={user?.role === "agent" ? "/agent" : "/manager"} replace />;
+  if (isAuthenticated && user?.role) {
+    return <Navigate to={resolvePostLoginPath(user.role, fromPath)} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,11 +43,11 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const user = await login(email, password);
-      if (user?.role === "agent") {
-        navigate("/agent");
+      const signedInUser = await login(email, password);
+      if (signedInUser?.role) {
+        navigate(resolvePostLoginPath(signedInUser.role, fromPath), { replace: true });
       } else {
-        navigate("/manager");
+        navigate(getDashboardPathForRole(null), { replace: true });
       }
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please check your credentials.");

@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { ManagerLayout } from "./components/layouts/ManagerLayout";
 import { AgentLayout } from "./components/layouts/AgentLayout";
 import { ManagerDashboard } from "./components/manager/ManagerDashboard";
@@ -11,9 +11,9 @@ import { NotificationsPage } from "./components/notifications/NotificationsPage"
 import { AgentDashboard } from "./components/agent/AgentDashboard";
 import { AgentCalls } from "./components/agent/AgentCalls";
 import { AgentCallDetail } from "./components/agent/AgentCallDetail";
-import { LandingPage } from "./components/LandingPage";
 
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { RoleRoute } from "./components/RoleRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SettingsPage } from "./components/SettingsPage";
 import { ManagerSettings } from "./components/manager/ManagerSettings";
@@ -24,45 +24,54 @@ import Login from "./pages/Login";
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <LandingPage />,
+    element: <Login />,
     errorElement: <RouteErrorBoundary />,
   },
   {
     path: "/login",
-    element: <Login />,
-    errorElement: <RouteErrorBoundary />,
+    element: <Navigate to="/" replace />,
   },
   {
     element: <ProtectedRoute />,
     errorElement: <RouteErrorBoundary />,
     children: [
       {
-        path: "/manager",
-        element: <ManagerLayout />,
-        errorElement: <RouteErrorBoundary />,
+        element: <RoleRoute requiredRole="manager" />,
         children: [
-          { index: true, element: <ManagerDashboard /> },
-          { path: "inspector", element: <SessionInspector /> },
-          { path: "inspector/:id", element: <SessionDetail /> },
-          { path: "reviews", element: <ReviewQueue /> },
-          { path: "notifications", element: <NotificationsPage /> },
-          { path: "assistant", element: <ManagerAssistant /> },
-          { path: "knowledge", element: <KnowledgeBase /> },
-          { path: "settings", element: <ManagerSettings /> },
-          { path: "*", element: <UnderDevelopment /> },
+          {
+            path: "/manager",
+            element: <ManagerLayout />,
+            errorElement: <RouteErrorBoundary />,
+            children: [
+              { index: true, element: <ManagerDashboard /> },
+              { path: "inspector", element: <SessionInspector /> },
+              { path: "inspector/:id", element: <SessionDetail /> },
+              { path: "reviews", element: <ReviewQueue /> },
+              { path: "notifications", element: <NotificationsPage /> },
+              { path: "assistant", element: <ManagerAssistant /> },
+              { path: "knowledge", element: <KnowledgeBase /> },
+              { path: "settings", element: <ManagerSettings /> },
+              { path: "*", element: <UnderDevelopment /> },
+            ],
+          },
         ],
       },
       {
-        path: "/agent",
-        element: <AgentLayout />,
-        errorElement: <RouteErrorBoundary />,
+        element: <RoleRoute requiredRole="agent" />,
         children: [
-          { index: true, element: <AgentDashboard /> },
-          { path: "calls", element: <AgentCalls /> },
-          { path: "calls/:id", element: <AgentCallDetail /> },
-          { path: "notifications", element: <NotificationsPage /> },
-          { path: "settings", element: <SettingsPage /> },
-          { path: "*", element: <UnderDevelopment /> },
+          {
+            path: "/agent",
+            element: <AgentLayout />,
+            errorElement: <RouteErrorBoundary />,
+            children: [
+              { index: true, element: <AgentDashboard /> },
+              { path: "calls", element: <AgentCalls /> },
+              { path: "calls/:id", element: <AgentCallDetail /> },
+              { path: "notifications", element: <NotificationsPage /> },
+              { path: "settings", element: <SettingsPage /> },
+              { path: "*", element: <UnderDevelopment /> },
+            ],
+          },
         ],
       },
     ],

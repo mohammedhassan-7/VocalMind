@@ -298,7 +298,6 @@ describe('AgentCallDetail', () => {
         await waitFor(() => {
             expect(getInteractionDetailMock).toHaveBeenCalledWith('int-007', {
                 includeLLMTriggers: true,
-                skipCache: true,
             })
         })
         // Agent view should not have a Reprocess button

@@ -10,9 +10,9 @@ except ImportError:
 import importlib.util
 from pathlib import Path
 
-# Mock Supabase env vars so seed_database can be loaded for its constants
-os.environ.setdefault("SUPABASE_URL", "http://mock")
-os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "mock")
+# Placeholder Supabase env vars so seed_database can be loaded for its constants
+os.environ.setdefault("SUPABASE_URL", "http://placeholder")
+os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "placeholder")
 
 # Fix path to import seed_database
 ROOT = Path(__file__).parent
@@ -52,7 +52,7 @@ def seed():
                     cur.execute(f"TRUNCATE TABLE {table_name} CASCADE;")
                 print("  Wipe successful.")
                 
-                print("Inserting mock data...")
+                print("Inserting bootstrap data...")
                 for table_name, rows in seed_database.TABLES_IN_ORDER:
                     print(f"  Inserting into {table_name} ({len(rows)} rows)...")
                     if not rows: continue
