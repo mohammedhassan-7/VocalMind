@@ -71,7 +71,7 @@ VocalMind reads settings from `backend/.env` using Pydantic `BaseSettings`. Belo
 *   **`SUPABASE_SERVICE_KEY`** (string, Optional): Supabase service role API key.
 
 ### 1.9 LLM Triggers & Provider Settings
-*   **`LLM_PROVIDER`** (string): LLM provider for the three-chain trigger evaluation pipeline (`"groq"` or `"ollama_cloud"`, defaults to `"groq"`).
+*   **`LLM_PROVIDER`** (string): LLM provider for the three-chain trigger evaluation pipeline (`"groq"` or `"ollama_cloud"`). The code default is `"groq"`, but the shipped/production configuration (`.env.example`, docker-compose) sets `"ollama_cloud"`.
 *   **`GROQ_API_KEY`** (string, Required if `LLM_PROVIDER="groq"`): API key for Groq Cloud inference (e.g., `gsk_...`).
 *   **`LLM_MODEL`** (string): Chat model name for trigger evaluation when using Groq (defaults to `"llama-3.3-70b-versatile"`).
 *   **`LLM_TEMPERATURE`** (float): Sampling temperature for trigger generation. Defaults to `0.0`.

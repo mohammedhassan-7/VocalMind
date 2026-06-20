@@ -25,7 +25,7 @@ backend/app/
 │   └── interaction_processing.py # Background processing task queue worker
 ├── llm_trigger/
 │   ├── prompts.py         # Prompt templates protected by _INJECTION_GUARD
-│   ├── chains.py          # LangChain Groq runnables with exponential backoffs
+│   ├── chains.py          # LangChain LLM runnables (Ollama Cloud in prod; Groq fallback) with exponential backoffs
 │   ├── retrieval.py       # Qdrant retrievers (SOP, Policy, and KB adaptors)
 │   └── service.py         # Evaluating triggers (emotion shifts, compliance, NLI)
 └── models/                # SQLModel ORM declarations mapping transactional tables

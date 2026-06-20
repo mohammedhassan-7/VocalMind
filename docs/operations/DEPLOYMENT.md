@@ -1,6 +1,6 @@
 # VocalMind Operations, Setup & Developer Guide
 
-VocalMind is a modular, multi-service AI application. It coordinates transcription (WhisperX), voice activity detection (Silero VAD), speech emotion recognition (emotion2vec), vector storage (Qdrant), and LLM reasoning (Groq/Gemini/Ollama) to evaluate call center interactions.
+VocalMind is a modular, multi-service AI application. It coordinates transcription (WhisperX), voice activity detection (Silero VAD), speech emotion recognition (emotion2vec), vector storage (Qdrant), and LLM reasoning (Ollama Cloud in production, with Gemini and Groq as alternative providers) to evaluate call center interactions.
 
 This operations manual details deployment patterns, environment configurations, background processes, testing, and continuous integration.
 
@@ -29,7 +29,8 @@ VocalMind coordinates settings via two configurations:
 
 ### 2.1 Root `.env`
 Used by Docker Compose to pass variables into containers.
-*   `GROQ_API_KEY`: Required. Authenticates calls to Groq Cloud LLM trigger chains.
+*   `OLLAMA_API_KEY`: Required for the production provider (`LLM_PROVIDER=ollama_cloud`). Authenticates calls to Ollama Cloud for the LLM trigger chains.
+*   `GROQ_API_KEY`: Required only when `LLM_PROVIDER=groq` (alternative provider). Authenticates calls to Groq Cloud.
 *   `HF_TOKEN`: Required. Authenticates pyannote model downloads inside the WhisperX container.
 
 ### 2.2 Backend `.env` (`backend/.env`)

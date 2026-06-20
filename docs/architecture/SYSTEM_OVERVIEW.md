@@ -22,7 +22,7 @@ graph TD
         VAD[VAD Service :8002]
         WhisperX[WhisperX Service :8003]
         Emotion[Emotion Service :8001]
-        Groq[Groq Cloud API]
+        OllamaCloud[Ollama Cloud API]
     end
 
     Gateway <-- SQLModel --> Postgres
@@ -33,7 +33,7 @@ graph TD
     Gateway -- Splits Audio --> VAD
     Gateway -- Transcribe & Diarize --> WhisperX
     Gateway -- Emotion Classification --> Emotion
-    Gateway -- compliance NLI / triggers --> Groq
+    Gateway -- compliance NLI / triggers --> OllamaCloud
 ```
 
 ---

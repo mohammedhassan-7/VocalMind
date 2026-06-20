@@ -17,7 +17,7 @@ Each ML stage has different runtime needs:
 | VAD (Silero) | torch | optional | small | seconds |
 | WhisperX (ASR + align + diar) | torch, ctranslate2, pyannote | yes | ~6 GB | minutes |
 | Emotion (acoustic + text) | transformers | optional | ~2 GB | tens of seconds |
-| LLM trigger | groq/langchain | none | small | seconds |
+| LLM trigger | ollama_cloud/langchain (Groq fallback) | none | small | seconds |
 | RAG | qdrant, ollama embeddings, llm | none | medium | seconds |
 
 The business layer — auth, RBAC, dashboards, evaluation persistence, the
