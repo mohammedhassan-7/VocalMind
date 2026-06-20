@@ -1,12 +1,12 @@
 # VocalMind RAG
 
-**Dual-granularity Policy Compliance & Answer Scoring with Docling, Qdrant, and Groq**
+**Dual-granularity Policy Compliance & Answer Scoring with Docling, Qdrant, and Ollama Cloud (Groq fallback)**
 
 A robust Retrieval-Augmented Generation (RAG) system for policy document analysis, featuring:
 
 - Dual-granularity chunking (full sections & precision snippets)
 - Policy compliance and answer correctness evaluation
-- Fast, local-first architecture (Docling, Ollama, Qdrant, Groq)
+- Hybrid architecture (Docling, Ollama embeddings, Qdrant, Ollama Cloud synthesis with Groq fallback)
 - Per-organization document support
 
 ---
@@ -19,7 +19,7 @@ A robust Retrieval-Augmented Generation (RAG) system for policy document analysi
 	- **SOP + KB Parents**: Procedure and reference sections (no child collection)
 - **AI-powered PDF Parsing**: Uses Docling for accurate PDF-to-Markdown conversion
 - **Local Embeddings**: Embeddings generated via Ollama (snowflake-arctic-embed2)
-- **Fast LLM Synthesis**: Uses Groq for rapid, high-quality LLM responses
+- **LLM Synthesis**: Uses Ollama Cloud in production for high-quality LLM responses (Groq supported as a fallback provider)
 - **Per-Organization Filtering**: Each org’s docs are indexed with metadata for targeted queries
 - **Policy Compliance & Answer Scoring**: Built-in evaluators for both transcript compliance and answer correctness
 - **Detailed Logging**: All queries and evaluations are logged as JSON in `logs/`

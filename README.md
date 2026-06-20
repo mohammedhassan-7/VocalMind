@@ -13,7 +13,7 @@ VocalMind is a modular AI ecosystem integrating speech processing (ASR, Diarizat
 | **VAD**      | Silero VAD, FastAPI | Voice Activity Detection microservice. |
 | **WhisperX** | WhisperX, pyannote, FastAPI | Automatic Speech Recognition and Diarization microservice. |
 | **Emotion**  | Transformers, FastAPI | Speech emotion recognition microservice. |
-| **RAG**      | LlamaIndex, Qdrant, Groq, Ollama | Retrieval-Augmented Generation for knowledge queries. |
+| **RAG**      | LlamaIndex, Qdrant, Ollama Cloud (Groq fallback) | Retrieval-Augmented Generation for knowledge queries. |
 | **Ingestion**| LlamaIndex | Automated pipeline for RAG document ingestion. |
 | **Explainability** | FastAPI, React, LLM/NLI attribution | Evidence-anchored layer that links triggers and compliance verdicts to transcript spans and retrieved policy/SOP evidence. |
 | **Research** | Jupyter | Reference experiments for speech pipelines and voice generation. |
@@ -29,8 +29,8 @@ VocalMind is a modular AI ecosystem integrating speech processing (ASR, Diarizat
 - **Node.js 20+** (via [pnpm v10+](https://pnpm.io/)) — only needed for local frontend development
 - **Git LFS** — if your fork includes large test fixtures
 - **Hugging Face token** (`HF_TOKEN`) — required for WhisperX diarization (pyannote)
-- **Groq API key** (`GROQ_API_KEY`) — required when `LLM_PROVIDER=groq` (default); optional when using Ollama Cloud
-- **Ollama API key** (`OLLAMA_API_KEY`) — required when `LLM_PROVIDER=ollama_cloud`
+- **Ollama Cloud API key** (`OLLAMA_API_KEY`) — required for the production configuration (`LLM_PROVIDER=ollama_cloud`, the value shipped in `.env.example`); provides LLM inference and optional embeddings
+- **Groq API key** (`GROQ_API_KEY`) — only needed if you switch to the alternative `LLM_PROVIDER=groq` provider
 
 ### 1. Configure Environment Variables
 
@@ -49,7 +49,7 @@ Edit `backend/.env` and fill in the required secrets:
 | `SECRET_KEY` | **Yes** | Generate with `openssl rand -hex 32` |
 | `IS_LOCAL` | No | `true` = Docker containers (default in docker-compose.yml); `false` = Kaggle remote |
 
-For Option A (full Docker), the root `.env` provides `GROQ_API_KEY` and `HF_TOKEN` which docker-compose.yml passes through. For Option B (local dev), set these in `backend/.env` and change the service URLs to `localhost`.
+For Option A (full Docker), the root `.env` provides `OLLAMA_API_KEY` (production LLM provider), `HF_TOKEN`, and an optional `GROQ_API_KEY` which docker-compose.yml passes through. For Option B (local dev), set these in `backend/.env` and change the service URLs to `localhost`.
 
 ### 2. Prepare Speaker-Role Model (WhisperX)
 

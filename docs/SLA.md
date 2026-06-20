@@ -26,19 +26,19 @@ audio uploads).
 | Dashboard reads (`/api/v1/dashboard/*`) | 200 ms | 800 ms | 2 s | Cached for the manager's org; cold cache may hit p95 |
 | Interaction list / detail (`/api/v1/interactions*`) | 250 ms | 1.2 s | 3 s | |
 | Notifications + review queue | 150 ms | 600 ms | 1.5 s | Bounded by the polling cadence on the bell (30 s) |
-| LLM trigger inference | 8 s | 25 s | 60 s | Bounded by Groq; degraded fallback returns ≤ 1 s |
+| LLM trigger inference | 8 s | 25 s | 60 s | Bounded by the Ollama Cloud provider; degraded fallback returns ≤ 1 s |
 | End-to-end pipeline (audio → scored) | 45 s / minute of audio | 90 s / minute | 180 s / minute | WhisperX is the long pole |
 
 These targets are conditional on the
 [Architecture ADR](ADR-001-architecture.md) infrastructure assumptions:
-single backend replica, single WhisperX worker, Groq as LLM provider.
+single backend replica, single WhisperX worker, Ollama Cloud as the production LLM provider.
 
 ## 3. Error budget
 
 | Metric | Budget |
 |---|---|
 | API 5xx rate | ≤ 0.5 % over any 1-hour window |
-| LLM trigger fallback rate | ≤ 5 % over any 24-hour window (rises = Groq incident / quota / prompt regression) |
+| LLM trigger fallback rate | ≤ 5 % over any 24-hour window (rises = Ollama Cloud incident / quota / prompt regression) |
 | Pipeline failures (`processing_jobs.status=failed`) | ≤ 2 % over any 24-hour window |
 
 A breached budget is a halt-and-investigate signal — no new merges to

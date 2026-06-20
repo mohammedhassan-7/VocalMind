@@ -6,7 +6,7 @@ Architecture:
   Parsing    → Docling  (AI-powered PDF → Markdown)
   Embeddings → Ollama   (snowflake-arctic-embed2, 1024-dim)
   Vector DB  → Qdrant   (dual collections: parents + children)
-  LLM        → Groq     (fast cloud inference)
+  LLM        → Ollama Cloud (production; LLM_PROVIDER=ollama_cloud); Groq optional fallback
 """
 
 from pathlib import Path

@@ -12,7 +12,7 @@ The RAG service itself combines:
 1. Docling PDF parsing
 2. Local embeddings (Ollama)
 3. Qdrant vector search (dual collections)
-4. Groq LLM synthesis for standalone query mode
+4. LLM synthesis for standalone query mode (Ollama Cloud in production; Groq fallback)
 
 It also feeds the Evidence-Anchored Explainability Layer used in manager call review.
 
@@ -63,7 +63,7 @@ It also feeds the Evidence-Anchored Explainability Layer used in manager call re
 1. `services/rag/query_engine.py`
 - Embeds query text via Ollama (with `/api/embed` and `/api/embeddings` fallback)
 - Queries Qdrant with optional org filter
-- Synthesizes final response using Groq via LlamaIndex
+- Synthesizes final response via LlamaIndex (Ollama Cloud in production; Groq fallback)
 - Logs query traces in `services/rag/logs`
 
 2. `services/rag/evaluator.py`
@@ -131,7 +131,7 @@ It also feeds the Evidence-Anchored Explainability Layer used in manager call re
 
 1. Ingestion parses PDFs and indexes vectors (policies → `vocalmind_parents`, SOPs/KB → `vocalmind_sop_parents`)
 2. Query engine retrieves relevant chunks
-3. Groq synthesizes response from retrieved context
+3. The configured LLM provider (Ollama Cloud in production; Groq fallback) synthesizes the response from retrieved context
 4. Retrieval provenance is attached for explainability and auditability
 5. Logs and timing are stored for auditability
 

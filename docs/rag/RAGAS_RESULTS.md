@@ -21,9 +21,12 @@ all 30 samples successfully scored (no NaN, no rate-limit corruption):
 | **Answer Relevancy** | **0.81** |
 | **Context Precision** | **0.82** |
 
-These reflect the **production pipeline**: Groq `llama-3.3-70b-versatile`
-synthesis, Ollama `snowflake-arctic-embed2` embeddings, Qdrant dual-collection
-retrieval, and a `bge-reranker-v2-m3` cross-encoder reranker.
+These reflect the **production pipeline**, whose synthesis stage is served through
+**Ollama Cloud** (a 70B-class model), with Ollama `snowflake-arctic-embed2`
+embeddings, Qdrant dual-collection retrieval, and a `bge-reranker-v2-m3`
+cross-encoder reranker. The numbers above were measured with a 70B `llama-3.3-70b`
+synthesizer (run via Groq for the offline evaluation) as a representative,
+reproducible stand-in for the production 70B-class model.
 
 ---
 
@@ -31,7 +34,7 @@ retrieval, and a `bge-reranker-v2-m3` cross-encoder reranker.
 
 | Component | Choice | Notes |
 |---|---|---|
-| Synthesis LLM | Groq `llama-3.3-70b-versatile` | production model |
+| Synthesis LLM | 70B-class model (`llama-3.3-70b`, run via Groq for the eval) | production serves the equivalent 70B-class model via Ollama Cloud |
 | Embeddings | Ollama `snowflake-arctic-embed2` (1024-d) | |
 | Retrieval | Qdrant dense search, top-20 pool → rerank → top-3 | |
 | Reranker | `BAAI/bge-reranker-v2-m3` (cross-encoder) | |

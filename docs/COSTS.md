@@ -40,7 +40,14 @@ per call** on a T4–A10G, depending on provider.
 If batching ≥ 4 calls into a single WhisperX worker (currently we don't
 — one job at a time), the per-call cost drops roughly 35 %.
 
-## 3. LLM trigger (Groq)
+## 3. LLM trigger (Ollama Cloud in production)
+
+> **Production note:** the deployed configuration uses **Ollama Cloud**
+> (`LLM_PROVIDER=ollama_cloud`) on a **flat $20/month Pro plan**, not metered
+> per-token billing. The top heavy model (`kimi-k2.6:cloud`) is only available on
+> Ollama Cloud. The per-token figures below are an **alternative-provider (Groq)
+> reference** kept for comparison; under the flat plan, the marginal LLM-trigger
+> cost per call is effectively $0 until the plan's throughput cap is reached.
 
 Three chains fan out via `asyncio.gather` per call:
 
@@ -96,7 +103,7 @@ call volume.
 | Component | Per call (low) | Per call (high) |
 |---|---|---|
 | WhisperX GPU | $0.04 | $0.08 |
-| LLM trigger (Groq) | $0.006 | $0.01 |
+| LLM trigger (Ollama Cloud flat plan; Groq per-token ref: $0.006–0.01) | ~$0 | ~$0 |
 | Postgres + storage | ~$0.0005 | ~$0.001 |
 | **Total per call** | **~$0.05** | **~$0.09** |
 
