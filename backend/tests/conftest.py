@@ -95,3 +95,49 @@ def mock_user_fixture() -> dict:
         "full_name": "Test User",
         "role": "manager"
     }
+
+
+class AsyncSessionAdapter:
+    """
+    Wraps a synchronous SQLModel Session in an async interface,
+    mimicking AsyncSession for dependency overrides in tests.
+    """
+    def __init__(self, session):
+        self._session = session
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    async def exec(self, statement):
+        return self._session.exec(statement)
+
+    async def get(self, *args, **kwargs):
+        return self._session.get(*args, **kwargs)
+
+    def add(self, instance):
+        self._session.add(instance)
+
+    def add_all(self, instances):
+        self._session.add_all(instances)
+
+    async def flush(self):
+        self._session.flush()
+
+    async def commit(self):
+        self._session.commit()
+
+    async def refresh(self, instance):
+        self._session.refresh(instance)
+
+    async def rollback(self):
+        self._session.rollback()
+
+    async def delete(self, instance):
+        self._session.delete(instance)
+
+    async def close(self):
+        self._session.close()
+

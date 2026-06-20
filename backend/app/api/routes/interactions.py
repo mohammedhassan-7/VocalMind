@@ -24,6 +24,7 @@ from app.core.score_utils import to_percentage
 from pathlib import Path
 from app.core.inference_contracts import is_supported_audio_filename
 from app.core.interaction_processing import (
+    AudioStorageError,
     enqueue_interaction_processing,
     create_processing_jobs,
     interaction_has_active_jobs,
@@ -359,7 +360,7 @@ async def create_interaction(
     file: UploadFile = File(...),
     agent_id: UUID | None = Form(default=None),
 ):
-    """Upload a real audio call, persist it locally, and enqueue processing."""
+    """Upload a real audio call, persist it to configured storage, and enqueue processing."""
     if not is_supported_audio_filename(file.filename):
         raise HTTPException(status_code=400, detail="Only .wav and .mp3 files are supported.")
 
@@ -391,7 +392,12 @@ async def create_interaction(
     session.add(interaction)
     await session.flush()
 
-    saved_audio_path = await save_audio_upload(organization.slug, interaction.id, file.filename, content)
+    try:
+        saved_audio_path = await save_audio_upload(organization.slug, interaction.id, file.filename, content)
+    except AudioStorageError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     interaction.audio_file_path = str(saved_audio_path)
     session.add(interaction)
 

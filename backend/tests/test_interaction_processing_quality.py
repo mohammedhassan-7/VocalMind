@@ -23,44 +23,7 @@ from app.models.user import User
 from app.models.enums import UserRole
 
 
-class _SyncResult:
-    def __init__(self, result):
-        self._result = result
-
-    def first(self):
-        return self._result.first()
-
-    def all(self):
-        return self._result.all()
-
-
-class _AsyncSessionAdapter:
-    def __init__(self, wrapped: Session):
-        self._wrapped = wrapped
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def exec(self, statement):
-        return _SyncResult(self._wrapped.exec(statement))
-
-    async def get(self, *args, **kwargs):
-        return self._wrapped.get(*args, **kwargs)
-
-    def add(self, instance):
-        self._wrapped.add(instance)
-
-    async def flush(self):
-        self._wrapped.flush()
-
-    async def commit(self):
-        self._wrapped.commit()
-
-    async def rollback(self):
-        self._wrapped.rollback()
+from tests.conftest import AsyncSessionAdapter
 
 
 @pytest.mark.asyncio
@@ -120,7 +83,7 @@ async def test_process_interaction_uses_stable_role_mapping(monkeypatch, tmp_pat
     session.add(Transcript(interaction_id=interaction_id, full_text=""))
     session.commit()
 
-    monkeypatch.setattr(ip, "AsyncSession", lambda *args, **kwargs: _AsyncSessionAdapter(session))
+    monkeypatch.setattr(ip, "AsyncSession", lambda *args, **kwargs: AsyncSessionAdapter(session))
     monkeypatch.setattr(ip, "engine", SimpleNamespace())
     monkeypatch.setattr(ip, "evaluate_interaction_triggers", AsyncMock(return_value=None))
     monkeypatch.setattr(ip, "relabel_segments_with_speaker_model", lambda segments: segments)
@@ -374,7 +337,7 @@ async def test_mark_interaction_failed_stage_status_transaction_rolls_back_on_mi
     monkeypatch.setattr(
         ip,
         "AsyncSession",
-        lambda *args, **kwargs: _AsyncSessionAdapter(session),
+        lambda *args, **kwargs: AsyncSessionAdapter(session),
     )
     monkeypatch.setattr(ip, "engine", SimpleNamespace())
     monkeypatch.setattr(ip, "_set_job_status", _exploding_set_job_status)

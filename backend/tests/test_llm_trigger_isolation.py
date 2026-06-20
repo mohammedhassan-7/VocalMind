@@ -82,28 +82,7 @@ def test_llm_trigger_run_blocks_cross_org_access(client, tmp_path, monkeypatch):
     session.add_all([org_a, org_b, user_a, user_b_agent, interaction_b, transcript_b, utterance_b])
     session.commit()
 
-    class AsyncSessionAdapter:
-        def __init__(self, wrapped):
-            self._wrapped = wrapped
-
-        async def exec(self, statement):
-            return self._wrapped.exec(statement)
-
-        async def flush(self):
-            self._wrapped.flush()
-
-        async def commit(self):
-            self._wrapped.commit()
-
-        async def refresh(self, instance):
-            self._wrapped.refresh(instance)
-
-        async def rollback(self):
-            self._wrapped.rollback()
-
-        def add(self, instance):
-            self._wrapped.add(instance)
-
+    from tests.conftest import AsyncSessionAdapter
     adapter = AsyncSessionAdapter(session)
 
     async def _override_get_db():

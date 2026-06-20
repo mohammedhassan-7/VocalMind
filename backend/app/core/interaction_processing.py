@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import httpx
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote as url_quote
 from uuid import UUID
 
 from sqlmodel import delete, select
@@ -14,7 +16,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.routes.full.service import full_client
 from app.api.routes.transcription.service import transcription_client
-from app.core.audio_resolver import fetch_audio_bytes
+from app.core.audio_resolver import audio_media_type_from_path, fetch_audio_bytes
 from app.core.config import settings
 from app.core.database import engine
 from app.core.emotion_fusion import build_deterministic_emotion_analysis
@@ -193,14 +195,63 @@ async def _resolve_policy_record_for_report(
     return best_policy or policies[0]
 
 
+class AudioStorageError(RuntimeError):
+    pass
+
+
 def build_audio_storage_path(organization_slug: str, interaction_id: UUID, filename: str) -> Path:
     return _storage_root() / organization_slug / str(interaction_id) / _sanitize_filename(filename)
 
 
-async def save_audio_upload(organization_slug: str, interaction_id: UUID, filename: str, content: bytes) -> Path:
+def build_supabase_audio_object_path(organization_slug: str, interaction_id: UUID, filename: str) -> str:
+    return f"{organization_slug}/{interaction_id}/{_sanitize_filename(filename)}"
+
+
+def _audio_storage_backend() -> str:
+    return (settings.AUDIO_STORAGE_BACKEND or "local").strip().lower()
+
+
+async def upload_supabase_audio_object(object_path: str, filename: str, content: bytes) -> str:
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY or not settings.SUPABASE_AUDIO_BUCKET:
+        raise AudioStorageError(
+            "AUDIO_STORAGE_BACKEND=supabase requires SUPABASE_URL, "
+            "SUPABASE_SERVICE_KEY, and SUPABASE_AUDIO_BUCKET."
+        )
+
+    bucket = settings.SUPABASE_AUDIO_BUCKET.strip("/")
+    upload_url = (
+        f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/"
+        f"{url_quote(bucket, safe='')}/{url_quote(object_path, safe='/')}"
+    )
+    headers = {
+        "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+        "apikey": settings.SUPABASE_SERVICE_KEY,
+        "Content-Type": audio_media_type_from_path(filename),
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(upload_url, headers=headers, content=content, timeout=120.0)
+    except httpx.RequestError as exc:
+        raise AudioStorageError(f"Supabase audio upload failed: {exc.__class__.__name__}") from exc
+
+    if response.status_code not in {200, 201}:
+        detail = response.text[:300] if response.text else response.reason_phrase
+        raise AudioStorageError(f"Supabase audio upload failed ({response.status_code}): {detail}")
+
+    return f"{bucket}/{object_path}"
+
+
+async def save_audio_upload(organization_slug: str, interaction_id: UUID, filename: str, content: bytes) -> Path | str:
+    if _audio_storage_backend() == "supabase":
+        object_path = build_supabase_audio_object_path(organization_slug, interaction_id, filename)
+        return await upload_supabase_audio_object(object_path, filename, content)
+
     target_path = build_audio_storage_path(organization_slug, interaction_id, filename)
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_bytes(content)
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_bytes(content)
+    except OSError as exc:
+        raise AudioStorageError(f"Local audio storage write failed: {exc.__class__.__name__}") from exc
     return target_path.resolve()
 
 

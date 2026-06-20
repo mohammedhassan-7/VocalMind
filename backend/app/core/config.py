@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://vocalmind:vocalmind_dev@localhost:5434/vocalmind"
     ASSISTANT_DATABASE_URL: str = "postgresql+asyncpg://vocalmind_readonly:vocalmind_readonly_dev@localhost:5434/vocalmind"
     LOCAL_AUDIO_STORAGE_DIR: str = "storage/uploads"
+    AUDIO_STORAGE_BACKEND: str = "local"  # local | supabase
 
     # AI service routing: True = Docker containers, False = Kaggle server
     IS_LOCAL: bool = True
@@ -55,6 +56,7 @@ class Settings(BaseSettings):
     # Supabase (for routes that use Supabase client directly)
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_KEY: str = ""
+    SUPABASE_AUDIO_BUCKET: str = "recordings"
     HF_TOKEN: str = ""
 
     # LLM trigger (Groq + LangChain)

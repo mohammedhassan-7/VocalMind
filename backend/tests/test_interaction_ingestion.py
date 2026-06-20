@@ -34,34 +34,7 @@ def seed_org_and_auth(client, tmp_path, monkeypatch):
     SQLModel.metadata.create_all(engine)
     test_session = Session(engine)
 
-    class AsyncSessionAdapter:
-        def __init__(self, wrapped_session):
-            self._session = wrapped_session
-
-        async def exec(self, statement):
-            return self._session.exec(statement)
-
-        async def get(self, *args, **kwargs):
-            return self._session.get(*args, **kwargs)
-
-        def add(self, instance):
-            self._session.add(instance)
-
-        def add_all(self, instances):
-            self._session.add_all(instances)
-
-        async def flush(self):
-            self._session.flush()
-
-        async def commit(self):
-            self._session.commit()
-
-        async def refresh(self, instance):
-            self._session.refresh(instance)
-
-        async def close(self):
-            self._session.close()
-
+    from tests.conftest import AsyncSessionAdapter
     async_session = AsyncSessionAdapter(test_session)
 
     organization = Organization(
@@ -111,6 +84,7 @@ def seed_org_and_auth(client, tmp_path, monkeypatch):
     client.app.dependency_overrides[get_db] = _override_get_db
     client.app.dependency_overrides[get_session] = _override_get_session
     monkeypatch.setattr(settings, "LOCAL_AUDIO_STORAGE_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setattr(settings, "AUDIO_STORAGE_BACKEND", "local")
 
     async def _noop_enqueue(interaction_id):
         return None
@@ -159,6 +133,60 @@ def test_upload_interaction_creates_pending_job_rows(client, seed_org_and_auth):
     assert len(jobs) == 6
     assert {job.stage.value for job in jobs} == {"diarization", "stt", "emotion", "reasoning", "scoring", "rag_eval"}
     assert all(job.status.value == "pending" for job in jobs)
+
+
+def test_upload_interaction_can_store_audio_in_supabase(client, seed_org_and_auth, monkeypatch):
+    uploaded: dict[str, object] = {}
+
+    async def _fake_upload(object_path: str, filename: str, content: bytes) -> str:
+        uploaded["object_path"] = object_path
+        uploaded["filename"] = filename
+        uploaded["content"] = content
+        return f"recordings/{object_path}"
+
+    monkeypatch.setattr(settings, "AUDIO_STORAGE_BACKEND", "supabase")
+    monkeypatch.setattr("app.core.interaction_processing.upload_supabase_audio_object", _fake_upload)
+
+    response = client.post(
+        "/api/v1/interactions",
+        data={"agent_id": str(TEST_AGENT_ID)},
+        files={"file": ("call.wav", b"RIFF0000WAVEfmt ", "audio/wav")},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    interaction_id = UUID(payload["interactionId"])
+    expected_path = f"recordings/nexalink/{interaction_id}/call.wav"
+
+    session = seed_org_and_auth
+    interaction = session.get(Interaction, interaction_id)
+    assert interaction.audio_file_path == expected_path
+    assert payload["audioFilePath"] == expected_path
+    assert uploaded == {
+        "object_path": f"nexalink/{interaction_id}/call.wav",
+        "filename": "call.wav",
+        "content": b"RIFF0000WAVEfmt ",
+    }
+    assert not (Path(settings.LOCAL_AUDIO_STORAGE_DIR) / "nexalink" / str(interaction_id) / "call.wav").exists()
+
+
+def test_upload_interaction_rolls_back_when_audio_storage_fails(client, seed_org_and_auth, monkeypatch):
+    async def _failing_upload(_object_path: str, _filename: str, _content: bytes) -> str:
+        from app.core.interaction_processing import AudioStorageError
+
+        raise AudioStorageError("Supabase audio upload failed (500): test failure")
+
+    monkeypatch.setattr(settings, "AUDIO_STORAGE_BACKEND", "supabase")
+    monkeypatch.setattr("app.core.interaction_processing.upload_supabase_audio_object", _failing_upload)
+
+    response = client.post(
+        "/api/v1/interactions",
+        data={"agent_id": str(TEST_AGENT_ID)},
+        files={"file": ("call.wav", b"RIFF0000WAVEfmt ", "audio/wav")},
+    )
+
+    assert response.status_code == 502
+    assert seed_org_and_auth.exec(select(Interaction)).all() == []
 
 
 def test_reprocess_resets_artifacts_and_jobs(client, seed_org_and_auth):

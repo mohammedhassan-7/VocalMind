@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 
@@ -82,7 +83,7 @@ def resolve_local_audio_path(audio_path: str) -> Path | None:
 
 
 def _storage_url_for_path(audio_path: str) -> str:
-    return f"{settings.SUPABASE_URL}/storage/v1/object/{audio_path}"
+    return f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/{quote(audio_path, safe='/')}"
 
 
 async def fetch_supabase_audio(audio_path: str, timeout_seconds: float = 60.0) -> bytes:

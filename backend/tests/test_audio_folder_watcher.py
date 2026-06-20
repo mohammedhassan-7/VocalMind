@@ -13,35 +13,7 @@ from app.models.organization import Organization
 from app.models.user import User
 
 
-class _SyncResult:
-    def __init__(self, result):
-        self._result = result
-
-    def first(self):
-        return self._result.first()
-
-    def all(self):
-        return self._result.all()
-
-
-class _AsyncSessionAdapter:
-    def __init__(self, wrapped: Session):
-        self._wrapped = wrapped
-
-    async def exec(self, statement):
-        return _SyncResult(self._wrapped.exec(statement))
-
-    def add(self, instance):
-        self._wrapped.add(instance)
-
-    async def flush(self):
-        self._wrapped.flush()
-
-    async def commit(self):
-        self._wrapped.commit()
-
-    async def refresh(self, instance):
-        self._wrapped.refresh(instance)
+from tests.conftest import AsyncSessionAdapter
 
 
 def _seed_org_with_users(session: Session, *, slug: str = "org-a") -> Organization:
@@ -110,7 +82,7 @@ async def test_scan_skips_out_of_bounds_symlink_and_warns(tmp_path, monkeypatch,
     engine = create_engine(f"sqlite:///{tmp_path / 'watcher.db'}", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    async_session = _AsyncSessionAdapter(session)
+    async_session = AsyncSessionAdapter(session)
     org = _seed_org_with_users(session)
 
     root = tmp_path / "storage" / "audio"
@@ -142,7 +114,7 @@ async def test_scan_accepts_in_bounds_file(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'watcher-ok.db'}", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
     session = Session(engine)
-    async_session = _AsyncSessionAdapter(session)
+    async_session = AsyncSessionAdapter(session)
     org = _seed_org_with_users(session)
 
     root = tmp_path / "storage" / "audio"
