@@ -526,6 +526,15 @@ async def transcribe(
         elif Models.diarize_model is not None:
             diarize_segments = Models.diarize_model(audio)
             result = whisperx.assign_word_speakers(diarize_segments, result)
+            # Ensure diarization_speaker is always populated in speaker_meta
+            # so _count_diarization_clusters() works regardless of classifier state
+            for seg in result["segments"]:
+                raw_spk = seg.get("speaker", "")
+                if raw_spk.upper().startswith("SPEAKER_"):
+                    seg.setdefault("speaker_meta", {})
+                    if not seg["speaker_meta"].get("diarization_speaker"):
+                        seg["speaker_meta"]["diarization_speaker"] = raw_spk
+                        seg["speaker_meta"].setdefault("source", "diarization")
             for segment in result["segments"]:
                 segment.setdefault("speaker_meta", {})
                 segment["speaker_meta"].setdefault("source", "diarization")
