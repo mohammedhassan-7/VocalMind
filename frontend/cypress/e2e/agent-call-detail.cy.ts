@@ -34,6 +34,8 @@ describe('Agent Call Detail', () => {
       interactionDetails: {
         'int-001': {
           body: buildInteractionDetail(buildInteractionSummary(), {
+            emotionComparison: null,
+            policyViolations: [],
             llmTriggers: {
               available: false,
               error: 'LLM offline',
@@ -96,15 +98,14 @@ describe('Agent Call Detail', () => {
     });
 
     cy.wait('@getInteractionDetail');
-    
-    // Check metric gauges
-    cy.contains('Acoustic ↔ Text').scrollIntoView().should('be.visible');
-    
-    // Check charts section
-    cy.contains('Emotion Distribution').should('be.visible');
 
-    // Check alert section
-    cy.contains('Cross-Modal Disagreement').should('be.visible');
-    cy.contains('5 utterances show mismatch between acoustic and text emotions').should('be.visible');
+    // Switch to the Quality tab where emotion comparison data is shown
+    cy.contains('button', 'Quality').click();
+
+    // Check metric gauges inside AnalysisTabs quality section
+    cy.contains('Audio ↔ Text').scrollIntoView().should('be.visible');
+
+    // Check disagreement alert
+    cy.contains('5 mismatches').should('be.visible');
   });
 });
