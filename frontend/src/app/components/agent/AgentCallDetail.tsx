@@ -53,7 +53,14 @@ export function AgentCallDetail() {
   const [data, setData] = useState<InteractionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Tracks the live <audio> DOM node so listeners bind exactly when it mounts
+  // (the element only renders after data loads, and remounts on reprocess).
+  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  const setAudioRef = useCallback((el: HTMLAudioElement | null) => {
+    audioRef.current = el;
+    setAudioEl(el);
+  }, []);
 
   // Audio state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -89,7 +96,7 @@ export function AgentCallDetail() {
 
   // Audio event handlers
   useEffect(() => {
-    const el = audioRef.current;
+    const el = audioEl;
     if (!el) return;
     const onTime = () => setCurrentTime(el.currentTime);
     const onMeta = () => setDuration(el.duration);
@@ -99,13 +106,17 @@ export function AgentCallDetail() {
     el.addEventListener("loadedmetadata", onMeta);
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
+    // Sync state immediately in case metadata already loaded before binding.
+    if (el.duration) setDuration(el.duration);
+    setCurrentTime(el.currentTime);
+    setIsPlaying(!el.paused);
     return () => {
       el.removeEventListener("timeupdate", onTime);
       el.removeEventListener("loadedmetadata", onMeta);
       el.removeEventListener("play", onPlay);
       el.removeEventListener("pause", onPause);
     };
-  }, [audioEpoch]);
+  }, [audioEl]);
 
   if (loading) {
     return (
@@ -233,7 +244,7 @@ export function AgentCallDetail() {
       {/* ── Audio Player ──────────────────────────────────────────────── */}
       {interaction.audioFilePath && (
         <div className="bg-card rounded-2xl border border-border p-4">
-          <audio ref={audioRef} key={audioEpoch} src={getAudioUrl(interaction.id)} preload="metadata" className="hidden" />
+          <audio ref={setAudioRef} key={audioEpoch} src={getAudioUrl(interaction.id)} preload="metadata" className="hidden" />
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <button type="button" onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.max(0, currentTime - 5); }}

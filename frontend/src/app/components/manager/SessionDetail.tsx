@@ -293,7 +293,14 @@ export function SessionDetail() {
   const [audioEpoch, setAudioEpoch] = useState(0);
 
   // Audio player state
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Tracks the live <audio> DOM node so listeners always bind to the mounted
+  // element, even after it is unmounted/remounted (e.g. collapsing sections).
+  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  const setAudioRef = useCallback((el: HTMLAudioElement | null) => {
+    audioRef.current = el;
+    setAudioEl(el);
+  }, []);
   const audioObjectUrlRef = useRef<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -369,7 +376,7 @@ export function SessionDetail() {
 
   // ── Audio event listeners ───────────────────────────────────────────────
   useEffect(() => {
-    const a = audioRef.current;
+    const a = audioEl;
     if (!a) return;
     const onTime = () => setCurrentTime(a.currentTime);
     const onDur = () => setDuration(a.duration || 0);
@@ -381,6 +388,10 @@ export function SessionDetail() {
     a.addEventListener("play", onPlay);
     a.addEventListener("pause", onPause);
     a.addEventListener("ended", onEnd);
+    // Resync state in case the element remounted mid-playback.
+    if (a.duration) setDuration(a.duration);
+    setCurrentTime(a.currentTime);
+    setIsPlaying(!a.paused);
     return () => {
       a.removeEventListener("timeupdate", onTime);
       a.removeEventListener("loadedmetadata", onDur);
@@ -388,7 +399,7 @@ export function SessionDetail() {
       a.removeEventListener("pause", onPause);
       a.removeEventListener("ended", onEnd);
     };
-  }, [audioSrc]);
+  }, [audioEl]);
 
   // ── Auto-scroll transcript ──────────────────────────────────────────────
   useEffect(() => {
@@ -608,7 +619,7 @@ export function SessionDetail() {
         <div className="mt-4 pt-4 border-t border-border">
           {audioSrc ? (
             <>
-              <audio ref={audioRef} src={audioSrc} preload="metadata" className="hidden" />
+              <audio ref={setAudioRef} src={audioSrc} preload="metadata" className="hidden" />
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1">
                   <button type="button" onClick={() => skip(-10)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
