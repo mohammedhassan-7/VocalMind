@@ -86,7 +86,7 @@ def seed_org_and_auth(client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "LOCAL_AUDIO_STORAGE_DIR", str(tmp_path / "uploads"))
     monkeypatch.setattr(settings, "AUDIO_STORAGE_BACKEND", "local")
 
-    async def _noop_enqueue(interaction_id):
+    async def _noop_enqueue(interaction_id, **kwargs):
         return None
 
     monkeypatch.setattr("app.api.routes.interactions.enqueue_interaction_processing", _noop_enqueue)

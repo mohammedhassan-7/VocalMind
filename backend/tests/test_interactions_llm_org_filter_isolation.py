@@ -64,7 +64,7 @@ def test_interaction_detail_ignores_client_llm_org_filter_override(client, monke
             is_active=True,
         )
 
-    async def _fake_eval(*, session, interaction_id, org_filter, force_rerun, commit_cache, requester_organization_id):
+    async def _fake_load_cached(*, session, interaction_id, org_filter):
         seen_org_filter["value"] = org_filter
 
         class _Report:
@@ -128,7 +128,10 @@ def test_interaction_detail_ignores_client_llm_org_filter_override(client, monke
     client.app.dependency_overrides[get_db] = _override_get_db
     client.app.dependency_overrides[get_session] = _override_get_session
     client.app.dependency_overrides[get_current_user] = _override_current_user
-    monkeypatch.setattr("app.api.routes.interactions.evaluate_interaction_triggers", _fake_eval)
+    monkeypatch.setattr(
+        "app.api.routes.interactions.load_cached_interaction_trigger_report",
+        _fake_load_cached,
+    )
 
     response = client.get(
         "/api/v1/interactions/c0000000-0000-0000-0000-000000000001"

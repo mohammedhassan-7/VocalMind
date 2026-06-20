@@ -113,16 +113,6 @@ def resolve_local_audio_path(audio_path: str) -> Path | None:
     if not audio_path or "\0" in audio_path or "\x00" in audio_path:
         return None
 
-    path_obj = Path(audio_path)
-    if path_obj.is_absolute():
-        try:
-            resolved = path_obj.resolve(strict=False)
-        except (ValueError, OSError):
-            return None
-        if resolved.exists() and resolved.is_file():
-            return resolved
-        return None
-
     # Normalize forward/backslash mix so Windows-built records still match.
     audio_path_norm = audio_path.replace("\\", "/")
     backend_dir = Path(__file__).resolve().parents[2]
@@ -162,6 +152,16 @@ def resolve_local_audio_path(audio_path: str) -> Path | None:
                         suffix = suffix[len("audio/"):]
                     candidates.append(extra_root / suffix)
                     break
+    path_obj = Path(audio_path_norm)
+    if path_obj.is_absolute():
+        try:
+            resolved = path_obj.resolve(strict=False)
+        except (ValueError, OSError):
+            return None
+        if any(resolved.is_relative_to(root) for root in allowed_roots):
+            if resolved.exists() and resolved.is_file():
+                return resolved
+        return None
     for candidate in candidates:
         try:
             resolved = candidate.resolve(strict=False)
