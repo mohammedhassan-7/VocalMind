@@ -11,6 +11,9 @@ const { getInteractionDetailMock } = vi.hoisted(() => ({
 vi.mock('../app/services/api', () => ({
     getInteractionDetail: getInteractionDetailMock,
     getAudioUrl: vi.fn(() => ''),
+    reprocessInteraction: vi.fn(async () => ({})),
+    getInteractionProcessingStatus: vi.fn(async () => null),
+    fetchAuthenticatedBlob: vi.fn(async () => new Blob()),
     queryRag: vi.fn(async () => ({ response: 'ok', chunks: [], timing: {} })),
 }))
 

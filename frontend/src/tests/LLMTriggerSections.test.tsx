@@ -126,6 +126,9 @@ vi.mock("../app/services/api", () => {
   return {
     getInteractionDetail: vi.fn(async () => mockDetail),
     getAudioUrl: vi.fn(() => ""),
+    reprocessInteraction: vi.fn(async () => ({})),
+    getInteractionProcessingStatus: vi.fn(async () => null),
+    fetchAuthenticatedBlob: vi.fn(async () => new Blob()),
   };
 });
 

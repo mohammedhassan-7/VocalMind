@@ -215,8 +215,8 @@ describe('AgentCallDetail', () => {
 
         renderWithId('int-005')
 
-        // Wait for component to render fully
-        expect(await screen.findByText('Emotion Timeline')).toBeInTheDocument()
+        // Wait for the synced playback console to render fully
+        expect(await screen.findByText('Synced Playback')).toBeInTheDocument()
         const audio = document.querySelector('audio') as HTMLAudioElement | null
         expect(audio).not.toBeNull()
         Object.defineProperty(audio!, 'currentTime', {
@@ -228,11 +228,10 @@ describe('AgentCallDetail', () => {
         expect(audio).toHaveAttribute('src', '/audio/int-005.mp3')
         expect(getAudioUrlMock).toHaveBeenCalledWith('int-005')
 
-        // Find and click the play button for the emotion event
-        const playButtons = await screen.findAllByRole('button')
-        const jumpBtn = playButtons.find(b => b.textContent?.includes('00:05'))
+        // Click the emotion-shift jump marker on the timeline (labelled by time)
+        const jumpBtn = await screen.findByLabelText(/Jump to .* at 00:05/i)
         expect(jumpBtn).toBeTruthy()
-        fireEvent.click(jumpBtn!)
+        fireEvent.click(jumpBtn)
 
         expect(audio!.currentTime).toBe(5)
         expect(mockPlay).toHaveBeenCalledTimes(1)
@@ -299,7 +298,6 @@ describe('AgentCallDetail', () => {
         await waitFor(() => {
             expect(getInteractionDetailMock).toHaveBeenCalledWith('int-007', {
                 includeLLMTriggers: true,
-                skipCache: true,
             })
         })
         // Agent view should not have a Reprocess button

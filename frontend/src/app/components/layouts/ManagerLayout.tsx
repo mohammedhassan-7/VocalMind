@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router";
 import { UserNav } from "./UserNav";
 import {
@@ -17,6 +17,12 @@ import { NotificationBell } from "../notifications/NotificationBell";
 export function ManagerLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+
+  // Manager portal uses the purple (default) brand accent.
+  useEffect(() => {
+    document.documentElement.dataset.role = "manager";
+    return () => { delete document.documentElement.dataset.role; };
+  }, []);
 
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/manager" },

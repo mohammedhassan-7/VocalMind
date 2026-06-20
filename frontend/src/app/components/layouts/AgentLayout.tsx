@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from "react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { UserNav } from "./UserNav";
 import {
@@ -14,6 +14,12 @@ export function AgentLayout() {
   const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+
+  // Agent portal swaps the brand accent to teal.
+  useEffect(() => {
+    document.documentElement.dataset.role = "agent";
+    return () => { delete document.documentElement.dataset.role; };
+  }, []);
 
   const navItems = [
     { icon: Activity, label: "My Performance", path: "/agent" },

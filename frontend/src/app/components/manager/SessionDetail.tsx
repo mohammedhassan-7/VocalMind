@@ -18,8 +18,8 @@ import {
   type LLMEvidenceCitation, type ProcessingStatusResult,
 } from "../../services/api";
 import { EvidenceAnchoredExplainabilityPanel } from "./EvidenceAnchoredExplainabilityPanel";
+import { SyncedPlaybackConsole, type TimelineMarker } from "../shared/SyncedPlaybackConsole";
 import { AnalysisTabs } from "./AnalysisTabs";
-import { EmotionComparisonPanel } from "./EmotionComparisonPanel";
 import { ManagerCorrectionSheet } from "./ManagerCorrectionSheet";
 import {
   activeUtteranceAtTime,
@@ -319,6 +319,7 @@ export function SessionDetail() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [rate, setRate] = useState(1);
 
   // Transcript state
   const [followAudio, setFollowAudio] = useState(true);
@@ -481,6 +482,15 @@ export function SessionDetail() {
     }
   }, [id]);
 
+  const seekTo = useCallback((seconds: number) => {
+    if (audioRef.current) audioRef.current.currentTime = seconds;
+  }, []);
+
+  const changeRate = useCallback((r: number) => {
+    setRate(r);
+    if (audioRef.current) audioRef.current.playbackRate = r;
+  }, []);
+
   const handleReprocess = async () => {
     if (!id || reprocessing) return;
     setActionError(null);
@@ -532,11 +542,6 @@ export function SessionDetail() {
   const timeline = useMemo(() => buildTimeline(utterances, emotionEvents), [utterances, emotionEvents]);
   const chartData = useMemo(() => buildEmotionChartData(utterances), [utterances]);
 
-  const activeUtteranceId = useMemo(() => {
-    if (!followAudio || !utterances.length) return null;
-    return activeUtteranceAtTime(utterances, currentTime)?.id ?? null;
-  }, [currentTime, followAudio, utterances]);
-
   const scrollTranscriptToTime = useCallback((seconds: number) => {
     if (!transcriptRef.current || !utterances.length) return;
     let target = utterances[0];
@@ -556,6 +561,21 @@ export function SessionDetail() {
       void audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
     }
   }, [scrollTranscriptToTime]);
+
+  const timelineMarkers = useMemo<TimelineMarker[]>(
+    () => emotionEvents.map((e) => ({
+      time: e.jumpToSeconds,
+      emotion: e.toEmotion,
+      label: `Jump to ${e.fromEmotion} → ${e.toEmotion} at ${e.timestamp}`,
+      onJump: () => handleJumpTo(e.jumpToSeconds),
+    })),
+    [emotionEvents, handleJumpTo],
+  );
+
+  const activeUtteranceId = useMemo(() => {
+    if (!followAudio || !utterances.length) return null;
+    return activeUtteranceAtTime(utterances, currentTime)?.id ?? null;
+  }, [currentTime, followAudio, utterances]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -722,114 +742,30 @@ export function SessionDetail() {
           <ScoreRing score={interaction.overallScore} />
         </div>
 
-        {/* ── Audio Player ───────────────────────────────────────────────── */}
+        {/* ── Audio element (hidden; controls live in Synced Playback) ────── */}
         <div className="mt-4 pt-4 border-t border-border">
-          {audioLoading ? (
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              Loading audio...
-            </div>
-          ) : audioError ? (
-            <p className="text-[12px] text-destructive">{audioError}</p>
-          ) : audioSrc ? (
-            <>
-              <audio ref={setAudioRef} src={audioSrc} preload="metadata" className="hidden" />
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => skip(-10)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                    <SkipBack className="w-3.5 h-3.5" />
-                  </button>
-                  <button type="button" onClick={togglePlay}
-                    className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity">
-                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                  </button>
-                  <button type="button" onClick={() => skip(10)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                    <SkipForward className="w-3.5 h-3.5" />
-                  </button>
-                  <button type="button" onClick={stopPlayback} title="Stop"
-                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                    <Square className="w-3 h-3 fill-current" />
-                  </button>
-                </div>
-
-                <span className="text-[11px] tabular-nums text-muted-foreground w-[80px] text-center shrink-0">
-                  {formatSeconds(currentTime)} / {formatSeconds(effectiveDuration || 0)}
-                </span>
-
-                <div className="flex-1 h-1.5 bg-muted rounded-full cursor-pointer group relative" onClick={handleSeek}>
-                  <div className="h-full bg-primary rounded-full transition-all relative"
-                    style={{ width: effectiveDuration ? `${(currentTime / effectiveDuration) * 100}%` : "0%" }}>
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow" />
-                  </div>
-                </div>
-
-                <button type="button" onClick={() => { setMuted(!muted); if (audioRef.current) audioRef.current.muted = !muted; }}
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                  {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </>
-          ) : audioError ? (
-            <p className="text-[12px] text-destructive">{audioError}</p>
+          {audioSrc ? (
+            <audio ref={setAudioRef} src={audioSrc} preload="metadata" className="hidden" />
           ) : (
-            <p className="text-[12px] text-muted-foreground">Loading audio...</p>
+            <p className="text-[12px] text-muted-foreground">Loading audio…</p>
           )}
         </div>
       </div>
 
-      {/* ── Emotion Timeline ─────────────────────────────────────────────── */}
-      {chartData.length > 0 && (
-        <div className="bg-card rounded-xl border border-border p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-4 h-4 text-primary" />
-            <h3 className="text-[14px] font-bold text-foreground">Emotion Timeline</h3>
-            <span className="text-[11px] text-muted-foreground ml-auto">{utterances.length} utterances</span>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis
-                dataKey="time" type="number" domain={["dataMin", "dataMax"]}
-                tickFormatter={formatSeconds}
-                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                axisLine={{ stroke: "var(--border)" }}
-                tickLine={{ stroke: "var(--border)" }}
-              />
-              <YAxis
-                domain={[0, 4]} ticks={[0, 1, 2, 3, 4]}
-                tickFormatter={(v: number) => EMOTION_LABELS[v] ?? ""}
-                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                axisLine={{ stroke: "var(--border)" }}
-                tickLine={{ stroke: "var(--border)" }}
-                width={72}
-              />
-              <RechartsTooltip content={<ChartTooltip />} />
-              {currentTime > 0 && duration > 0 && (
-                <ReferenceLine x={currentTime} stroke="var(--primary)" strokeDasharray="4 2" strokeWidth={1.5} />
-              )}
-              <Line
-                dataKey="customer" name="Customer" type="monotone"
-                stroke="#06B6D4" strokeWidth={2} dot={{ r: 2, fill: "#06B6D4" }}
-                connectNulls activeDot={{ r: 4 }}
-              />
-              <Line
-                dataKey="agent" name="Agent" type="monotone"
-                stroke="#8B5CF6" strokeWidth={2} dot={{ r: 2, fill: "#8B5CF6" }}
-                connectNulls activeDot={{ r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="flex items-center justify-center gap-5 mt-2">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-0.5 rounded bg-[#06B6D4]" />
-              <span className="text-[11px] text-muted-foreground">Customer</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-0.5 rounded bg-[#8B5CF6]" />
-              <span className="text-[11px] text-muted-foreground">Agent</span>
-            </div>
-          </div>
-        </div>
+      {/* ── Synced Playback console (emotion timeline + transport) ────────── */}
+      {audioSrc && utterances.length > 0 && (
+        <SyncedPlaybackConsole
+          utterances={utterances}
+          markers={timelineMarkers}
+          duration={duration}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          rate={rate}
+          onTogglePlay={togglePlay}
+          onSkip={skip}
+          onSeek={seekTo}
+          onRate={changeRate}
+        />
       )}
 
       {/* ── Main Content ─────────────────────────────────────────────────── */}
@@ -963,13 +899,6 @@ export function SessionDetail() {
           )}
         </div>
       </div>
-
-      {/* ── Emotion Comparison Panel (acoustic vs text vs fused) ─────────── */}
-      {data?.emotionComparison && data.emotionComparison.totalUtterances > 0 && (
-        <div className="bg-card rounded-xl border border-border p-5">
-          <EmotionComparisonPanel data={data.emotionComparison} />
-        </div>
-      )}
 
       {/* ── Explainability Panel (full width) ────────────────────────────── */}
       {explainability && (

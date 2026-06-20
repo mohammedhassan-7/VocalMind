@@ -67,15 +67,15 @@ describe("Session Detail", () => {
     cy.contains("Hi, I've been having issues with my account login").should("exist");
   });
 
-  it("renders emotion timeline section", () => {
+  it("renders synced playback console", () => {
     cy.wait('@getInteractionDetail');
-    cy.contains("h3", "Emotion Timeline").should("be.visible");
+    cy.contains("Synced Playback").scrollIntoView().should("be.visible");
   });
 
   it("renders the manager correction flow under the Policy tab", () => {
     cy.wait('@getInteractionDetail');
     cy.contains("button", "Policy").click();
-    cy.contains("Policy Violations").should("be.visible");
+    cy.contains("Policy Violations").scrollIntoView().should("be.visible");
     cy.contains("Use Correct to override the AI verdict directly.")
       .parent()
       .contains("button", "Correct")

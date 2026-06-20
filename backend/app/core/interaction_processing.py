@@ -472,9 +472,11 @@ def assign_cluster_roles_from_text(
         scores[cluster] = (agent_score, customer_score)
 
     # Single-cluster audio: pick role by sign of (agent − customer).
-    if len(scores) == 1:
-        cluster, (a, c) = next(iter(scores.items()))
-        return {cluster: SpeakerRole.agent if a >= c else SpeakerRole.customer}
+    if len(scores) <= 1:
+        # Diarization failed to split speakers.
+        # Return an empty mapping to force reliance on per-segment labels 
+        # from the upstream model (WhisperX classifier).
+        return {}
 
     # Multi-cluster: cluster with lowest net agent score is the customer; the rest are agents.
     nets = {cluster: a - c for cluster, (a, c) in scores.items()}
