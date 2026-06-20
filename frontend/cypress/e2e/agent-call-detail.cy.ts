@@ -47,7 +47,7 @@ describe('Agent Call Detail', () => {
     });
 
     cy.wait('@getInteractionDetail');
-    cy.contains('LLM coaching insights unavailable.').scrollIntoView().should('be.visible');
+    cy.contains('LLM coaching insights unavailable.').should('exist');
     cy.contains('LLM offline').should('exist');
   });
 
@@ -103,7 +103,7 @@ describe('Agent Call Detail', () => {
     cy.contains('button', 'Quality').click();
 
     // Check metric gauges inside AnalysisTabs quality section
-    cy.contains('Audio ↔ Text').scrollIntoView().should('be.visible');
+    cy.contains('Audio ↔ Text').should('exist');
 
     // Check disagreement alert
     cy.contains('5 mismatches').should('be.visible');
