@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     ASSISTANT_DATABASE_URL: str = "postgresql+asyncpg://vocalmind_readonly:vocalmind_readonly_dev@localhost:5434/vocalmind"
     LOCAL_AUDIO_STORAGE_DIR: str = "storage/uploads"
     AUDIO_STORAGE_BACKEND: str = "local"  # local | supabase
+    # Colon- or os-pathsep-separated extra roots for resolve_local_audio_path (e.g. /app/storage/audio_import)
+    EXTRA_AUDIO_ROOTS: str = ""
 
     # AI service routing: True = Docker containers, False = Kaggle server
     IS_LOCAL: bool = True
@@ -57,6 +59,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_KEY: str = ""
     SUPABASE_AUDIO_BUCKET: str = "recordings"
+    SUPABASE_DB_URL: str = ""
     HF_TOKEN: str = ""
 
     # LLM trigger (Groq + LangChain)
@@ -114,7 +117,7 @@ class Settings(BaseSettings):
 
     # OpenAI API Key for Assistant
     OPENAI_API_KEY: str = ""
-    SEED_MOCK_INTERACTIONS: bool = False
+    SEED_EVALUATION_SESSIONS: bool = False
 
     # When True, lifespan runs seed_nexalink + seed_meridian on every boot.
     # Always True for local dev; MUST be False for any deployment pointed at a

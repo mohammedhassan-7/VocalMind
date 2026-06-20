@@ -37,7 +37,7 @@ async def purge_seeded_interactions(org_slug: str = "nexalink") -> None:
 
         interaction_ids = [UUID(str(i)) for i in interactions]
         if not interaction_ids:
-            print("No seeded/mock interactions found to purge.")
+            print("No seeded evaluation sessions found to purge.")
             return
 
         await session.exec(delete(EmotionEvent).where(EmotionEvent.interaction_id.in_(interaction_ids)))
@@ -50,7 +50,7 @@ async def purge_seeded_interactions(org_slug: str = "nexalink") -> None:
 
         # Keep org-level knowledge links intact. This script only purges seeded calls.
         await session.commit()
-        print(f"Purged {len(interaction_ids)} seeded/mock interactions for org '{org_slug}'.")
+        print(f"Purged {len(interaction_ids)} seeded evaluation sessions for org '{org_slug}'.")
 
 
 if __name__ == "__main__":
