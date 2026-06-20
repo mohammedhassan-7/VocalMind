@@ -17,18 +17,12 @@ _CUSTOMER_LABEL_ALIASES = {
     "client",
     "caller",
     "user",
-    "speaker_0",
-    "speaker0",
-    "s0",
 }
 _AGENT_LABEL_ALIASES = {
     "agent",
     "support",
     "representative",
     "advisor",
-    "speaker_1",
-    "speaker1",
-    "s1",
 }
 # High-precision phrases that only the AGENT realistically says (greetings,
 # offers to help, verification asks, scripted closings).
@@ -240,22 +234,33 @@ class SpeakerRoleClassifier:
                 )
 
         # Stabilize role assignment by diarization speaker identity when available.
-        for segment in segments:
-            meta = dict(segment.get("speaker_meta") or {})
-            if meta.get("source") == "text_cue":
-                continue
-            diarization_speaker = str(meta.get("diarization_speaker") or "").strip()
-            if not diarization_speaker:
-                continue
-            if diarization_speaker.lower() in {"unknown", "speaker", "spk"}:
-                continue
-            votes = speaker_votes.get(diarization_speaker)
-            if not votes:
-                continue
-            winning_label = "agent" if votes["agent"] >= votes["customer"] else "customer"
-            segment["speaker"] = winning_label
-            meta["source"] = "cluster_vote"
-            segment["speaker_meta"] = meta
+        # Bypass voting if diarization failed to split speakers (only 1 valid cluster).
+        valid_diarization_speakers = {
+            str(seg.get("speaker_meta", {}).get("diarization_speaker") or "").strip()
+            for seg in segments
+        }
+        valid_diarization_speakers = {
+            s for s in valid_diarization_speakers 
+            if s and s.lower() not in {"unknown", "speaker", "spk"}
+        }
+
+        if len(valid_diarization_speakers) > 1:
+            for segment in segments:
+                meta = dict(segment.get("speaker_meta") or {})
+                if meta.get("source") == "text_cue":
+                    continue
+                diarization_speaker = str(meta.get("diarization_speaker") or "").strip()
+                if not diarization_speaker:
+                    continue
+                if diarization_speaker.lower() in {"unknown", "speaker", "spk"}:
+                    continue
+                votes = speaker_votes.get(diarization_speaker)
+                if not votes:
+                    continue
+                winning_label = "agent" if votes["agent"] >= votes["customer"] else "customer"
+                segment["speaker"] = winning_label
+                meta["source"] = "cluster_vote"
+                segment["speaker_meta"] = meta
         _smooth_unknown_speakers(segments)
         return segments
 

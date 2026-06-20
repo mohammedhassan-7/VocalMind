@@ -20,14 +20,15 @@ function scoreColor(score: number): string {
   return "#EF4444";
 }
 
-function ScoreChip({ score }: { score: number }) {
+function ScoreChip({ score, suffix }: { score: number; suffix?: string }) {
   const color = scoreColor(score);
   return (
     <span
-      className="inline-flex items-center justify-center min-w-[2.5rem] rounded-md px-1.5 py-0.5 text-[12px] font-bold tabular-nums"
+      className="inline-flex items-center justify-center min-w-[3.5rem] rounded-lg px-3 py-1.5 text-[15px] font-bold tabular-nums"
       style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}30` }}
     >
       {score}
+      {suffix && <span className="text-[12px] font-semibold opacity-70 ml-0.5">{suffix}</span>}
     </span>
   );
 }
@@ -365,12 +366,7 @@ export function SessionInspector() {
                       {row.duration}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
-                      <span
-                        className="text-[18px] font-bold"
-                        style={{ color: scoreColor(row.overallScore) }}
-                      >
-                        {row.overallScore}<span className="text-[12px] font-semibold text-muted-foreground">%</span>
-                      </span>
+                      <ScoreChip score={row.overallScore} suffix="%" />
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap"><ScoreChip score={row.empathyScore} /></td>
                     <td className="px-4 py-4 whitespace-nowrap"><ScoreChip score={row.policyScore} /></td>

@@ -19,6 +19,8 @@ def test_normalize_speaker_label_uses_token_matching():
     assert _normalize_speaker_label("customer") == "customer"
     assert _normalize_speaker_label("agent") == "agent"
     assert _normalize_speaker_label("not_customer_service") is None
+    assert _normalize_speaker_label("SPEAKER_00") is None
+    assert _normalize_speaker_label("speaker_1") is None
 
 
 def test_relabel_segments_preserves_diarization_when_model_unavailable(tmp_path):
@@ -30,6 +32,7 @@ def test_relabel_segments_preserves_diarization_when_model_unavailable(tmp_path)
 
     output = classifier.relabel_segments(segments)
     assert output[0]["speaker"] == "SPEAKER_00"
-    assert output[1]["speaker"] == "SPEAKER_01"
+    assert output[1]["speaker"] == "agent"
     assert output[0]["speaker_meta"]["source"] == "diarization"
-    assert output[1]["speaker_meta"]["fallback_reason"] == "classifier_unavailable"
+    assert output[1]["speaker_meta"]["source"] == "text_cue"
+    assert output[1]["speaker_meta"]["diarization_speaker"] == "SPEAKER_01"

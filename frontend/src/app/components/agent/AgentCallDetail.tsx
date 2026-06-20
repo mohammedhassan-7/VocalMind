@@ -12,9 +12,9 @@ import {
   getInteractionDetail, getAudioUrl,
   type InteractionDetail, type UtteranceData, type EmotionEventData,
 } from "../../services/api";
-import { EmotionComparisonPanel } from "../manager/EmotionComparisonPanel.tsx";
 import { EvidenceAnchoredExplainabilityPanel } from "../manager/EvidenceAnchoredExplainabilityPanel";
 import { AnalysisTabs } from "../manager/AnalysisTabs";
+import { SyncedPlaybackConsole, type TimelineMarker } from "../shared/SyncedPlaybackConsole";
 import { formatResponseTime } from "../../utils/interactionFormat";
 import { FlagButton } from "./FlagButton";
 
@@ -68,6 +68,7 @@ export function AgentCallDetail() {
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [audioEpoch, setAudioEpoch] = useState(0);
+  const [rate, setRate] = useState(1);
 
   const handleJumpTo = useCallback((seconds: number) => {
     if (audioRef.current) {
@@ -157,6 +158,13 @@ export function AgentCallDetail() {
 
   const chartData = buildEmotionChartData(utterances);
 
+  const timelineMarkers: TimelineMarker[] = emotionEvents.map((e) => ({
+    time: e.jumpToSeconds,
+    emotion: e.toEmotion,
+    label: `Jump to ${e.fromEmotion} → ${e.toEmotion} at ${e.timestamp}`,
+    onJump: () => handleJumpTo(e.jumpToSeconds),
+  }));
+
   const callData = {
     date: interaction.date,
     time: interaction.time,
@@ -241,65 +249,25 @@ export function AgentCallDetail() {
         </div>
       </div>
 
-      {/* ── Audio Player ──────────────────────────────────────────────── */}
+      {/* ── Audio element (hidden; controls live in Synced Playback) ───── */}
       {interaction.audioFilePath && (
-        <div className="bg-card rounded-2xl border border-border p-4">
-          <audio ref={setAudioRef} key={audioEpoch} src={getAudioUrl(interaction.id)} preload="metadata" className="hidden" />
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <button type="button" onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.max(0, currentTime - 5); }}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                <SkipBack className="w-4 h-4" />
-              </button>
-              <button type="button"
-                onClick={() => { const el = audioRef.current; if (el) isPlaying ? el.pause() : el.play().catch(() => {}); }}
-                className="w-10 h-10 flex items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm">
-                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-              </button>
-              <button type="button" onClick={() => { if (audioRef.current) audioRef.current.currentTime = Math.min(duration, currentTime + 5); }}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                <SkipForward className="w-4 h-4" />
-              </button>
-            </div>
-            <span className="text-[12px] font-mono text-muted-foreground w-[80px]">{fmtTime(currentTime)} / {fmtTime(duration)}</span>
-            <div className="flex-1 h-1.5 rounded-full bg-muted cursor-pointer" onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const pct = (e.clientX - rect.left) / rect.width;
-              if (audioRef.current) audioRef.current.currentTime = pct * duration;
-            }}>
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: duration ? `${(currentTime / duration) * 100}%` : "0%" }} />
-            </div>
-            <button type="button" onClick={() => { if (audioRef.current) { audioRef.current.muted = !isMuted; setIsMuted(!isMuted); } }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
+        <audio ref={setAudioRef} key={audioEpoch} src={getAudioUrl(interaction.id)} preload="metadata" className="hidden" />
       )}
 
-      {/* ── Emotion Timeline ──────────────────────────────────────────── */}
-      {chartData.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[14px] font-bold text-foreground">Emotion Timeline</h3>
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-500" /> Customer</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Agent</span>
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={140}>
-            <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.3} />
-              <XAxis dataKey="time" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
-              <YAxis domain={[0, 4]} ticks={[0, 1, 2, 3, 4]} tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                tickFormatter={(v: number) => ["Angry", "Frus.", "Sad", "Neut.", "Happy"][v] || ""} />
-              <RechartsTooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11 }}
-                formatter={(v: number) => [["Angry", "Frustrated", "Sad", "Neutral", "Happy"][v] || "?", "Emotion"]} />
-              <ReferenceLine y={3} stroke="var(--border)" strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="score" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      {/* ── Synced Playback console (emotion timeline + transport) ──────── */}
+      {interaction.audioFilePath && utterances.length > 0 && (
+        <SyncedPlaybackConsole
+          utterances={utterances}
+          markers={timelineMarkers}
+          duration={duration}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          rate={rate}
+          onTogglePlay={() => { const el = audioRef.current; if (el) { isPlaying ? el.pause() : el.play().catch(() => {}); } }}
+          onSkip={(d) => { if (audioRef.current) audioRef.current.currentTime = Math.max(0, Math.min(duration, currentTime + d)); }}
+          onSeek={(t) => { if (audioRef.current) audioRef.current.currentTime = t; }}
+          onRate={(r) => { setRate(r); if (audioRef.current) audioRef.current.playbackRate = r; }}
+        />
       )}
 
       {/* ── Main Content Grid ─────────────────────────────────────────── */}
@@ -386,11 +354,6 @@ export function AgentCallDetail() {
           )}
         </div>
       </div>
-
-      {/* ── Emotion Comparison Panel ──────────────────────────────────── */}
-      {data.emotionComparison && (
-        <EmotionComparisonPanel data={data.emotionComparison} />
-      )}
 
       {/* ── Customer Emotion Journey ──────────────────────────────────── */}
       {emotionEvents.length > 0 && (

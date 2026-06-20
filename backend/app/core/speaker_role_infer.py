@@ -16,8 +16,8 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 _classifier: Any = None
-_CUSTOMER_LABEL_ALIASES = {"customer", "client", "caller", "user", "speaker_0", "speaker0", "s0"}
-_AGENT_LABEL_ALIASES = {"agent", "support", "representative", "advisor", "speaker_1", "speaker1", "s1"}
+_CUSTOMER_LABEL_ALIASES = {"customer", "client", "caller", "user"}
+_AGENT_LABEL_ALIASES = {"agent", "support", "representative", "advisor"}
 
 
 def _normalize_speaker_label(raw_label: str) -> str | None:
