@@ -1,0 +1,51 @@
+name: Deploy Backend
+
+on:
+  workflow_run:
+    workflows: ["Backend CI"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_AUDIO_BUCKET: ${{ secrets.SUPABASE_AUDIO_BUCKET || 'recordings' }}
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          password: ${{ secrets.AZURE_VM_PASSWORD }}
+          envs: SHA,SUPABASE_URL,SUPABASE_SERVICE_KEY,SUPABASE_AUDIO_BUCKET
+          script_stop: true
+          script: |
+            cd /opt/vocalmind
+            git fetch origin main
+            git checkout main
+            git reset --hard "$SHA"
+            python3 - <<'PY'
+            import os
+            from pathlib import Path
+
+            path = Path("backend/.env")
+            values = {
+                "AUDIO_STORAGE_BACKEND": "supabase",
+                "SUPABASE_URL": os.environ["SUPABASE_URL"],
+                "SUPABASE_SERVICE_KEY": os.environ["SUPABASE_SERVICE_KEY"],
+                "SUPABASE_AUDIO_BUCKET": os.environ["SUPABASE_AUDIO_BUCKET"],
+            }
+            lines = path.read_text().splitlines() if path.exists() else []
+            kept = [line for line in lines if line.split("=", 1)[0].strip() not in values]
+            path.write_text("\n".join(kept + [f'{key}="{value}"' for key, value in values.items()]) + "\n")
+            PY
+            docker compose up -d --build backend
