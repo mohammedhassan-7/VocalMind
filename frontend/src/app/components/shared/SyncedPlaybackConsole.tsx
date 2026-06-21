@@ -1,4 +1,4 @@
-import { useMemo, type KeyboardEvent, type MouseEvent } from "react";
+import { useMemo, useId, type KeyboardEvent, type MouseEvent } from "react";
 import { SkipBack, SkipForward, Play, Pause } from "lucide-react";
 
 // ── Emotion → valence mapping (shared with the timeline + markers) ───────────
@@ -97,6 +97,7 @@ export function SyncedPlaybackConsole({
   onTogglePlay, onSkip, onSeek, onRate,
 }: SyncedPlaybackConsoleProps) {
   const dur = duration || 1;
+  const gradientId = `vmEmo-${useId().replace(/[:]/g, "")}`;
 
   const { areaPath, linePath, agentPath } = useMemo(() => {
     const custKf = buildKeyframes(utterances, "customer");
@@ -115,7 +116,9 @@ export function SyncedPlaybackConsole({
       const x = (j / SAMPLES) * W;
       agp += (j ? " L" : "M") + x.toFixed(1) + "," + y.toFixed(1);
     }
-    return { areaPath: `${lp} L${W},${H} L0,${H} Z`, linePath: lp, agentPath: agp };
+    // Close the area path at the middle baseline (y = 75) instead of the bottom (y = 150)
+    // so positive curves fill downwards to 75 and negative curves fill upwards to 75.
+    return { areaPath: `${lp} L${W},75 L0,75 Z`, linePath: lp, agentPath: agp };
   }, [utterances, dur]);
 
   const custKf = useMemo(() => buildKeyframes(utterances, "customer"), [utterances]);
@@ -137,7 +140,7 @@ export function SyncedPlaybackConsole({
 
   return (
     <section
-      className="sticky top-2 z-30 mt-4 rounded-2xl border border-[var(--border)] bg-card p-4 sm:p-5"
+      className="mt-4 rounded-2xl border border-[var(--border)] bg-card p-4 sm:p-5"
       style={{ boxShadow: "var(--shadow-md)" }}
     >
       <div className="flex items-center gap-3 mb-3">
@@ -162,29 +165,30 @@ export function SyncedPlaybackConsole({
         aria-label="Emotion timeline scrubber"
         aria-valuemin={0} aria-valuemax={Math.floor(dur)} aria-valuenow={Math.floor(currentTime)}
         onClick={seekFromEvent} onKeyDown={timelineKey}
-        className="relative h-[148px] rounded-xl border border-[var(--border)] overflow-hidden cursor-pointer"
-        style={{ background: "var(--surface-2)" }}
+        className="relative h-[148px] rounded-xl border border-[var(--border)] overflow-hidden cursor-pointer bg-[var(--surface-2)]"
       >
         {["POSITIVE", "NEUTRAL", "NEGATIVE"].map((lbl, i) => (
           <div key={lbl}
-            className="absolute left-2 px-1.5 rounded text-[9px] font-semibold tracking-wide text-[var(--text-faint)]"
-            style={{ background: "var(--surface)", top: i === 0 ? 6 : i === 1 ? "50%" : undefined, bottom: i === 2 ? 6 : undefined, transform: i === 1 ? "translateY(-50%)" : undefined }}>
+            className="absolute left-2 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider text-[var(--text-faint)] bg-background/50 backdrop-blur-[2px] border border-[var(--border)]/30"
+            style={{ top: i === 0 ? 6 : i === 1 ? "50%" : undefined, bottom: i === 2 ? 6 : undefined, transform: i === 1 ? "translateY(-50%)" : undefined }}>
             {lbl}
           </div>
         ))}
         <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0">
           <defs>
-            <linearGradient id="vmEmo" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--happy)" stopOpacity="0.32" />
-              <stop offset="48%" stopColor="var(--primary)" stopOpacity="0.15" />
-              <stop offset="100%" stopColor="var(--angry)" stopOpacity="0.30" />
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--happy)" stopOpacity="0.22" />
+              <stop offset="42%" stopColor="var(--happy)" stopOpacity="0.04" />
+              <stop offset="50%" stopColor="var(--neutral)" stopOpacity="0.0" />
+              <stop offset="58%" stopColor="var(--angry)" stopOpacity="0.04" />
+              <stop offset="100%" stopColor="var(--angry)" stopOpacity="0.22" />
             </linearGradient>
           </defs>
           <line x1="0" y1="18" x2={W} y2="18" stroke="var(--border)" strokeWidth="1" strokeDasharray="3 5" />
           <line x1="0" y1="75" x2={W} y2="75" stroke="var(--border-strong)" strokeWidth="1" />
           <line x1="0" y1="132" x2={W} y2="132" stroke="var(--border)" strokeWidth="1" strokeDasharray="3 5" />
           <path d={agentPath} fill="none" stroke="var(--text-muted)" strokeWidth="1.6" strokeDasharray="4 4" strokeOpacity="0.55" vectorEffect="non-scaling-stroke" />
-          <path d={areaPath} fill="url(#vmEmo)" />
+          <path d={areaPath} fill={`url(#${gradientId})`} />
           <path d={linePath} fill="none" stroke="var(--primary)" strokeWidth="2.4" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         </svg>
         {markers.map((m, i) => (
