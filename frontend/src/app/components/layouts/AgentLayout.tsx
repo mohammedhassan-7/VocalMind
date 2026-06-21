@@ -31,6 +31,7 @@ export function AgentLayout() {
     if (location.pathname === "/agent/calls") return "My Calls";
     if (location.pathname.includes("calls")) return "Call Detail";
     if (location.pathname.includes("notifications")) return "Notifications";
+    if (location.pathname.includes("settings")) return "Settings";
     return "My Performance";
   };
 
@@ -104,7 +105,9 @@ export function AgentLayout() {
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center gap-3 px-3.5 h-11 rounded-xl transition-all ${
+                      className={`flex items-center rounded-xl transition-all h-11 ${
+                        collapsed ? "justify-center px-0" : "gap-3 px-3.5"
+                      } ${
                         isActive
                           ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                           : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"

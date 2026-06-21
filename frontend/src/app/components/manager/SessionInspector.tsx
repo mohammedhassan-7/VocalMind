@@ -327,7 +327,18 @@ export function SessionInspector() {
       {/* Table */}
       <div className="bg-card rounded-[14px] border border-border">
         <div className="overflow-x-auto rounded-t-[14px]">
-          <table className="w-full min-w-[56rem] border-collapse">
+          <table className="w-full min-w-[91rem] table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[34rem]" />
+              <col className="w-[8.5rem]" />
+              <col className="w-[7rem]" />
+              <col className="w-[6rem]" />
+              <col className="w-[6rem]" />
+              <col className="w-[6rem]" />
+              <col className="w-[6.5rem]" />
+              <col className="w-[8rem]" />
+              <col className="w-[9rem]" />
+            </colgroup>
             <thead>
               <tr className="bg-muted/10 border-b border-border">
                 <th className="px-4 py-4 text-left text-label">Agent</th>
@@ -338,8 +349,8 @@ export function SessionInspector() {
                 <th className="px-4 py-4 text-left text-label">Policy</th>
                 <th className="px-4 py-4 text-left text-label">Resolution</th>
                 <th className="px-4 py-4 text-center text-label">Status</th>
-                <th className="px-3 py-4 text-center text-label sticky right-0 z-30 w-32 min-w-[8rem] border-l border-border bg-muted/10 shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.12)]">
-                  Actions
+                <th className="px-3 py-4 text-center text-label sticky right-0 z-30 w-32 min-w-[8rem] border-l border-border bg-card shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.12)] before:absolute before:inset-0 before:bg-muted/10 before:z-0 before:pointer-events-none relative">
+                  <span className="relative z-10">Actions</span>
                 </th>
               </tr>
             </thead>
@@ -412,13 +423,13 @@ export function SessionInspector() {
 
                     {/* Actions — sticky */}
                     <td
-                      className={`sticky right-0 whitespace-nowrap border-l border-border/80 px-3 py-4 text-center align-middle shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.1)] ${
+                      className={`sticky right-0 whitespace-nowrap border-l border-border/80 px-3 py-4 text-center align-middle shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.1)] relative bg-card before:absolute before:inset-0 before:pointer-events-none before:z-0 ${
                         openMenuId === row.id ? "z-30" : "z-20"
                       } ${
-                        failed ? "bg-destructive/[0.04] group-hover:bg-muted/5" : "bg-card group-hover:bg-muted/5"
-                      }`}
+                        failed ? "before:bg-destructive/[0.04]" : ""
+                      } group-hover:before:bg-muted/5`}
                     >
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex items-center justify-center gap-1.5 relative z-10">
                         <Link
                           to={`/manager/inspector/${row.id}`}
                           className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary/10 px-3 text-[12px] font-semibold text-primary hover:bg-primary/20 transition-colors"

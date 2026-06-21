@@ -29,6 +29,7 @@ function formatSeconds(s: number): string {
 interface CurvePoint {
   startTime: number;
   emotion: string;
+  fusedEmotion?: string;
   speaker: string;
 }
 
@@ -69,7 +70,7 @@ function buildKeyframes(utterances: CurvePoint[], speaker: "agent" | "customer")
   const pts = utterances
     .filter((u) => u.speaker === speaker)
     .sort((a, b) => a.startTime - b.startTime)
-    .map((u): [number, number] => [u.startTime, valenceOf(u.emotion)]);
+    .map((u): [number, number] => [u.startTime, valenceOf(u.fusedEmotion ?? u.emotion)]);
   return pts.length ? pts : [[0, 0]];
 }
 
@@ -174,9 +175,9 @@ export function SyncedPlaybackConsole({
         <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0">
           <defs>
             <linearGradient id="vmEmo" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--happy)" stopOpacity="0.28" />
-              <stop offset="48%" stopColor="var(--primary)" stopOpacity="0.12" />
-              <stop offset="100%" stopColor="var(--angry)" stopOpacity="0.26" />
+              <stop offset="0%" stopColor="var(--happy)" stopOpacity="0.32" />
+              <stop offset="48%" stopColor="var(--primary)" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="var(--angry)" stopOpacity="0.30" />
             </linearGradient>
           </defs>
           <line x1="0" y1="18" x2={W} y2="18" stroke="var(--border)" strokeWidth="1" strokeDasharray="3 5" />

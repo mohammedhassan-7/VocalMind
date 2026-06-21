@@ -28,7 +28,6 @@ export function ManagerLayout() {
     { icon: LayoutDashboard, label: "Dashboard", path: "/manager" },
     { icon: Search, label: "Session Inspector", path: "/manager/inspector" },
     { icon: ClipboardCheck, label: "Review Queue", path: "/manager/reviews" },
-    { icon: MessageSquare, label: "Manager Assistant", path: "/manager/assistant" },
     { icon: BookOpen, label: "Knowledge Base", path: "/manager/knowledge" },
   ];
 
@@ -40,6 +39,7 @@ export function ManagerLayout() {
     if (location.pathname.includes("notifications")) return "Notifications";
     if (location.pathname.includes("assistant")) return "Manager Assistant";
     if (location.pathname.includes("knowledge")) return "Knowledge Base";
+    if (location.pathname.includes("settings")) return "Settings";
     return "Dashboard";
   };
 
@@ -108,7 +108,9 @@ export function ManagerLayout() {
                       )}
                       <Link
                         to={item.path}
-                        className={`flex items-center gap-3 px-3.5 h-11 rounded-xl transition-all ${
+                        className={`flex items-center rounded-xl transition-all h-11 ${
+                          collapsed ? "justify-center px-0" : "gap-3 px-3.5"
+                        } ${
                           isActive
                             ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                             : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
