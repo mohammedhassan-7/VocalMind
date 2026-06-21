@@ -310,7 +310,7 @@ export function KnowledgeBase() {
             Refresh Sync
           </Button>
           <Button 
-            className="rounded-xl shadow-lg shadow-primary/20 gap-2 font-bold px-6"
+            className="rounded-xl bg-success hover:bg-success/90 text-white shadow-lg shadow-success/20 gap-2 font-bold px-6 border-none"
             onClick={() => {
               if (activeTab === "policies") openPolicyModal();
               else if (activeTab === "kb") openKbModal();
@@ -410,7 +410,13 @@ export function KnowledgeBase() {
                     <Switch checked={p.isActive} onCheckedChange={() => handleTogglePolicy(p.id)} />
                   </div>
                   
-                  <div>
+                  <div 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setSelectedDoc(p);
+                      setIsDetailOpen(true);
+                    }}
+                  >
                     <h4 className="text-[17px] font-black text-foreground group-hover:text-primary transition-colors leading-tight mb-2 text-ellipsis overflow-hidden">
                       {p.title}
                     </h4>
@@ -502,7 +508,13 @@ export function KnowledgeBase() {
                     <Switch checked={f.isActive} onCheckedChange={() => handleToggleFaq(f.id)} />
                   </div>
                   
-                  <div>
+                  <div 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setSelectedDoc(f);
+                      setIsDetailOpen(true);
+                    }}
+                  >
                     <h4 className="text-[17px] font-black text-foreground group-hover:text-success transition-colors leading-tight mb-2">
                       {f.question}
                     </h4>
@@ -594,7 +606,13 @@ export function KnowledgeBase() {
                     <Switch checked={k.isActive} onCheckedChange={() => handleToggleKB(k.id)} />
                   </div>
                   
-                  <div>
+                  <div 
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setSelectedDoc(k);
+                      setIsDetailOpen(true);
+                    }}
+                  >
                     <h4 className="text-[17px] font-black text-foreground group-hover:text-blue-500 transition-colors leading-tight mb-2 text-ellipsis overflow-hidden">
                       {k.title}
                     </h4>
@@ -987,7 +1005,7 @@ export function KnowledgeBase() {
               className="rounded-xl px-10 font-black shadow-lg"
               onClick={() => setIsDetailOpen(false)}
             >
-              Done Viewing
+              Close
             </Button>
           </div>
         </DialogContent>
