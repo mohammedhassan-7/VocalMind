@@ -681,12 +681,27 @@ export function KnowledgeBase() {
           <div className="p-8 space-y-6">
             <div className="space-y-2">
               <p className="text-[11px] font-black uppercase text-muted-foreground tracking-widest pl-1">Guideline PDF</p>
-              <Input
-                type="file"
-                accept="application/pdf"
-                onChange={(event) => setPolicyFile(event.target.files?.[0] ?? null)}
-                className="rounded-xl border-border bg-muted/30 focus-visible:ring-primary/20 h-11 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-primary-foreground file:font-bold"
-              />
+              <div className="relative">
+                <input
+                  type="file"
+                  id="policy-file-upload"
+                  accept="application/pdf"
+                  onChange={(event) => setPolicyFile(event.target.files?.[0] ?? null)}
+                  className="sr-only"
+                />
+                <label
+                  htmlFor="policy-file-upload"
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-border hover:border-primary/50 rounded-2xl p-6 bg-muted/20 hover:bg-primary/5 cursor-pointer transition-all group text-center"
+                >
+                  <Upload className="w-8 h-8 text-muted-foreground group-hover:text-primary mb-2 transition-colors" />
+                  <span className="text-[13px] font-semibold text-foreground truncate max-w-full px-4">
+                    {policyFile ? policyFile.name : "Choose Guideline PDF"}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-1">
+                    {policyFile ? `${(policyFile.size / 1024 / 1024).toFixed(2)} MB` : "PDF only (max 10MB)"}
+                  </span>
+                </label>
+              </div>
               <p className="text-[10px] text-muted-foreground pl-1">PDF only. Leave title or category blank to use defaults.</p>
             </div>
 
@@ -743,12 +758,27 @@ export function KnowledgeBase() {
           <div className="p-8 space-y-6">
             <div className="space-y-2">
               <p className="text-[11px] font-black uppercase text-muted-foreground tracking-widest pl-1">SOP PDF</p>
-              <Input
-                type="file"
-                accept="application/pdf"
-                onChange={(event) => setFaqFile(event.target.files?.[0] ?? null)}
-                className="rounded-xl border-border bg-muted/30 focus-visible:ring-success/20 h-11 file:mr-4 file:rounded-lg file:border-0 file:bg-success file:px-4 file:py-2 file:text-white file:font-bold"
-              />
+              <div className="relative">
+                <input
+                  type="file"
+                  id="faq-file-upload"
+                  accept="application/pdf"
+                  onChange={(event) => setFaqFile(event.target.files?.[0] ?? null)}
+                  className="sr-only"
+                />
+                <label
+                  htmlFor="faq-file-upload"
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-border hover:border-success/50 rounded-2xl p-6 bg-muted/20 hover:bg-success/5 cursor-pointer transition-all group text-center"
+                >
+                  <Upload className="w-8 h-8 text-muted-foreground group-hover:text-success mb-2 transition-colors" />
+                  <span className="text-[13px] font-semibold text-foreground truncate max-w-full px-4">
+                    {faqFile ? faqFile.name : "Choose SOP PDF"}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-1">
+                    {faqFile ? `${(faqFile.size / 1024 / 1024).toFixed(2)} MB` : "PDF only (max 10MB)"}
+                  </span>
+                </label>
+              </div>
               <p className="text-[10px] text-muted-foreground pl-1">PDF only. The extracted text becomes the SOP content.</p>
             </div>
 
@@ -805,12 +835,27 @@ export function KnowledgeBase() {
           <div className="p-8 space-y-6">
             <div className="space-y-2">
               <p className="text-[11px] font-black uppercase text-muted-foreground tracking-widest pl-1">KB PDF</p>
-              <Input
-                type="file"
-                accept="application/pdf"
-                onChange={(event) => setKbFile(event.target.files?.[0] ?? null)}
-                className="rounded-xl border-border bg-muted/30 focus-visible:ring-blue-500/20 h-11 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-white file:font-bold"
-              />
+              <div className="relative">
+                <input
+                  type="file"
+                  id="kb-file-upload"
+                  accept="application/pdf"
+                  onChange={(event) => setKbFile(event.target.files?.[0] ?? null)}
+                  className="sr-only"
+                />
+                <label
+                  htmlFor="kb-file-upload"
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-border hover:border-blue-500/50 rounded-2xl p-6 bg-muted/20 hover:bg-blue-500/5 cursor-pointer transition-all group text-center"
+                >
+                  <Upload className="w-8 h-8 text-muted-foreground group-hover:text-blue-500 mb-2 transition-colors" />
+                  <span className="text-[13px] font-semibold text-foreground truncate max-w-full px-4">
+                    {kbFile ? kbFile.name : "Choose KB PDF"}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-1">
+                    {kbFile ? `${(kbFile.size / 1024 / 1024).toFixed(2)} MB` : "PDF only (max 10MB)"}
+                  </span>
+                </label>
+              </div>
               <p className="text-[10px] text-muted-foreground pl-1">PDF only. The extracted text becomes the KB article content.</p>
             </div>
 
