@@ -9,6 +9,7 @@ import {
   Download,
   Menu,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import logoSrc from "../../../assets/logo/logo.svg";
 import { Separator } from "../ui/separator";
@@ -29,6 +30,7 @@ export function ManagerLayout() {
     { icon: Search, label: "Session Inspector", path: "/manager/inspector" },
     { icon: ClipboardCheck, label: "Review Queue", path: "/manager/reviews" },
     { icon: BookOpen, label: "Knowledge Base", path: "/manager/knowledge" },
+    { icon: Sparkles, label: "Manager Assistant", path: "/manager/assistant" },
     { icon: Settings, label: "Settings", path: "/manager/settings" },
   ];
 

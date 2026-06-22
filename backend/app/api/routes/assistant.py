@@ -12,6 +12,7 @@ from collections.abc import Iterable
 import httpx
 import sqlparse
 from openai import AsyncOpenAI
+from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 from sqlmodel import text
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -21,7 +22,7 @@ from app.core.config import settings
 from app.core.llm_circuit_breaker import CircuitOpenError, get_breaker, is_transient_llm_error
 from app.llm_trigger.chains import get_model_for_stage
 
-from app.api.deps import CurrentUser, get_db, SessionDep
+from app.api.deps import CurrentUser, SessionDep
 from app.core.database import engine
 from app.models.enums import QueryMode, UserRole
 from app.schemas.assistant import AssistantQueryRequest, AssistantQueryResponse
@@ -996,23 +997,31 @@ async def get_assistant_history(current_user: CurrentUser):
         queries_db = list(queries_r.all())
 
         def _coerce_result_rows(raw) -> Optional[list]:
-            if raw is None: return None
-            if isinstance(raw, list): return raw
+            if raw is None:
+                return None
+            if isinstance(raw, list):
+                return raw
             if isinstance(raw, str):
                 try:
                     parsed = json.loads(raw)
                     return parsed if isinstance(parsed, list) else None
-                except json.JSONDecodeError: return None
+                except json.JSONDecodeError:
+                    return None
             return None
 
         def _ts_label(created_at) -> Optional[str]:
-            if created_at is None: return None
-            try: return created_at.isoformat()
-            except Exception: return str(created_at)
+            if created_at is None:
+                return None
+            try:
+                return created_at.isoformat()
+            except Exception:
+                return str(created_at)
 
         def _ai_turn_success(response_text: Optional[str], gen_sql: Optional[str], ai_u: Optional[str]) -> bool:
-            if ai_u and str(ai_u).lower() == "help": return True
-            if not gen_sql: return False
+            if ai_u and str(ai_u).lower() == "help":
+                return True
+            if not gen_sql:
+                return False
             low = (response_text or "").lower()
             if any(p in low for p in ("database error", "hit a database error", "rate limits", "not sure how to answer", "having trouble connecting")):
                 return False
@@ -1033,7 +1042,8 @@ async def get_assistant_history(current_user: CurrentUser):
             else:
                 idx, sid, q, r_text, gen_sql, exec_ms, ai_u, created_at = row
                 result_rows_raw = None
-            if not r_text: continue
+            if not r_text:
+                continue
             ts = _ts_label(created_at)
             stored_data = _coerce_result_rows(result_rows_raw)
             sid_str = str(sid)
@@ -1048,7 +1058,8 @@ async def get_assistant_history(current_user: CurrentUser):
                     "id": f"a_{idx}", "type": "ai", "content": r_text, "mode": "chat", "success": success,
                     "sql": gen_sql or None, "executionTime": exec_label, "execution_time": exec_label, "created_at": ts,
                 }
-                if stored_data is not None: ai_payload["data"] = stored_data
+                if stored_data is not None:
+                    ai_payload["data"] = stored_data
                 session_map[sid_str]["messages"].append(ai_payload)
 
         return list(session_map.values())
@@ -1392,7 +1403,6 @@ async def process_assistant_query(
         }
 
 
-from pydantic import BaseModel
 class AssistantSessionRenameRequest(BaseModel):
     title: str
 
