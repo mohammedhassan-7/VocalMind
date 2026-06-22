@@ -15,10 +15,9 @@ os.environ["SECRET_KEY"] = "mock_secret"
 os.environ["IS_LOCAL"] = "true"
 os.environ["AUDIO_FOLDER_WATCHER_ENABLED"] = "false"
 
-from fastapi import FastAPI
-from fastapi.routing import APIRoute
-from app.main import app
-from app.api.deps import get_current_user, get_token
+from fastapi.routing import APIRoute  # noqa: E402
+from app.main import app  # noqa: E402
+from app.api.deps import get_current_user, get_token  # noqa: E402
 
 def is_auth_route(route: APIRoute) -> bool:
     if not hasattr(route, "dependant") or route.dependant is None:
@@ -96,7 +95,6 @@ def main():
             route_id = f"{method} {path}"
             
             # R2. Endpoint Docstrings and Descriptions
-            op_summary = op.get("summary")
             op_desc = op.get("description")
             
             if not op_desc:

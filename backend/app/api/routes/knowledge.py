@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Path as FastAPIPath
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlmodel import select
 from pypdf import PdfReader
@@ -25,8 +25,6 @@ LEGACY_FAQ_DOCS_FOLDER = "faq-docs"
 KB_DOCS_FOLDER = "knowledge-base"
 LEGACY_KB_DOCS_FOLDER = "kb"
 KB_CATEGORY_PREFIX = "kb:"
-
-from pydantic import Field
 
 # --- Schemas ---
 

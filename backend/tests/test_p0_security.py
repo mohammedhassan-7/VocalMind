@@ -103,11 +103,6 @@ def cross_org_client(client, tmp_path, monkeypatch):
     client.app.dependency_overrides[get_db] = _override_get_db
     client.app.dependency_overrides[get_session] = _override_get_session
 
-    async def _noop_invalidate(session, org_filter=None):
-        return 0
-
-    monkeypatch.setattr("app.api.routes.knowledge.invalidate_llm_trigger_cache", _noop_invalidate)
-
     yield client, test_session, current_user_state
 
     client.app.dependency_overrides.pop(get_current_user, None)
@@ -184,7 +179,7 @@ def test_delete_linked_policy_removes_only_caller_link(cross_org_client):
         "/api/v1/knowledge/policies",
         json={"title": "Refund", "category": "Guidelines", "content": "abc"},
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     policy_id = response.json()["id"]
 
     # Org B is granted a link to the same policy (e.g. a shared/seeded policy).
