@@ -43,6 +43,10 @@ def test_assistant_rejects_sql_without_org_tenant_filter(client, monkeypatch):
     class _FakeResult:
         def all(self):
             return []
+            
+        def scalar(self):
+            from uuid import UUID
+            return UUID("c0000000-0000-0000-0000-000000000001")
 
     class _FakeConn:
         async def __aenter__(self):

@@ -1,4 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type {
   ClaimProvenance,
   EvidenceAnchoredExplainability,
@@ -6,6 +8,7 @@ import type {
   UtteranceData,
 } from "../../services/api";
 import { resolveJumpSeconds } from "../../utils/utteranceNavigation";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "../ui/accordion";
 
 const verdictTheme: Record<string, string> = {
   Supported: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
@@ -16,6 +19,11 @@ const verdictTheme: Record<string, string> = {
   "No Trigger": "bg-sky-500/10 text-sky-400 border-sky-500/20",
   "Insufficient Evidence": "bg-muted text-muted-foreground border-border",
 };
+
+// Emotion attributions that did not actually fire add no review value to this
+// supervisor deck and duplicate the always-on Emotion Analysis tab. We keep
+// emotion cards only when they represent a real finding.
+const NON_FIRING_EMOTION_VERDICTS = new Set(["No Trigger", "Neutral", "Insufficient Evidence"]);
 
 function formatPercent(value?: number | null): string {
   const numeric = Number(value);
@@ -28,6 +36,8 @@ function cleanEvidenceText(value?: string | null): string {
     .replace(/\r/g, "")
     .replace(/^\s*#{1,6}\s*/gm, "")
     .replace(/<!--.*?-->/gs, " ")
+    .replace(/\[Focus window.*?\]\s*/gi, "")
+    .replace(/^(agent|customer):\s*/gi, "")
     .replace(/\s*Ã¢â‚¬Â¢\s*/g, " / ")
     .replace(/\s*â€¢\s*/g, " / ")
     .replace(/\|{2,}/g, " / ")
@@ -36,6 +46,100 @@ function cleanEvidenceText(value?: string | null): string {
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+const isDelimiterRow = (line: string) => /^\s*\|(?:\s*:?-{1,}:?\s*\|)+\s*$/.test(line);
+const tableCells = (line: string) =>
+  line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
+// Build a valid GFM table from grouped rows (header + delimiter + body), padding
+// short rows to the widest column count so remark-gfm parses every row.
+function buildMarkdownTable(rows: string[][]): string {
+  const colCount = Math.max(...rows.map((r) => r.length));
+  const pad = (r: string[]) => {
+    const padded = [...r];
+    while (padded.length < colCount) padded.push("");
+    return padded;
+  };
+  const lines = [`| ${pad(rows[0]).join(" | ")} |`, `|${" --- |".repeat(colCount)}`];
+  for (let i = 1; i < rows.length; i++) lines.push(`| ${pad(rows[i]).join(" | ")} |`);
+  return lines.join("\n");
+}
+
+// Retrieved policy clauses are stored as GFM pipe tables, but the chunking that
+// produced them mangles the structure two ways: it drops the `| --- | --- |`
+// delimiter row, and it often flattens the whole table onto one line so that the
+// row boundary survives only as an empty `| |` cell. Either way remark-gfm
+// renders literal "| ID | Rule |" text. Reconstruct a valid table so it renders.
+// Non-table clauses (which don't start with `|`) are returned untouched.
+function normalizePolicyMarkdown(value?: string | null): string {
+  const source = (value || "").replace(/\r/g, "").trim();
+  if (!source.startsWith("|") || !source.includes("|")) return source;
+
+  // Flattened single-line table: split on cells, group rows on empty cells.
+  if (!source.includes("\n")) {
+    const rows: string[][] = [];
+    let current: string[] = [];
+    for (const cell of tableCells(source)) {
+      if (cell === "") {
+        if (current.length) rows.push(current);
+        current = [];
+      } else {
+        current.push(cell);
+      }
+    }
+    if (current.length) rows.push(current);
+    return rows.length >= 2 ? buildMarkdownTable(rows) : source;
+  }
+
+  // Multi-line table: inject a delimiter after the header row if missing.
+  const lines = source.split("\n");
+  const isRow = (line: string) => /^\s*\|.*\|\s*$/.test(line);
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    out.push(lines[i]);
+    const prevIsRow = i > 0 && isRow(lines[i - 1]);
+    const isHeader = isRow(lines[i]) && !isDelimiterRow(lines[i]) && !prevIsRow;
+    if (isHeader && (lines[i + 1] === undefined || !isDelimiterRow(lines[i + 1]))) {
+      out.push(`|${" --- |".repeat(tableCells(lines[i]).length)}`);
+    }
+  }
+  return out.join("\n");
+}
+
+// Renders a retrieved SOP/policy/KB clause, reconstructing any mangled pipe table
+// into a styled GFM table. Shared by the claim-provenance and trigger-attribution
+// cards so both render clauses identically.
+function PolicyClauseMarkdown({ clause }: { clause?: string | null }) {
+  return (
+    <div className="text-[13px] leading-relaxed text-foreground/80">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          table: ({ children }) => (
+            <div className="overflow-x-auto rounded-lg border border-border my-2">
+              <table className="w-full text-[12px] border-collapse">{children}</table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
+          tbody: ({ children }) => <tbody>{children}</tbody>,
+          tr: ({ children }) => <tr className="border-t border-border">{children}</tr>,
+          th: ({ children }) => (
+            <th className="px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => <td className="px-3 py-2 text-foreground/80 align-top">{children}</td>,
+          p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+          code: ({ children }) => (
+            <code className="px-1 py-0.5 rounded bg-muted/50 text-[11px] font-mono">{children}</code>
+          ),
+        }}
+      >
+        {normalizePolicyMarkdown(clause)}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 function VerdictBadge({ verdict }: { verdict: string }) {
@@ -136,14 +240,35 @@ function TriggerCard({ attribution, utterances, onJumpTo }: { attribution: Trigg
             const accent = src === "kb" ? "text-indigo-400" : "text-orange-400";
             const bgAccent = src === "kb" ? "bg-indigo-500/5 border-indigo-500/15" : "bg-orange-500/5 border-orange-500/15";
             return (
-              <div className={`rounded-lg border p-3 ${bgAccent}`}>
-                <p className={`text-[11px] font-extrabold uppercase tracking-wider ${accent}`}>{label}</p>
-                <p className="mt-1 text-[12px] font-bold text-foreground">{cleanEvidenceText(attribution.policyReference.reference)}</p>
-                <p className="mt-2 text-[13px] leading-relaxed text-foreground/80">{cleanEvidenceText(attribution.policyReference.clause)}</p>
-                {attribution.policyReference.provenance && (
-                  <p className="mt-2 text-[11px] font-medium text-muted-foreground">{cleanEvidenceText(attribution.policyReference.provenance)}</p>
-                )}
-              </div>
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="policy" className={`rounded-lg border px-3 py-1 border-b-0 ${bgAccent}`}>
+                  <AccordionTrigger className={`text-[11px] font-extrabold uppercase tracking-wider py-2 hover:no-underline ${accent}`}>
+                    <div className="flex items-center justify-between w-full pr-2 text-left">
+                       <div className="flex items-center gap-2">
+                         <span>{label}</span>
+                         {attribution.policyReference.severity && (
+                           <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider ${
+                             attribution.policyReference.severity === 'critical' ? 'bg-red-500/20 text-red-500' :
+                             attribution.policyReference.severity === 'major' ? 'bg-amber-500/20 text-amber-500' :
+                             'bg-blue-500/20 text-blue-500'
+                           }`}>
+                             {attribution.policyReference.severity}
+                           </span>
+                         )}
+                       </div>
+                       <span className="text-[10px] text-muted-foreground normal-case font-medium">{cleanEvidenceText(attribution.policyReference.reference)}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-2 pb-3 border-t border-border/40">
+                    <div className="mt-2">
+                      <PolicyClauseMarkdown clause={attribution.policyReference.clause} />
+                    </div>
+                    {attribution.policyReference.provenance && (
+                      <p className="mt-2 text-[11px] font-medium text-muted-foreground">{cleanEvidenceText(attribution.policyReference.provenance)}</p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             );
           })()}
         </div>
@@ -151,7 +276,7 @@ function TriggerCard({ attribution, utterances, onJumpTo }: { attribution: Trigg
         <div className="space-y-3">
           <div className="rounded-lg border border-border bg-card p-3">
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Reasoning</p>
-            <div className="mt-2 max-h-[15rem] overflow-y-auto pr-1 text-[13px] leading-relaxed text-foreground/80">
+            <div className="mt-2 max-h-[15rem] overflow-y-auto pr-1 scrollbar-thin text-[13px] leading-relaxed text-foreground/80">
               {cleanEvidenceText(attribution.reasoning)}
             </div>
           </div>
@@ -219,18 +344,28 @@ function ClaimCard({ claim, utterances, onJumpTo }: { claim: ClaimProvenance; ut
           )}
 
           {claim.retrievedPolicy && (
-            <div className="rounded-lg border border-teal-500/15 bg-teal-500/5 p-3">
-              <p className="text-[11px] font-extrabold uppercase tracking-wider text-teal-400">Retrieved Policy</p>
-              <p className="mt-1 text-[12px] font-bold text-foreground">{cleanEvidenceText(claim.retrievedPolicy.reference)}</p>
-              <p className="mt-2 text-[13px] leading-relaxed text-foreground/80">{cleanEvidenceText(claim.retrievedPolicy.clause)}</p>
-              <p className="mt-2 text-[11px] font-medium text-muted-foreground">{cleanEvidenceText(claim.provenance)}</p>
-            </div>
+            <Accordion type="single" collapsible defaultValue="policy" className="w-full">
+              <AccordionItem value="policy" className="rounded-lg border border-teal-500/15 bg-teal-500/5 px-3 py-1 border-b-0">
+                <AccordionTrigger className="text-[11px] font-extrabold uppercase tracking-wider py-2 hover:no-underline text-teal-400">
+                  <div className="flex items-center justify-between w-full pr-2 text-left">
+                     <span>Retrieved Policy</span>
+                     <span className="text-[10px] text-muted-foreground normal-case font-medium">{cleanEvidenceText(claim.retrievedPolicy.reference)}</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pt-2 pb-3 border-t border-border/40">
+                  <div className="mt-2">
+                    <PolicyClauseMarkdown clause={claim.retrievedPolicy.clause} />
+                  </div>
+                  <p className="mt-4 text-[11px] font-medium text-muted-foreground">{cleanEvidenceText(claim.provenance)}</p>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
         </div>
 
         <div className="rounded-lg border border-border bg-card p-3">
           <p className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">Reasoning</p>
-          <div className="mt-2 max-h-[15rem] overflow-y-auto pr-1 text-[13px] leading-relaxed text-foreground/80">
+          <div className="mt-2 max-h-[15rem] overflow-y-auto pr-1 scrollbar-thin text-[13px] leading-relaxed text-foreground/80">
             {cleanEvidenceText(claim.reasoning)}
           </div>
           <p className="mt-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -269,7 +404,9 @@ export function EvidenceAnchoredExplainabilityPanel({
   onJumpTo?: (seconds: number) => void;
 }) {
   const transcriptUtterances = utterances ?? [];
-  const triggerAttributions = explainability?.triggerAttributions ?? [];
+  const triggerAttributions = (explainability?.triggerAttributions ?? []).filter(
+    (item) => item.family !== "emotion" || !NON_FIRING_EMOTION_VERDICTS.has(item.verdict),
+  );
   const claimProvenance = explainability?.claimProvenance ?? [];
   const [pages, setPages] = useState<Record<string, number>>({});
   const [activeSection, setActiveSection] = useState<string>("");
@@ -318,7 +455,11 @@ export function EvidenceAnchoredExplainabilityPanel({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-primary">
+          <span className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider ${
+            triggerAttributions.length === 0
+              ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400"
+              : "border-primary/20 bg-primary/5 text-primary"
+          }`}>
             <span className="text-sm leading-none">{triggerAttributions.length}</span> Triggers
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/20 bg-teal-500/5 px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-teal-400">

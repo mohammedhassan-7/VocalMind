@@ -32,8 +32,8 @@ from app.core.policy_violation_mapping import (
     ensure_organization_policies_from_source,
     persist_policy_violations,
 )
-from app.core.speaker_role_infer import relabel_segments_with_speaker_model
 from app.llm_trigger.chains import is_gibberish
+from app.llm_trigger.scoring import compute_scores
 from app.llm_trigger.service import evaluate_interaction_triggers
 from app.models.emotion_event import EmotionEvent
 from app.models.enums import JobStage, JobStatus, NotificationType, ProcessingStatus, SpeakerRole
@@ -551,8 +551,7 @@ def _speaker_role_from_label(
     """Resolve a single segment's role.
 
     Priority:
-      1. Explicit "agent"/"customer" labels (e.g. set by the DistilBERT
-         relabel pass) win as-is.
+      1. Explicit "agent"/"customer" labels (e.g. set by diarization) win as-is.
       2. Cluster map decision from ``assign_cluster_roles_from_text``.
       3. Caller-supplied default.
     """
@@ -875,7 +874,7 @@ async def process_interaction(interaction_id: UUID) -> None:
         transcript = transcript_result.first() or Transcript(interaction_id=interaction_id)
 
         segments = analysis.get("segments", []) or []
-        segments = relabel_segments_with_speaker_model([dict(s) for s in segments])
+        segments = [dict(s) for s in segments]
         segments = apply_emotion_min_duration_gate(segments)
         agent_user = await session.get(User, interaction.agent_id) if interaction.agent_id else None
         agent_name = agent_user.name if agent_user else None
@@ -987,28 +986,11 @@ async def process_interaction(interaction_id: UUID) -> None:
                 session,
                 interaction.organization_id,
             )
-            compliance_score = max(0.0, min(1.0, float(report.process_adherence.efficiency_score) / 10.0))
-            policy_alignment = report.nli_policy.policy_alignment_score
-            if policy_alignment is None:
-                policy_alignment = 1.0 if report.nli_policy.nli_category in {"Entailment", "Benign Deviation"} else 0.35
-            policy_score = max(0.0, min(1.0, (compliance_score * 0.55) + (float(policy_alignment) * 0.45)))
-
-            if report.emotion_shift.is_dissonance_detected:
-                empathy_score = 0.55
-            elif report.emotion_shift.insufficient_evidence:
-                empathy_score = 0.82
-            else:
-                empathy_score = 0.95
-
-            if report.process_adherence.is_resolved:
-                resolution_score = 0.94 if not report.process_adherence.missing_sop_steps else 0.84
-            else:
-                resolution_score = 0.42
-
-            overall_score = round(
-                (empathy_score * 0.3) + (policy_score * 0.4) + (resolution_score * 0.3),
-                4,
-            )
+            scores = compute_scores(report)
+            empathy_score = scores.empathy
+            policy_score = scores.policy
+            resolution_score = scores.resolution
+            overall_score = scores.overall
 
             violation_input = ViolationMappingInput.from_llm_trigger_report(report)
             violation_specs = derive_violation_specs(violation_input)
@@ -1035,7 +1017,7 @@ async def process_interaction(interaction_id: UUID) -> None:
                     resolution_score=resolution_score,
                     total_silence_seconds=0.0,
                     avg_response_time_seconds=1.0,
-                    was_resolved=report.process_adherence.is_resolved,
+                    was_resolved=scores.was_resolved,
                 )
             )
         else:

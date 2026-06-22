@@ -607,7 +607,11 @@ export function SessionDetail() {
   const ragCompliance = data?.ragCompliance ?? null;
   const ragProcess = ragCompliance?.processAdherence ?? data?.llmTriggers?.processAdherence ?? null;
   const ragNli = ragCompliance?.nliPolicy ?? data?.llmTriggers?.nliPolicy ?? null;
-  const explainability = data?.llmTriggers?.explainability ?? emotionTrigger?.explainability ?? ragCompliance?.explainability ?? null;
+  // Prefer the merged llmTriggers payload: it carries both emotion + sop/policy
+  // trigger attributions AND the full claim provenance. The isolated
+  // emotionTriggers payload always ships claimProvenance: [], so reading it first
+  // dropped the NLI provenance and showed "0 Provenance".
+  const explainability = data?.llmTriggers?.explainability ?? ragCompliance?.explainability ?? emotionTrigger?.explainability ?? null;
 
   const hasAnalysisData = !!(
     emotionTrigger?.emotionShift || ragProcess || ragNli ||
@@ -772,8 +776,8 @@ export function SessionDetail() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
 
         {/* ── Transcript (left) ────────────────────────────────────────── */}
-        <div className="lg:col-span-7 bg-card rounded-xl border border-border p-5 flex flex-col">
-          <div className="flex items-center justify-between mb-3">
+        <div className="lg:col-span-7 bg-card rounded-xl border border-border p-5 h-[700px] flex flex-col">
+          <div className="flex items-center justify-between mb-3 shrink-0">
             <div>
               <h3 className="text-[14px] font-bold text-foreground">Transcript</h3>
               <p className="text-[11px] text-muted-foreground">{utterances.length} utterances</p>
@@ -785,7 +789,7 @@ export function SessionDetail() {
             </label>
           </div>
 
-          <div ref={transcriptRef} className="space-y-1 flex-1 overflow-y-auto pr-1 scroll-smooth max-h-[600px] lg:max-h-none">
+          <div ref={transcriptRef} className="space-y-1 flex-1 min-h-0 overflow-y-auto pr-1 scrollbar-thin scroll-smooth">
             {timeline.map((item) => {
               if (item.kind === "shift") {
                 const e = item.data;
@@ -854,50 +858,50 @@ export function SessionDetail() {
         </div>
 
         {/* ── Analysis Sidebar (right) ─────────────────────────────────── */}
-        <div className="lg:col-span-5">
-          <div className="space-y-3 lg:sticky lg:top-6">
-            {llmLoading && (
-              <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                Loading AI analysis...
+        <div className="lg:col-span-5 flex flex-col h-[700px]">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 scrollbar-thin space-y-3">
+          {llmLoading && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              Loading AI analysis...
+            </div>
+          )}
+          {!hasAnalysisData ? (
+            <div className="bg-card rounded-xl border border-border p-6 text-center space-y-3">
+              <Brain className="w-8 h-8 text-muted-foreground/40 mx-auto" />
+              <div>
+                <p className="text-[13px] font-semibold text-foreground">No Analysis Available</p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Pipeline data hasn&apos;t been generated yet. Click Reprocess to run the evaluation pipeline.
+                </p>
               </div>
-            )}
-            {!hasAnalysisData ? (
-              <div className="bg-card rounded-xl border border-border p-6 text-center space-y-3">
-                <Brain className="w-8 h-8 text-muted-foreground/40 mx-auto" />
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">No Analysis Available</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Pipeline data hasn&apos;t been generated yet. Click Reprocess to run the evaluation pipeline.
-                  </p>
+              {pipelineErrors.length > 0 && (
+                <div className="rounded-lg bg-red-500/5 border border-red-500/10 p-2.5 text-left">
+                  <p className="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1">Pipeline Errors</p>
+                  {pipelineErrors.map((err, i) => (
+                    <p key={i} className="text-[11px] text-muted-foreground">{err}</p>
+                  ))}
                 </div>
-                {pipelineErrors.length > 0 && (
-                  <div className="rounded-lg bg-red-500/5 border border-red-500/10 p-2.5 text-left">
-                    <p className="text-[10px] font-semibold text-red-400 uppercase tracking-wider mb-1">Pipeline Errors</p>
-                    {pipelineErrors.map((err, i) => (
-                      <p key={i} className="text-[11px] text-muted-foreground">{err}</p>
-                    ))}
-                  </div>
-                )}
-                <button type="button" onClick={() => void handleReprocess()} disabled={reprocessing}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 text-[12px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50 mx-auto">
-                  <RefreshCw className={`h-3.5 w-3.5 ${reprocessing ? "animate-spin" : ""}`} />
-                  {reprocessing ? "Processing..." : "Run Pipeline"}
-                </button>
-              </div>
-            ) : (
-              <AnalysisTabs
-                emotionTrigger={emotionTrigger}
-                ragProcess={ragProcess}
-                ragNli={ragNli}
-                policyViolations={policyViolations}
-                emotionComparison={data?.emotionComparison ?? null}
-                utterances={utterances}
-                onJumpTo={handleJumpTo}
-                variant="manager"
-                onSaved={() => void refreshDetail()}
-              />
-            )}
+              )}
+              <button type="button" onClick={() => void handleReprocess()} disabled={reprocessing}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-4 text-[12px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50 mx-auto">
+                <RefreshCw className={`h-3.5 w-3.5 ${reprocessing ? "animate-spin" : ""}`} />
+                {reprocessing ? "Processing..." : "Run Pipeline"}
+              </button>
+            </div>
+          ) : (
+            <AnalysisTabs
+              emotionTrigger={emotionTrigger}
+              ragProcess={ragProcess}
+              ragNli={ragNli}
+              policyViolations={policyViolations}
+              emotionComparison={data?.emotionComparison ?? null}
+              utterances={utterances}
+              onJumpTo={handleJumpTo}
+              variant="manager"
+              onSaved={() => void refreshDetail()}
+            />
+          )}
           </div>
         </div>
       </div>

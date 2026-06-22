@@ -463,6 +463,7 @@ export interface InteractionSummary {
   agentId: string;
   date: string;
   time: string;
+  timestamp?: string;
   duration: string;
   language: string;
   overallScore: number;
@@ -482,7 +483,18 @@ export function getInteractions(): Promise<InteractionSummary[]> {
   if (USE_OFFLINE_DEMO) {
     return Promise.resolve(offlineInteractionsList);
   }
-  return apiFetch<InteractionSummary[]>("/interactions");
+  return apiFetch<InteractionSummary[]>("/interactions").then((data) => {
+    return data.map((item) => {
+      if (item.timestamp) {
+        const d = new Date(item.timestamp);
+        // e.g. "2026-06-21"
+        item.date = d.toLocaleDateString('en-CA'); 
+        // e.g. "02:15 PM"
+        item.time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      }
+      return item;
+    });
+  });
 }
 
 export interface CreateInteractionResult {
@@ -981,6 +993,11 @@ export function getInteractionDetail(
   }
 
   return apiFetch<InteractionDetail>(`/interactions/${id}${suffix}`).then((data) => {
+    if (data.interaction && data.interaction.timestamp) {
+      const d = new Date(data.interaction.timestamp);
+      data.interaction.date = d.toLocaleDateString('en-CA');
+      data.interaction.time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
     if (!options?.skipCache) {
       interactionDetailCache.set(cacheKey, {
         data,
@@ -1527,8 +1544,16 @@ export function getAgentProfile(agentId: string): Promise<AgentProfile> {
 
 // ── Assistant ────────────────────────────────────────────────────────────────
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  deleted: boolean;
+  messages: AssistantResponse[];
+}
+
 export interface AssistantResponse {
   id?: string;
+  session_id?: string;
   type: "user" | "ai";
   content: string;
   mode: string;
@@ -1548,7 +1573,7 @@ function normalizeAssistantPayload(raw: AssistantResponse): AssistantResponse {
   return { ...raw, execution_time: exec, executionTime: exec, success };
 }
 
-export function sendAssistantQuery(text: string, mode: "chat" | "voice" = "chat"): Promise<AssistantResponse> {
+export function sendAssistantQuery(text: string, mode: "chat" | "voice" = "chat", session_id?: string): Promise<AssistantResponse> {
   if (USE_OFFLINE_DEMO) {
     let content = "Hello! I am your VocalMind Manager Assistant. I can write read-only queries and help analyze team performance metrics. Ask me about average empathy scores, active policy violations, or individual agent performances.";
     let sql = "SELECT * FROM interactions LIMIT 5;";
@@ -1611,15 +1636,43 @@ export function sendAssistantQuery(text: string, mode: "chat" | "voice" = "chat"
     body: JSON.stringify({
       query_text: text,
       mode: mode,
+      session_id: session_id,
     }),
   }).then(normalizeAssistantPayload);
 }
 
-export function getAssistantHistory(): Promise<AssistantResponse[]> {
+export function getAssistantHistory(): Promise<ChatSession[]> {
   if (USE_OFFLINE_DEMO) {
-    return Promise.resolve(offlineAssistantHistoryList.map(normalizeAssistantPayload) as AssistantResponse[]);
+    return Promise.resolve([
+      {
+        id: "offline-session",
+        title: "Offline Demo Chat",
+        deleted: false,
+        messages: offlineAssistantHistoryList.map(normalizeAssistantPayload) as AssistantResponse[]
+      }
+    ]);
   }
-  return apiFetch<AssistantResponse[]>("/assistant/history").then((rows) => rows.map(normalizeAssistantPayload));
+  return apiFetch<ChatSession[]>("/assistant/history").then(sessions => {
+    return sessions.map(s => {
+      s.messages = s.messages.map(normalizeAssistantPayload);
+      return s;
+    });
+  });
+}
+
+export function renameAssistantSession(sessionId: string, title: string): Promise<void> {
+  if (USE_OFFLINE_DEMO) return Promise.resolve();
+  return apiFetch(`/assistant/session/${sessionId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function deleteAssistantSession(sessionId: string): Promise<void> {
+  if (USE_OFFLINE_DEMO) return Promise.resolve();
+  return apiFetch(`/assistant/session/${sessionId}`, {
+    method: "DELETE",
+  });
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

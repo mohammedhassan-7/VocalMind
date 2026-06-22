@@ -6,10 +6,22 @@ from datetime import datetime, timezone
 from app.models.enums import QueryMode
 
 
+class AssistantSession(SQLModel, table=True):
+    __tablename__ = "assistant_sessions"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    organization_id: UUID = Field(foreign_key="organizations.id", index=True)
+    title: str = Field(max_length=255, default="New chat")
+    is_deleted: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+
 class AssistantQuery(SQLModel, table=True):
     __tablename__ = "assistant_queries"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    session_id: Optional[UUID] = Field(default=None, foreign_key="assistant_sessions.id", index=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
     organization_id: UUID = Field(foreign_key="organizations.id", index=True)
     query_mode: QueryMode = Field(

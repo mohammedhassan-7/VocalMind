@@ -273,10 +273,10 @@ export function AgentCallDetail() {
       {/* ── Main Content Grid ─────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         {/* ── Transcript (left) ────────────────────────────────────────── */}
-        <div className="lg:col-span-7 flex flex-col h-full">
-          <div className="bg-card rounded-2xl border border-border p-5 flex flex-col h-full">
+        <div className="lg:col-span-7">
+          <div className="bg-card rounded-2xl border border-border p-5 h-[700px] flex flex-col">
             <h3 className="text-[14px] font-bold text-foreground mb-3 shrink-0">Transcript</h3>
-            <div className="space-y-3 flex-1 overflow-y-auto pr-1 max-h-[600px] lg:max-h-none">
+            <div className="space-y-3 flex-1 overflow-y-auto pr-1 scrollbar-thin">
               {utterances.map((utterance) => {
                 const isAgent = utterance.speaker === "agent";
                 const emotionStyle = getEmotionStyle(utterance.emotion);
@@ -306,53 +306,53 @@ export function AgentCallDetail() {
         </div>
 
         {/* ── Analysis Sidebar (right) ─────────────────────────────────── */}
-        <div className="lg:col-span-5">
-          <div className="space-y-3 lg:sticky lg:top-6">
-            {!hasAnalysisData && emotionTrigger && !emotionTrigger.available ? (
-              <div className="bg-card rounded-2xl border border-border p-5 text-center space-y-3">
-                <p className="text-[13px] font-semibold text-foreground">LLM coaching insights unavailable.</p>
-                {emotionTrigger.error && (
-                  <p className="text-[11px] text-muted-foreground">{emotionTrigger.error}</p>
-                )}
-              </div>
-            ) : hasAnalysisData ? (
-              <AnalysisTabs
-                emotionTrigger={emotionTrigger}
-                ragProcess={ragProcess}
-                ragNli={ragNli}
-                policyViolations={policyViolations}
-                emotionComparison={data?.emotionComparison ?? null}
-                utterances={utterances}
-                onJumpTo={handleJumpTo}
-                variant="agent"
-                renderAgentFlag={(kind, id) => <FlagButton kind={kind} targetId={id} />}
-              />
-            ) : (
-              <>
-                {/* Coaching Points (kept for backward compat when no LLM data) */}
-                {policyViolations.length > 0 && (
-                  <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-5">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Target className="w-4 h-4 text-amber-500" />
-                      <h3 className="text-[14px] font-semibold text-amber-500">Coaching Points</h3>
-                    </div>
-                    <p className="text-[11px] italic text-muted-foreground mb-3">Areas to focus on from saved findings.</p>
-                    <div className="space-y-2.5">
-                      {policyViolations.map((v) => (
-                        <div key={v.id} className="bg-card border border-amber-500/20 rounded-xl p-3">
-                          <h4 className="text-[13px] font-semibold text-foreground mb-1">{v.policyTitle}</h4>
-                          <p className="text-[12px] text-muted-foreground mb-1">{v.reasoning}</p>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span className="text-[12px] font-semibold text-amber-500">Score: {v.score}% · target 80%+</span>
-                            <FlagButton kind="compliance" targetId={v.id} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+        <div className="lg:col-span-5 flex flex-col h-[700px]">
+          <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin space-y-3">
+          {!hasAnalysisData && emotionTrigger && !emotionTrigger.available ? (
+            <div className="bg-card rounded-2xl border border-border p-5 text-center space-y-3">
+              <p className="text-[13px] font-semibold text-foreground">LLM coaching insights unavailable.</p>
+              {emotionTrigger.error && (
+                <p className="text-[11px] text-muted-foreground">{emotionTrigger.error}</p>
+              )}
+            </div>
+          ) : hasAnalysisData ? (
+            <AnalysisTabs
+              emotionTrigger={emotionTrigger}
+              ragProcess={ragProcess}
+              ragNli={ragNli}
+              policyViolations={policyViolations}
+              emotionComparison={data?.emotionComparison ?? null}
+              utterances={utterances}
+              onJumpTo={handleJumpTo}
+              variant="agent"
+              renderAgentFlag={(kind, id) => <FlagButton kind={kind} targetId={id} />}
+            />
+          ) : (
+            <>
+              {/* Coaching Points (kept for backward compat when no LLM data) */}
+              {policyViolations.length > 0 && (
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Target className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-[14px] font-semibold text-amber-500">Coaching Points</h3>
                   </div>
-                )}
-              </>
-            )}
+                  <p className="text-[11px] italic text-muted-foreground mb-3">Areas to focus on from saved findings.</p>
+                  <div className="space-y-2.5">
+                    {policyViolations.map((v) => (
+                      <div key={v.id} className="bg-card border border-amber-500/20 rounded-xl p-3">
+                        <h4 className="text-[13px] font-semibold text-foreground mb-1">{v.policyTitle}</h4>
+                        <p className="text-[12px] text-muted-foreground mb-1">{v.reasoning}</p>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <span className="text-[12px] font-semibold text-amber-500">Score: {v.score}% · target 80%+</span>
+                          <FlagButton kind="compliance" targetId={v.id} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           </div>
         </div>
       </div>

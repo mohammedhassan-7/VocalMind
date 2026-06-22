@@ -23,6 +23,11 @@ from app.llm_trigger.schemas import EmotionShiftAnalysis, NLIEvaluation, Process
 
 logger = logging.getLogger(__name__)
 
+def _ensure_gemini_credentials():
+    import os
+    if settings.GOOGLE_APPLICATION_CREDENTIALS and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
+
 _lock = threading.Lock()
 _shared_model: BaseChatModel | None = None
 
@@ -77,6 +82,27 @@ def build_llm(fast: bool = False, stage: str | None = None) -> BaseChatModel:
             max_tokens=settings.LLM_MAX_TOKENS,
             request_timeout=settings.LLM_REQUEST_TIMEOUT_SECONDS,
         )
+    if settings.LLM_PROVIDER == "gemini":
+        from langchain_google_vertexai import ChatVertexAI
+        
+        _ensure_gemini_credentials()
+        
+        if fast:
+            model = settings.GEMINI_FAST_MODEL or settings.GEMINI_MODEL
+        elif stage:
+            model = get_model_for_stage(stage)
+        else:
+            model = settings.GEMINI_MODEL
+            
+        return ChatVertexAI(
+            model=model,
+            project=settings.GEMINI_PROJECT or None,
+            location=settings.GEMINI_REGION or "us-central1",
+            temperature=0,
+            max_output_tokens=max(settings.LLM_MAX_TOKENS, settings.GEMINI_MAX_OUTPUT_TOKENS),
+            response_mime_type="application/json",
+        )
+        
     from langchain_groq import ChatGroq
 
     return ChatGroq(
@@ -121,6 +147,18 @@ def get_model_for_stage(stage: str) -> str:
         return legacy_override
 
     stage_class = _STAGE_MODEL_CLASS[key]
+    if settings.LLM_PROVIDER == "gemini":
+        gemini_overrides = {
+            "emotion_shift": settings.GEMINI_MODEL_EMOTION_SHIFT,
+            "process_adherence": settings.GEMINI_MODEL_PROCESS_ADHERENCE,
+            "nli_policy": settings.GEMINI_MODEL_NLI_POLICY,
+        }
+        gemini_override = (gemini_overrides.get(key) or "").strip()
+        if gemini_override:
+            return gemini_override
+        if stage_class == _FAST_STAGE:
+            return settings.GEMINI_FAST_MODEL or settings.GEMINI_MODEL
+        return settings.GEMINI_MODEL
     if settings.LLM_PROVIDER == "ollama_cloud":
         if stage_class == _FAST_STAGE:
             return settings.OLLAMA_CLOUD_FAST_MODEL
@@ -153,7 +191,15 @@ def _get_shared_model() -> BaseChatModel:
 
 
 def _with_json_object_mode(model: BaseChatModel) -> BaseChatModel:
-    """Bind OpenAI-compatible JSON object mode (Ollama Cloud / ChatOpenAI)."""
+    """Bind OpenAI-compatible JSON object mode (Ollama Cloud / ChatOpenAI / Groq).
+
+    Skipped for Vertex AI Gemini: the model is already built with
+    ``response_mime_type="application/json"``. Binding OpenAI's ``response_format``
+    onto ChatVertexAI makes LangChain force tool-calling mode, which conflicts with
+    native JSON output and makes Vertex reject the request with HTTP 400.
+    """
+    if settings.LLM_PROVIDER == "gemini":
+        return model
     bind = getattr(model, "bind", None)
     if bind is None:
         return model

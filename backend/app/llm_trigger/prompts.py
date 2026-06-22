@@ -33,12 +33,13 @@ def build_emotion_shift_prompt() -> ChatPromptTemplate:
                 "Customer text: {customer_text}\n"
                 "Acoustic emotion: {acoustic_emotion}\n\n"
                 "Task:\n"
-                "1) Diagnose agent behavioral friction_root_cause: interruption, dismissive_tone, "
+                "1) Determine if there is emotional dissonance between acoustic and text (set is_dissonance_detected).\n"
+                "2) Diagnose the primary issue into dissonance_type: interruption, dismissive_tone, "
                 "missing_acknowledgment, or none.\n"
-                "2) Do NOT output sarcasm, passive_aggression, or cross_modal.\n"
-                "3) Set turn_index to the agent turn where friction occurred (or null).\n"
-                "4) Set evidence to a verbatim quote of the agent friction behavior.\n"
-                "5) Return ONLY the JSON object.",
+                "3) Explain the transcript-grounded root_cause of the friction.\n"
+                "4) Provide an actionable counterfactual_correction starting with 'If the agent had...'.\n"
+                "5) Extract exact evidence_quotes from the transcript to support the analysis.\n"
+                "6) Return ONLY the JSON object.",
             ),
         ]
     )
@@ -59,9 +60,12 @@ def build_process_adherence_prompt() -> ChatPromptTemplate:
                 "Retrieved SOP:\n{retrieved_sop}\n\n"
                 "Expected resolution graph steps:\n{expected_resolution_graph}\n\n"
                 "Task:\n"
-                "- Set missing_sop_steps to an array of step_key strings (snake_case) from the catalog "
-                "that are absent or weak in the transcript (empty array if none).\n"
-                "- Provide justification, evidence_quotes, and citations grounded in the transcript.\n"
+                "- Set detected_topic to the core issue from the dialogue.\n"
+                "- Set is_resolved to true if the customer issue appears solved.\n"
+                "- Rate efficiency_score 1-10 based on how well the agent adhered to the SOP steps.\n"
+                "- Provide justification for the score.\n"
+                "- Set missing_sop_steps to an array of step_key strings (snake_case) from the expected steps that are absent or weak.\n"
+                "- Extract exact evidence_quotes from the transcript.\n"
                 "- Return ONLY the JSON object.",
             ),
         ]
@@ -80,8 +84,12 @@ def build_nli_policy_prompt() -> ChatPromptTemplate:
                 "{few_shot}\n\n"
                 "Ground truth policy:\n{ground_truth_policy}\n\n"
                 "Agent statement:\n{agent_statement}\n\n"
-                "Classify into exactly one category. Set both verdict and nli_category to the same label.\n"
-                "Return ONLY the JSON object.",
+                "Task:\n"
+                "- Set nli_category to exactly one of the allowed categories.\n"
+                "- Provide a short justification for the classification.\n"
+                "- Extract exact evidence_quotes from the policy/statement.\n"
+                "- Set confidence_score to a float between 0.0 and 1.0 representing your confidence in the classification.\n"
+                "- Return ONLY the JSON object.",
             ),
         ]
     )

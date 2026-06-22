@@ -186,13 +186,33 @@ async def get_agent_profile(
     )
     calls_this_week = calls_this_week_res.one_or_none() or 0
 
+    # 7. Team Rank
+    rank_stmt = (
+        select(
+            Interaction.agent_id,
+            func.avg(InteractionScore.overall_score).label("avg_score")
+        )
+        .join(InteractionScore, InteractionScore.interaction_id == Interaction.id)
+        .where(Interaction.organization_id == current_user.organization_id)
+        .group_by(Interaction.agent_id)
+        .order_by(func.avg(InteractionScore.overall_score).desc())
+    )
+    rank_res = await session.exec(rank_stmt)
+    ranked_agents = rank_res.all()
+    
+    team_rank = 1
+    for i, r in enumerate(ranked_agents):
+        if str(r.agent_id) == str(agent_id):
+            team_rank = i + 1
+            break
+
     result = {
         "id": str(agent.id),
         "name": agent.name,
         "role": agent.role.value if agent.role else "agent",
         "totalCalls": total_calls,
         "callsThisWeek": calls_this_week,
-        "teamRank": 1, 
+        "teamRank": team_rank, 
         "avgScore": avg_overall,
         "overallScore": avg_overall,
         "empathyScore": avg_empathy,

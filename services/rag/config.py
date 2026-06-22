@@ -203,9 +203,12 @@ class Settings(BaseSettings):
     RAGAS_JUDGE_PROVIDER: str = Field(default="local", alias="RAGAS_JUDGE_PROVIDER")
 
     # ── Vertex AI (Gemini judge) ──
-    VERTEX_PROJECT: str = Field(default="", alias="VERTEX_PROJECT")
+    GEMINI_PROJECT: str = Field(default="", alias="GEMINI_PROJECT")
     VERTEX_LOCATION: str = Field(default="us-central1", alias="VERTEX_LOCATION")
     VERTEX_SA_FILE: str = Field(default="", alias="VERTEX_SA_FILE")
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    GEMINI_FAST_MODEL: str = Field(default="gemini-2.5-flash-lite", alias="GEMINI_FAST_MODEL")
+    GOOGLE_APPLICATION_CREDENTIALS: str = Field(default="", alias="GOOGLE_APPLICATION_CREDENTIALS")
 
     # ── Reranker score threshold ──
     # Cross-encoder chunks below this score are dropped before synthesis.
@@ -308,6 +311,10 @@ def resolve_model_for_stage(stage: str) -> str:
         if _STAGE_MODEL_CLASS[key] == _FAST_STAGE:
             return settings.OLLAMA_CLOUD_FAST_MODEL
         return settings.OLLAMA_CLOUD_HEAVY_MODEL
+    if settings.LLM_PROVIDER == "gemini":
+        if _STAGE_MODEL_CLASS[key] == _FAST_STAGE:
+            return settings.GEMINI_FAST_MODEL
+        return settings.GEMINI_MODEL
     return settings.groq.model
 
 
@@ -326,6 +333,23 @@ def build_rag_llm_client():
     OpenAI-compatible chat client for RAG judge calls.
     Groq SDK when LLM_PROVIDER=groq; OpenAI client → Ollama Cloud otherwise.
     """
+    if settings.LLM_PROVIDER == "gemini":
+        from langchain_google_vertexai import ChatVertexAI
+        import os
+        
+        # Ensure credentials are set for Vertex AI
+        if settings.GOOGLE_APPLICATION_CREDENTIALS and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
+        elif settings.VERTEX_SA_FILE and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.VERTEX_SA_FILE
+            
+        return ChatVertexAI(
+            model=rag_judge_model(),
+            project=settings.GEMINI_PROJECT or None,
+            location=settings.VERTEX_LOCATION or "us-central1",
+            temperature=0,
+            max_output_tokens=settings.groq.max_tokens,
+        )
     if settings.LLM_PROVIDER == "ollama_cloud":
         from openai import OpenAI
 

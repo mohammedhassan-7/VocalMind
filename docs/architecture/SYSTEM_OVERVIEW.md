@@ -47,7 +47,7 @@ The system is decoupled into modular services to allow independent scaling, deve
 | **Frontend** | `:3000` | React 18, Vite, Tailwind v4, Material UI | Single Page Application presenting role-based dashboards (Manager and Agent views), detailed call transcript inspector, interactive evidence panels, and AI assistant query chats. |
 | **Backend Gateway** | `:8000` | FastAPI, SQLModel (SQLAlchemy) | Exposes REST endpoints, validates schemas, enforces RBAC policies, manages session-state caches, runs the background audio scanner, and orchestrates call processing. |
 | **VAD Service** | `:8002` | Silero VAD, FastAPI wrapper | Voice Activity Detection service. Evaluates raw audio streams to isolate precise timestamp segments containing speech. |
-| **WhisperX Service** | `:8003` | WhisperX, pyannote, DistilBERT | Performs speech-to-text, forced word-level alignment, speaker diarization, and maps speech roles (Agent vs. Customer). |
+| **WhisperX Service** | `:8003` | WhisperX, pyannote | Performs speech-to-text, forced word-level alignment, and speaker diarization. Agent/Customer role mapping is done downstream in the backend. |
 | **Emotion Service** | `:8001` | funASR emotion2vec, FastAPI | Speech emotion recognition. Generates classification probability vectors across 7 canonical emotion labels for mono audio segments. |
 | **RAG Vector DB** | `:6333` | Qdrant Vector DB | Stores parsed policy, SOP, and knowledge base document chunks. Supports segmented payloads filtered by multi-tenant organization IDs. |
 | **Ollama** | `:11434` | Ollama (`snowflake-arctic-embed2`) | Host-local embedding server utilized to generate dense vector representations of policy and Q&A documents. |

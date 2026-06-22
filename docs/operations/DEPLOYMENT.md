@@ -38,7 +38,6 @@ Used when running the FastAPI backend gateway natively on the host:
 *   `IS_LOCAL`: Boolean flag. `true` directs inference requests to local Docker microservices (`:8001`, `:8002`, `:8003`). `false` redirects inference to a remote Kaggle environment via a secure fallback client.
 *   `DATABASE_URL`: Connection string. Defaults to `postgresql+asyncpg://vocalmind:vocalmind_dev@db:5432/vocalmind` in Docker, and `postgresql+asyncpg://...` or SQLite fallback for unit tests.
 *   `ASSISTANT_LLM_PROVIDER`: Provider for NL-to-SQL Assistant (`gemini`, `groq`, or `ollama`).
-*   `BACKEND_SPEAKER_RELABEL_ENABLED`: Must remain `false` while WhisperX is running to avoid double speaker labeling conflicts.
 *   `AUDIO_FOLDER_WATCHER_ENABLED`: Set to `true` to enable automatic background file ingestion.
 
 ---

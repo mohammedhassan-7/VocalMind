@@ -113,7 +113,7 @@ export function NotificationBell() {
         {items.length === 0 ? (
           <div className="p-4 text-center text-sm text-muted-foreground">No notifications</div>
         ) : (
-          <div className="max-h-[360px] overflow-y-auto">
+          <div className="max-h-[360px] overflow-y-auto scrollbar-thin">
             {items.map((item) => (
               <button
                 key={item.id}

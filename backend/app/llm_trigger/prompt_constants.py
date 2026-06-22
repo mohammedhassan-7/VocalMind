@@ -18,20 +18,18 @@ EMOTION_SHIFT_ALLOWED_TYPES = FRICTION_ROOT_CAUSES
 EMOTION_SHIFT_OUTPUT_SCHEMA = """
 OUTPUT FORMAT (strict — return ONLY this JSON object, no markdown fences, no extra keys):
 {
-  "friction_root_cause": "interruption" | "dismissive_tone" | "missing_acknowledgment" | "none",
-  "shift_type": "<same as friction_root_cause>",
-  "dissonance_type": "<same as friction_root_cause>",
-  "turn_index": <integer turn where agent friction occurred, or null>,
-  "evidence": "<verbatim quote showing agent friction behavior>",
-  "is_dissonance_detected": <boolean — true unless friction_root_cause is "none">,
+  "is_dissonance_detected": <boolean — true unless dissonance_type is "none">,
+  "dissonance_type": "interruption" | "dismissive_tone" | "missing_acknowledgment" | "none",
   "root_cause": "<one sentence: why this agent behavior explains the emotion shift>",
   "counterfactual_correction": "<must start with 'If the agent had...'>",
-  "evidence_quotes": ["<verbatim quote>"],
+  "current_customer_emotion": "<dominant customer emotion label for this slice>",
+  "current_emotion_reasoning": "<one sentence on why the customer is in this emotional state>",
+  "evidence_quotes": ["<verbatim quote showing the agent friction behavior>"],
   "citations": [{"source": "transcript", "speaker": "agent|customer", "quote": "<verbatim>"}],
   "confidence_score": <float 0.0-1.0>
 }
 
-CLOSED LABEL SET for friction_root_cause (use EXACTLY one):
+CLOSED LABEL SET for dissonance_type (use EXACTLY one):
 - interruption — agent talked over the customer, overlapping speech, or cut the customer off mid-sentence
 - dismissive_tone — agent used curt, blaming, or impatient language (CS-RULE-008 style) without clear overlap
 - missing_acknowledgment — agent jumped to verification/script without acknowledging the customer's stated concern
@@ -50,6 +48,15 @@ TIE-BREAK RULES:
 - If BOTH interruption and dismissive tone are present, choose interruption.
 - If agent line sounds polite but skips acknowledgment of customer concern, choose missing_acknowledgment.
 - Use none only when transcript evidence does not support any agent behavioral cause.
+
+CONSERVATIVE BIAS (avoid false positives — empathy must reward good agents):
+- Default to "none". Only choose interruption / dismissive_tone / missing_acknowledgment when you can
+  put an EXACT verbatim AGENT line in evidence_quotes that demonstrates the friction.
+- Do NOT infer friction from the customer's emotion alone. A frustrated or anxious customer is not
+  proof of agent fault — the agent can be empathetic toward an upset customer.
+- A polite, on-script, or efficient agent is "none". Verification questions, hold requests, and
+  procedural steps are NOT friction unless the agent is curt/blaming or cuts the customer off.
+- If your only evidence quote is a CUSTOMER line, the verdict is "none".
 """.strip()
 
 EMOTION_SHIFT_FEW_SHOT = """
@@ -57,25 +64,25 @@ Example A (interruption):
 Detected emotion: frustration
 Transcript note: overlapping speech when customer explained the $87 charge.
 Output JSON:
-{"friction_root_cause":"interruption","shift_type":"interruption","dissonance_type":"interruption","turn_index":4,"evidence":"Let's just get through verification first—","is_dissonance_detected":true,"root_cause":"Agent talked over the customer during the billing explanation, triggering frustration.","counterfactual_correction":"If the agent had let the customer finish describing the charge before responding, frustration may not have spiked.","evidence_quotes":["overlapping speech, impatience"],"citations":[{"source":"transcript","speaker":"agent","quote":"Let's just get through verification first—"}],"confidence_score":0.9}
+{"is_dissonance_detected":true,"dissonance_type":"interruption","root_cause":"Agent talked over the customer during the billing explanation, triggering frustration.","counterfactual_correction":"If the agent had let the customer finish describing the charge before responding, frustration may not have spiked.","current_customer_emotion":"frustrated","current_emotion_reasoning":"The customer was cut off while explaining the disputed charge.","evidence_quotes":["Let's just get through verification first—"],"citations":[{"source":"transcript","speaker":"agent","quote":"Let's just get through verification first—"}],"confidence_score":0.9}
 
 Example B (dismissive_tone):
 Detected emotion: anger
 Agent: "Well, if you'd listened the first time we wouldn't be here."
 Output JSON:
-{"friction_root_cause":"dismissive_tone","shift_type":"dismissive_tone","dissonance_type":"dismissive_tone","turn_index":3,"evidence":"Well, if you'd listened the first time we wouldn't be here.","is_dissonance_detected":true,"root_cause":"Agent used blaming language that escalated customer anger.","counterfactual_correction":"If the agent had apologized for the repetition instead of blaming the customer, anger could have de-escalated.","evidence_quotes":["Well, if you'd listened the first time we wouldn't be here."],"citations":[{"source":"transcript","speaker":"agent","quote":"Well, if you'd listened the first time we wouldn't be here."}],"confidence_score":0.88}
+{"is_dissonance_detected":true,"dissonance_type":"dismissive_tone","root_cause":"Agent used blaming language that escalated customer anger.","counterfactual_correction":"If the agent had apologized for the repetition instead of blaming the customer, anger could have de-escalated.","current_customer_emotion":"angry","current_emotion_reasoning":"The agent's blaming remark provoked the customer.","evidence_quotes":["Well, if you'd listened the first time we wouldn't be here."],"citations":[{"source":"transcript","speaker":"agent","quote":"Well, if you'd listened the first time we wouldn't be here."}],"confidence_score":0.88}
 
 Example C (none — no agent friction):
 Detected emotion: frustration
 Customer and agent text align; customer states frustration about outage and agent acknowledges it.
 Output JSON:
-{"friction_root_cause":"none","shift_type":"none","dissonance_type":"none","turn_index":null,"evidence":"I want a credit on my bill.","is_dissonance_detected":false,"root_cause":"Frustration aligns with stated issue; no agent interruption or dismissive behavior.","counterfactual_correction":"If the agent had continued the same supportive approach, the interaction likely would have remained stable.","evidence_quotes":["I want a credit on my bill."],"citations":[{"source":"transcript","speaker":"customer","quote":"I want a credit on my bill."}],"confidence_score":0.85}
+{"is_dissonance_detected":false,"dissonance_type":"none","root_cause":"Frustration aligns with stated issue; no agent interruption or dismissive behavior.","counterfactual_correction":"If the agent had continued the same supportive approach, the interaction likely would have remained stable.","current_customer_emotion":"frustrated","current_emotion_reasoning":"The customer is frustrated about the outage itself, not the agent.","evidence_quotes":["I want a credit on my bill."],"citations":[{"source":"transcript","speaker":"customer","quote":"I want a credit on my bill."}],"confidence_score":0.85}
 
 Example D (missing_acknowledgment):
 Detected emotion: worry
 Customer worried about unauthorized charge; agent immediately requests verification without acknowledgment.
 Output JSON:
-{"friction_root_cause":"missing_acknowledgment","shift_type":"missing_acknowledgment","dissonance_type":"missing_acknowledgment","turn_index":2,"evidence":"Yeah, I hear you. Let's just get through the verification first.","is_dissonance_detected":true,"root_cause":"Agent skipped explicit acknowledgment of the fraud worry before forcing verification.","counterfactual_correction":"If the agent had validated the customer's worry about the charge before verification, trust would improve.","evidence_quotes":["Let's just get through the verification first."],"citations":[{"source":"transcript","speaker":"agent","quote":"Let's just get through the verification first."}],"confidence_score":0.82}
+{"is_dissonance_detected":true,"dissonance_type":"missing_acknowledgment","root_cause":"Agent skipped explicit acknowledgment of the fraud worry before forcing verification.","counterfactual_correction":"If the agent had validated the customer's worry about the charge before verification, trust would improve.","current_customer_emotion":"sad","current_emotion_reasoning":"The customer is anxious about the unauthorized charge and feels unheard.","evidence_quotes":["Let's just get through the verification first."],"citations":[{"source":"transcript","speaker":"agent","quote":"Let's just get through the verification first."}],"confidence_score":0.82}
 """.strip()
 
 EMOTION_SHIFT_SYSTEM_CORE = (
@@ -234,6 +241,15 @@ regardless of empathetic language.
 DISTINGUISHING RULE (Policy Hallucination vs Contradiction):
 Invented fees, approval rules, or thresholds not in policy → Policy Hallucination (not Contradiction).
 Misstating or breaking a rule that IS in policy → Contradiction.
+
+CONSERVATIVE BIAS (avoid false positives):
+- Choose Contradiction or Policy Hallucination ONLY when you can quote the specific policy clause
+  that is violated or that the agent fabricated. If you cannot point to such a clause, the statement
+  is NOT a violation.
+- An agent CORRECTLY denying a request, enforcing a rule, or following the documented procedure is
+  Entailment — not a Contradiction. Denying something the policy does not allow is compliance.
+- When the statement is consistent with policy and no clause is clearly breached, choose Entailment.
+- Reserve "critical" severity for genuine regulatory/financial/identity harm; do not inflate severity.
 """.strip()
 
 NLI_OUTPUT_SCHEMA = """
@@ -241,44 +257,60 @@ OUTPUT FORMAT (strict JSON only):
 {
   "verdict": "Entailment" | "Benign Deviation" | "Contradiction" | "Policy Hallucination",
   "nli_category": "<same value as verdict>",
+  "severity": "critical" | "major" | "minor" | "none",
   "justification": "<one sentence with policy evidence>",
   "evidence_quotes": ["<policy quote>", "<agent quote>"],
   "citations": [{"source": "policy|transcript", "quote": "<verbatim>"}],
   "confidence_score": <float 0.0-1.0>,
   "policy_alignment_score": <float 0.0-1.0>
 }
+
+SEVERITY (only for Contradiction / Policy Hallucination; use "none" for Entailment / Benign Deviation):
+- critical — regulatory breach, identity-verification shortfall, financial limit exceeded, or prohibited action that risks real customer/legal harm.
+- major — a clear policy violation with limited or recoverable harm.
+- minor — a small procedural slip with negligible harm (e.g. omitting the call-recording notice, skipping a non-material script line).
 """.strip()
 
 NLI_FEW_SHOT = """
 Example A (Entailment):
 - policy: "Refunds are allowed only within 30 days."
 - agent: "I can help process a refund if your purchase is within 30 days."
-→ {"verdict":"Entailment","nli_category":"Entailment","justification":"Agent restates the 30-day refund window from policy.","evidence_quotes":["Refunds are allowed only within 30 days.","within 30 days"],"citations":[{"source":"policy","quote":"Refunds are allowed only within 30 days."},{"source":"transcript","quote":"within 30 days"}],"confidence_score":0.94,"policy_alignment_score":0.96}
+→ {"verdict":"Entailment","nli_category":"Entailment","severity":"none","justification":"Agent restates the 30-day refund window from policy.","evidence_quotes":["Refunds are allowed only within 30 days.","within 30 days"],"citations":[{"source":"policy","quote":"Refunds are allowed only within 30 days."},{"source":"transcript","quote":"within 30 days"}],"confidence_score":0.94,"policy_alignment_score":0.96}
 
 Example B (Benign Deviation — empathy before verification):
 - policy: "Agents must verify identity before account changes."
 - agent: "I completely understand how stressful this is. Let me verify your account number and PIN first."
-→ {"verdict":"Benign Deviation","nli_category":"Benign Deviation","justification":"Empathetic preamble before required verification; no policy violation.","evidence_quotes":["verify identity","I completely understand"],"citations":[],"confidence_score":0.78,"policy_alignment_score":0.55}
+→ {"verdict":"Benign Deviation","nli_category":"Benign Deviation","severity":"none","justification":"Empathetic preamble before required verification; no policy violation.","evidence_quotes":["verify identity","I completely understand"],"citations":[],"confidence_score":0.78,"policy_alignment_score":0.55}
 
-Example C (Contradiction — insufficient verification count, nli_003 pattern):
+Example C (Contradiction, critical — insufficient verification count, nli_003 pattern):
 - policy: "Agents must complete 3-of-5 identity verification before any financial adjustment."
 - agent: "I completely understand how stressful unauthorized charges can be. Before we adjust anything, I need to verify your account number and PIN."
-→ {"verdict":"Contradiction","nli_category":"Contradiction","justification":"Agent proposes only two verification factors before adjustment; policy requires 3-of-5.","evidence_quotes":["3-of-5 identity verification","account number and PIN"],"citations":[],"confidence_score":0.92,"policy_alignment_score":0.12}
+→ {"verdict":"Contradiction","nli_category":"Contradiction","severity":"critical","justification":"Agent proposes only two verification factors before adjustment; policy requires 3-of-5.","evidence_quotes":["3-of-5 identity verification","account number and PIN"],"citations":[],"confidence_score":0.92,"policy_alignment_score":0.12}
 
-Example D (Policy Hallucination):
+Example D (Policy Hallucination, major):
 - policy: "Frontline agents may apply goodwill credits up to $200 without manager approval."
 - agent: "Our policy requires manager approval for any goodwill credit and charges a $25 processing fee."
-→ {"verdict":"Policy Hallucination","nli_category":"Policy Hallucination","justification":"Agent invented manager-approval requirement and $25 fee not present in policy.","evidence_quotes":["up to $200 without manager approval","$25 processing fee"],"citations":[],"confidence_score":0.9,"policy_alignment_score":0.05}
+→ {"verdict":"Policy Hallucination","nli_category":"Policy Hallucination","severity":"major","justification":"Agent invented manager-approval requirement and $25 fee not present in policy.","evidence_quotes":["up to $200 without manager approval","$25 processing fee"],"citations":[],"confidence_score":0.9,"policy_alignment_score":0.05}
 
 Example E (Benign Deviation — at-threshold credit with justification):
 - policy: "Escalations require supervisor approval before promising credits over $50."
 - agent: "I'll note a $50 goodwill credit pending — skipping the hold script because you're a 5-year customer and I documented the reason."
-→ {"verdict":"Benign Deviation","nli_category":"Benign Deviation","justification":"Credit is at the $50 threshold (not over), with explicit documented justification for skipping hold script.","evidence_quotes":["over $50","$50 goodwill credit","documented the reason"],"citations":[],"confidence_score":0.8,"policy_alignment_score":0.6}
+→ {"verdict":"Benign Deviation","nli_category":"Benign Deviation","severity":"none","justification":"Credit is at the $50 threshold (not over), with explicit documented justification for skipping hold script.","evidence_quotes":["over $50","$50 goodwill credit","documented the reason"],"citations":[],"confidence_score":0.8,"policy_alignment_score":0.6}
 
-Example F (Policy Hallucination — must NOT label Contradiction):
+Example F (Policy Hallucination, major — must NOT label Contradiction):
 - policy: "Frontline agents may apply goodwill credits up to $200 without manager approval."
 - agent: "Manager approval is required for any goodwill credit and we charge a $25 processing fee."
-→ {"verdict":"Policy Hallucination","nli_category":"Policy Hallucination","justification":"Agent invented approval rule and $25 fee not in policy.","evidence_quotes":["without manager approval","$25 processing fee"],"citations":[],"confidence_score":0.93,"policy_alignment_score":0.04}
+→ {"verdict":"Policy Hallucination","nli_category":"Policy Hallucination","severity":"major","justification":"Agent invented approval rule and $25 fee not in policy.","evidence_quotes":["without manager approval","$25 processing fee"],"citations":[],"confidence_score":0.93,"policy_alignment_score":0.04}
+
+Example G (Contradiction, minor — small procedural slip):
+- policy: "Agent must state the call-recording notice immediately after greeting."
+- agent: "Thanks for calling, my name is Marcus — how can I help with your internet today?"
+→ {"verdict":"Contradiction","nli_category":"Contradiction","severity":"minor","justification":"Agent omitted the mandatory call-recording notice after the greeting; negligible customer harm.","evidence_quotes":["state the call-recording notice immediately after greeting","how can I help with your internet today?"],"citations":[],"confidence_score":0.8,"policy_alignment_score":0.2}
+
+Example H (Entailment — correct denial is compliance, NOT a contradiction):
+- policy: "Speeds within 20% of the advertised rate are within spec; no credit is owed."
+- agent: "Your line is testing within 15% of plan speed, so that's within our normal range and I'm not able to issue a credit for it."
+→ {"verdict":"Entailment","nli_category":"Entailment","severity":"none","justification":"Agent correctly applies the 20% in-spec rule and declines a credit the policy does not owe.","evidence_quotes":["within 20% of the advertised rate are within spec","within our normal range"],"citations":[{"source":"policy","quote":"within 20% of the advertised rate are within spec"}],"confidence_score":0.88,"policy_alignment_score":0.9}
 """.strip()
 
 NLI_POLICY_SYSTEM_CORE = (

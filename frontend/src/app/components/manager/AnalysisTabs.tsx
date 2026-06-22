@@ -8,7 +8,7 @@ import type {
   UtteranceData, EmotionComparison, PolicyViolationData,
 } from "../../services/api";
 import { findUtteranceByIndex, resolveJumpSeconds } from "../../utils/utteranceNavigation";
-import { stripRedundantEvidenceNarrative, uniqueByQuote } from "../../utils/evidenceDisplay";
+import { cleanDisplayText, stripRedundantEvidenceNarrative, uniqueByQuote } from "../../utils/evidenceDisplay";
 import { ManagerCorrectionSheet } from "./ManagerCorrectionSheet";
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
@@ -88,7 +88,7 @@ function CitationsList({ citations, onJumpTo, utterances }: {
         return (
           <div key={i} className="rounded-lg bg-muted/30 border border-border/40 p-2 text-[11px] space-y-0.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-muted-foreground">{c.source}{c.speaker ? ` · ${c.speaker}` : ""}</span>
+              <span className="font-semibold text-muted-foreground">{c.source}{c.speaker && c.speaker !== "unknown" ? ` · ${c.speaker}` : ""}</span>
               {jumpSeconds != null && (
                 <button type="button" onClick={() => onJumpTo(jumpSeconds)}
                   className="text-[10px] font-bold text-primary hover:underline cursor-pointer">
@@ -96,7 +96,7 @@ function CitationsList({ citations, onJumpTo, utterances }: {
                 </button>
               )}
             </div>
-            {c.quote && <p className="text-foreground/70 italic leading-relaxed">&ldquo;{c.quote}&rdquo;</p>}
+            {c.quote && <p className="text-foreground/70 italic leading-relaxed">&ldquo;{c.quote.replace(/\[Focus window.*?\]\s*/gi, "").replace(/^(agent|customer):\s*/gi, "")}&rdquo;</p>}
           </div>
         );
       })}
@@ -239,14 +239,14 @@ export function AnalysisTabs({
                 </div>
                 {emotionTrigger.derived.customerText && (
                   <div className="space-y-0.5">
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Latest Customer Turn</span>
-                    <p className="text-[11px] italic text-foreground/80 leading-snug">&ldquo;{emotionTrigger.derived.customerText}&rdquo;</p>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Customer Context</span>
+                    <p className="text-[11px] italic text-foreground/80 leading-snug whitespace-pre-wrap max-h-28 overflow-y-auto pr-1 scrollbar-thin">&ldquo;{cleanDisplayText(emotionTrigger.derived.customerText)}&rdquo;</p>
                   </div>
                 )}
                 {emotionTrigger.derived.agentStatement && (
                   <div className="space-y-0.5">
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Agent Response</span>
-                    <p className="text-[11px] italic text-foreground/80 leading-snug">&ldquo;{emotionTrigger.derived.agentStatement}&rdquo;</p>
+                    <p className="text-[11px] italic text-foreground/80 leading-snug whitespace-pre-wrap max-h-28 overflow-y-auto pr-1 scrollbar-thin">&ldquo;{cleanDisplayText(emotionTrigger.derived.agentStatement)}&rdquo;</p>
                   </div>
                 )}
               </div>
@@ -380,7 +380,7 @@ export function AnalysisTabs({
                   <AlertTriangleIcon className={`w-4 h-4 ${variant === "agent" ? "text-amber-500" : "text-red-400"}`} />
                   <span className="text-[13px] font-bold text-foreground">{L.violations} ({policyViolations.length})</span>
                 </div>
-                <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin">
                   {policyViolations.map((v) => (
                     <div key={v.id} className={`rounded-lg p-3 space-y-2 ${variant === "agent" ? "bg-amber-500/5 border border-amber-500/10" : "bg-red-500/5 border border-red-500/10"}`}>
                       <div className="flex items-center justify-between gap-2">

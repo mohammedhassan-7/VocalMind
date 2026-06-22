@@ -141,7 +141,10 @@ frontend/.pytest_cache/
 !backend/app/core/model.pkl
 !backend/app/core/vectorizer.pkl
 speaker_classifier_export.zip
-services/whisperx/models/speaker_role/distilbert/
+
+# Local SQLite scratch DBs
+vocalmind.db
+**/vocalmind.db
 
 # ── Audio & Media Files ─────────────────────────────────────────────────
 *.flac

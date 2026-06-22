@@ -1,22 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, Mic, MoreHorizontal, Pencil, Plus, Send, Trash2 } from "lucide-react";
 
-import { AssistantResponse, getAssistantHistory, sendAssistantQuery } from "../../services/api";
+import { AssistantResponse, ChatSession, deleteAssistantSession, getAssistantHistory, renameAssistantSession, sendAssistantQuery } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 
 interface AssistantMessage extends Partial<AssistantResponse> {
   id: string;
   type: "user" | "ai";
   content: string;
-  mode?: string;
+  mode: string;
 }
 
-interface ChatSession {
-  id: string;
-  title: string;
-  messages: AssistantMessage[];
-  deleted?: boolean;
-}
 
 interface ModalState {
   type: "rename" | "delete";
@@ -99,25 +93,14 @@ export function ManagerAssistant() {
     setHistoryError(null);
 
     getAssistantHistory()
-      .then((history) => {
+      .then((historySessions) => {
         if (cancelled) return;
-        if (!history?.length) return;
-
-        // Seed one imported session only when there are no local sessions yet.
-        setSessions((prev) => {
-          const active = Object.values(prev).filter((s) => !s.deleted);
-          if (active.length > 0) return prev;
-          const importedId = uid("chat");
-          const firstUser = (history as AssistantMessage[]).find((m) => m.type === "user");
-          return {
-            ...prev,
-            [importedId]: {
-              id: importedId,
-              title: firstUser ? deriveTitle(firstUser.content) : "Recent chat",
-              messages: history as AssistantMessage[],
-            },
-          };
-        });
+        if (!historySessions?.length) return;
+        const newSessions: Record<string, ChatSession> = {};
+        for (const s of historySessions) {
+            newSessions[s.id] = s as any;
+        }
+        setSessions(newSessions);
       })
       .catch((err) => {
         console.error("Failed to load chat history:", err);
@@ -176,18 +159,33 @@ export function ManagerAssistant() {
     setMenuState(null);
   };
 
-  const confirmRename = () => {
+  const confirmRename = async () => {
     if (!modalState || modalState.type !== "rename") return;
     const next = renameValue.trim();
     if (!next) return;
-    setSessions((prev) => ({ ...prev, [modalState.chatId]: { ...prev[modalState.chatId], title: next } }));
+    
+    try {
+      await renameAssistantSession(modalState.chatId, next);
+      setSessions((prev) => ({ ...prev, [modalState.chatId]: { ...prev[modalState.chatId], title: next } }));
+    } catch (e) {
+      console.error(e);
+    }
     setModalState(null);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!modalState || modalState.type !== "delete") return;
-    setSessions((prev) => ({ ...prev, [modalState.chatId]: { ...prev[modalState.chatId], deleted: true } }));
-    if (selectedChatId === modalState.chatId) setSelectedChatId(null);
+    try {
+      await deleteAssistantSession(modalState.chatId);
+      setSessions((prev) => {
+        const next = { ...prev };
+        delete next[modalState.chatId];
+        return next;
+      });
+      if (selectedChatId === modalState.chatId) setSelectedChatId(null);
+    } catch (e) {
+      console.error(e);
+    }
     setModalState(null);
     setIsDraftNewChat(false);
   };
@@ -210,16 +208,18 @@ export function ManagerAssistant() {
     const queryText = input;
     if (!queryText.trim()) return;
 
-    let chatId = selectedChatId;
-    if (!chatId || isDraftNewChat) {
-      chatId = uid("chat");
+    const isNew = !selectedChatId || isDraftNewChat;
+    const tempChatId = isNew ? uid("temp") : selectedChatId!;
+    
+    if (isNew) {
       const newSession: ChatSession = {
-        id: chatId,
+        id: tempChatId,
         title: deriveTitle(queryText),
         messages: [],
-      };
-      setSessions((prev) => ({ ...prev, [chatId!]: newSession }));
-      setSelectedChatId(chatId);
+        deleted: false,
+      } as any;
+      setSessions((prev) => ({ ...prev, [tempChatId]: newSession }));
+      setSelectedChatId(tempChatId);
       setIsDraftNewChat(false);
     }
 
@@ -229,25 +229,49 @@ export function ManagerAssistant() {
       content: queryText,
       mode: "chat",
     };
-    appendToSession(chatId, userMessage);
+    appendToSession(tempChatId, userMessage);
 
     setInput("");
     setIsLoading(true);
 
     try {
-      const response = await sendAssistantQuery(queryText);
-      const aiMessage: AssistantMessage = {
-        ...response,
-        id: response.id ?? `msg_ai_${Date.now()}`,
-        type: "ai",
-      };
-      appendToSession(chatId, aiMessage);
+      const response = await sendAssistantQuery(queryText, "chat", isNew ? undefined : tempChatId);
+      const returnedSessionId = (response as any).session_id;
+      
+      if (isNew && returnedSessionId && returnedSessionId !== tempChatId) {
+        setSessions((prev) => {
+           const next = { ...prev };
+           const s = next[tempChatId];
+           if (s) {
+              s.id = returnedSessionId;
+              next[returnedSessionId] = s;
+              delete next[tempChatId];
+           }
+           return next;
+        });
+        setSelectedChatId(returnedSessionId);
+        
+        const aiMessage: AssistantMessage = {
+          ...response,
+          id: response.id ?? `msg_ai_${Date.now()}`,
+          type: "ai",
+        };
+        appendToSession(returnedSessionId, aiMessage);
+      } else {
+        const aiMessage: AssistantMessage = {
+          ...response,
+          id: response.id ?? `msg_ai_${Date.now()}`,
+          type: "ai",
+        };
+        appendToSession(tempChatId, aiMessage);
+      }
     } catch {
-      appendToSession(chatId, {
+      appendToSession(tempChatId, {
         id: `msg_err_${Date.now()}`,
         type: "ai",
         content: "I'm sorry, I'm having trouble connecting to the service. Please make sure the backend is running.",
         success: false,
+        mode: "chat",
       });
     } finally {
       setIsLoading(false);
@@ -277,7 +301,7 @@ export function ManagerAssistant() {
           <div className="h-12 px-3 border-b border-border/70 flex items-center">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent chats</span>
           </div>
-          <div className="p-2 overflow-y-auto min-h-0 space-y-1">
+          <div className="p-2 overflow-y-auto min-h-0 space-y-1 scrollbar-thin">
             {chatList.map((chat) => (
               <div key={chat.id} className="relative">
                 <button
@@ -312,7 +336,7 @@ export function ManagerAssistant() {
         </aside>
 
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-          <div className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0 scrollbar-thin">
             {historyError && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{historyError}</div>}
 
             {historyLoading ? (

@@ -45,7 +45,6 @@ VocalMind reads settings from `backend/.env` using Pydantic `BaseSettings`. Belo
 *   **`WHISPERX_API_URL`** (string): Endpoint for the local WhisperX microservice. Defaults to `"http://localhost:8003"`.
 
 ### 1.5 Speaker & Emotion Tuning
-*   **`BACKEND_SPEAKER_RELABEL_ENABLED`** (boolean): If `true`, enables a second speaker role relabel pass. **Must remain `false`** when using WhisperX to avoid double relabeling conflicts.
 *   **`TEXT_EMOTION_PROVIDER`** (string): Provider for text sentiment classification. **Default:** `rule_based`. Options: `rule_based` (keyword-based, no GPU required) | `hf_transformers` (DistilRoBERTa model, requires `HF_TOKEN` and GPU).
 *   **`TEXT_EMOTION_MODEL`** (string): Hugging Face model path. Defaults to `"j-hartmann/emotion-english-distilroberta-base"`.
 *   **`EMOTION_MIN_SEGMENT_SECS`** (string): Minimum duration gate for emotion classification. Segments shorter than this (e.g., `"1.0"`) inherit the previous turn's emotion.
@@ -66,7 +65,6 @@ VocalMind reads settings from `backend/.env` using Pydantic `BaseSettings`. Belo
 
 ### 1.8 Storage & Supabase Settings
 *   **`LOCAL_AUDIO_STORAGE_DIR`** (string): Root directory where uploaded audio call recordings are stored (defaults to `"storage/uploads"`).
-*   **`SPEAKER_ROLE_MODEL_DIR`** (string, Optional): Path containing extracted DistilBERT speaker-role models.
 *   **`SUPABASE_URL`** (string, Optional): Supabase project URL, used when resolving files from Supabase Storage.
 *   **`SUPABASE_SERVICE_KEY`** (string, Optional): Supabase service role API key.
 
@@ -135,7 +133,6 @@ The following variables are read directly via `os.getenv` without being defined 
 *   **`EMOTION_MAX_AUDIO_SECONDS`** (float): Maximum length in seconds for audio clips processed by the Emotion microservice (caps at `30.0`).
 *   **`WHISPER_MODEL_SIZE`** (string): Model size constraint for WhisperX transcription.
 *   **`CHANNEL_DIARIZATION_ENABLED`** (boolean): Enables separate channel diarization.
-*   **`SPEAKER_ROLE_MODEL_ENABLED`** (boolean): Toggles using Hugging Face classifier inside WhisperX.
 *   **`STRICT_DIARIZATION`** (boolean): Toggles strict overlapping speaker segments handling.
 *   **`WHISPER_COMPUTE_TYPE`** (string): Torch float precision mode for WhisperX inference.
 *   **`CHANNEL_DIARIZATION_MAX_CORR`** (float): Maximum correlation threshold for diarization.

@@ -53,6 +53,20 @@ import {
   type KBData
 } from "../../services/api";
 import { toast } from "sonner";
+const cleanTitle = (title: string) => {
+  if (!title) return "";
+  let clean = title.replace(/^(Nexalink Telecommunications|Meridian)\s*(Policy)?\s*:?\s*/i, "");
+  return clean.trim() || title;
+};
+
+const cleanPreview = (text: string) => {
+  if (!text) return "";
+  let clean = text.replace(/#+/g, "");
+  clean = clean.replace(/[*_]{1,2}(.*?)[*_]{1,2}/g, "$1");
+  clean = clean.replace(/\|/g, " ");
+  clean = clean.replace(/\s+/g, " ").trim();
+  return clean;
+};
 
 export function KnowledgeBase() {
   const [policies, setPolicies] = useState<PolicyData[]>([]);
@@ -418,10 +432,10 @@ export function KnowledgeBase() {
                     }}
                   >
                     <h4 className="text-[17px] font-black text-foreground group-hover:text-primary transition-colors leading-tight mb-2 text-ellipsis overflow-hidden">
-                      {p.title}
+                      {cleanTitle(p.title)}
                     </h4>
                     <p className="text-[13px] text-muted-foreground/80 leading-relaxed line-clamp-3 font-medium h-[60px]">
-                      {p.preview}
+                      {cleanPreview(p.preview)}
                     </p>
                   </div>
                 </div>
@@ -516,10 +530,10 @@ export function KnowledgeBase() {
                     }}
                   >
                     <h4 className="text-[17px] font-black text-foreground group-hover:text-success transition-colors leading-tight mb-2">
-                      {f.question}
+                      {cleanTitle(f.question)}
                     </h4>
                     <p className="text-[13px] text-muted-foreground/80 leading-relaxed line-clamp-3 font-medium h-[60px]">
-                      {f.preview}
+                      {cleanPreview(f.preview)}
                     </p>
                   </div>
                 </div>
@@ -614,10 +628,10 @@ export function KnowledgeBase() {
                     }}
                   >
                     <h4 className="text-[17px] font-black text-foreground group-hover:text-blue-500 transition-colors leading-tight mb-2 text-ellipsis overflow-hidden">
-                      {k.title}
+                      {cleanTitle(k.title)}
                     </h4>
                     <p className="text-[13px] text-muted-foreground/80 leading-relaxed line-clamp-3 font-medium h-[60px]">
-                      {k.preview}
+                      {cleanPreview(k.preview)}
                     </p>
                   </div>
                 </div>
@@ -963,7 +977,7 @@ export function KnowledgeBase() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-10 py-8 custom-scrollbar bg-background shadow-inner">
+          <div className="flex-1 overflow-y-auto px-10 py-8 scrollbar-thin bg-background shadow-inner">
             <div className="max-w-3xl mx-auto">
               <article className="prose dark:prose-invert prose-slate max-w-none 
                 prose-headings:font-black prose-headings:tracking-tight 
@@ -997,7 +1011,7 @@ export function KnowledgeBase() {
                 <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-1">Source</span>
                 <div className="flex items-center gap-2 text-foreground font-bold text-sm">
                   <FileText className="w-4 h-4 text-muted-foreground" />
-                  Nexalink Knowledge Base
+                  VocalMind Knowledge Base
                 </div>
               </div>
             </div>

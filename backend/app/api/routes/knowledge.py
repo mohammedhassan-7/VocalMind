@@ -16,7 +16,6 @@ from app.core.config import settings
 from app.models.organization import Organization
 from app.models.policy import CompanyPolicy, OrganizationPolicy, PolicyCompliance
 from app.models.faq import FAQArticle, OrganizationFAQArticle
-from app.llm_trigger.service import invalidate_llm_trigger_cache
 
 router = APIRouter()
 
@@ -177,8 +176,9 @@ async def create_policy(session: SessionDep, current_user: CurrentUser, data: Po
     )
     session.add(org_link)
     await session.commit()
-    org_slug = await _get_org_slug(session, current_user.organization_id)
-    await invalidate_llm_trigger_cache(session, org_filter=org_slug)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "id": str(policy.id)}
 
 
@@ -221,8 +221,9 @@ async def upload_policy(
     )
     session.add(org_link)
     await session.commit()
-    org_slug = await _get_org_slug(session, current_user.organization_id)
-    await invalidate_llm_trigger_cache(session, org_filter=org_slug)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "id": str(policy.id)}
 
 
@@ -294,8 +295,9 @@ async def replace_policy_upload(
     policy.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(policy)
     await session.commit()
-    org_slug = await _get_org_slug(session, current_user.organization_id)
-    await invalidate_llm_trigger_cache(session, org_filter=org_slug)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "id": str(policy.id)}
 
 
@@ -320,8 +322,9 @@ async def toggle_policy(
     org_policy.is_active = not org_policy.is_active
     session.add(org_policy)
     await session.commit()
-    org_slug = await _get_org_slug(session, current_user.organization_id)
-    await invalidate_llm_trigger_cache(session, org_filter=org_slug)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "isActive": org_policy.is_active}
 
 
@@ -379,7 +382,9 @@ async def create_faq(session: SessionDep, current_user: CurrentUser, data: FAQCr
     )
     session.add(org_link)
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -422,7 +427,9 @@ async def upload_faq(
     )
     session.add(org_link)
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -455,7 +462,9 @@ async def update_faq(
 
     session.add(faq)
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success"}
 
 
@@ -495,7 +504,9 @@ async def replace_faq_upload(
     faq.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(faq)
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -520,7 +531,9 @@ async def toggle_faq(
     org_faq.is_active = not org_faq.is_active
     session.add(org_faq)
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "isActive": org_faq.is_active}
 
 @router.delete("/policies/{policy_id}", responses={401: {"description": "Not authenticated"}, 403: {"description": "Access denied - not authorized to delete this policy"}, 404: {"description": "Policy not found"}, 422: {"description": "Invalid UUID format"}})
@@ -568,7 +581,9 @@ async def delete_policy(
         _delete_document_file(settings.POLICY_DOCS_ROOT, org_slug, POLICY_DOCS_FOLDER, str(policy_id))
 
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=org_slug)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "message": "Policy deleted"}
 
 
@@ -613,7 +628,9 @@ async def delete_faq(
         _delete_document_file(settings.KNOWLEDGE_DOCS_ROOT, org_slug, SOP_DOCS_FOLDER, str(faq_id))
         _delete_document_file(settings.KNOWLEDGE_DOCS_ROOT, org_slug, LEGACY_FAQ_DOCS_FOLDER, str(faq_id))
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "message": "FAQ deleted"}
 
 
@@ -700,7 +717,9 @@ async def upload_kb_article(
     )
     session.add(org_link)
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -741,7 +760,9 @@ async def replace_kb_upload(
     faq.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(faq)
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -766,7 +787,9 @@ async def toggle_kb_article(
     org_faq.is_active = not org_faq.is_active
     session.add(org_faq)
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=current_user.organization_id)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "isActive": org_faq.is_active}
 
 
@@ -810,5 +833,7 @@ async def delete_kb_article(
         _delete_document_file(settings.KNOWLEDGE_DOCS_ROOT, org_slug, KB_DOCS_FOLDER, str(kb_id))
 
     await session.commit()
-    await invalidate_llm_trigger_cache(session, org_filter=org_slug)
+    # KB edits intentionally do NOT invalidate cached session analysis — existing
+    # results persist so prior sessions keep their data; the new KB only applies
+    # when an interaction is explicitly reprocessed.
     return {"status": "success", "message": "KB article deleted"}

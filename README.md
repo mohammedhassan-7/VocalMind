@@ -51,21 +51,7 @@ Edit `backend/.env` and fill in the required secrets:
 
 For Option A (full Docker), the root `.env` provides `OLLAMA_API_KEY` (production LLM provider), `HF_TOKEN`, and an optional `GROQ_API_KEY` which docker-compose.yml passes through. For Option B (local dev), set these in `backend/.env` and change the service URLs to `localhost`.
 
-### 2. Prepare Speaker-Role Model (WhisperX)
-
-WhisperX and the backend both mount the DistilBERT speaker-role classifier. Place the export archive at the repo root and run:
-
-```bash
-make prepare-speaker-model
-```
-
-This extracts `services/whisperx/models/speaker_role/distilbert/` from `speaker_classifier_export.zip` (which is gitignored). Without this step, WhisperX will fail at startup. Use `--delete-zip` to remove the archive after extraction:
-
-```bash
-python infra/scripts/prepare_speaker_role_model.py --delete-zip
-```
-
-### 3. Build Docker Images
+### 2. Build Docker Images
 
 ```bash
 make build
@@ -122,7 +108,6 @@ Start only the supporting infrastructure (Database, Ollama, Qdrant, VAD, Emotion
 
 ```bash
 make support-up
-make prepare-speaker-model   # if not done already
 ```
 
 Set `IS_LOCAL=true` and point service URLs at `localhost` in `backend/.env`:
@@ -243,7 +228,6 @@ make seed             # Seed database with demo data
 ### General
 ```bash
 make clean            # Remove caches and build artifacts
-make prepare-speaker-model  # Extract speaker-role classifier for WhisperX
 ```
 
 ### Utility Scripts
@@ -254,8 +238,7 @@ python infra/fixtures/kaggle/scripts/kaggle_api_smoke_test.py --audio-file stora
 
 ### Speaker Classifier Artifacts
 
-#### Option A: Logistic Regression Model (Hybrid Pipeline - Default)
-The backend uses a hybrid speaker role classifier combining ML predictions and rule-based priors. The required model weights and TF-IDF vectorizer must be placed in:
+The backend uses a hybrid logistic-regression speaker role classifier combining ML predictions and rule-based priors. The required model weights and TF-IDF vectorizer must be placed in:
 * **Model Weights**: [model.pkl](file:///g:/projects/VocalMind/backend/app/core/model.pkl)
 * **TF-IDF Vectorizer**: [vectorizer.pkl](file:///g:/projects/VocalMind/backend/app/core/vectorizer.pkl)
 
@@ -274,16 +257,6 @@ These files are excluded from Git via `.gitignore`. Teammates can retrieve them 
 
 2. **Retrieve the vectorizer**:
    Since the remote MLflow run only logged the model classifier and not the TF-IDF vectorizer, and regenerating it locally can cause a vocabulary alignment shift, teammates must copy the exact `vectorizer.pkl` from the team's shared/secured storage and place it directly under `backend/app/core/vectorizer.pkl`.
-
-
-#### Option B: DistilBERT Model (WhisperX Speaker-Role Pass)
-For the optional second-pass WhisperX relabeling:
-Place `speaker_classifier_export.zip` at the repo root and run:
-```bash
-make prepare-speaker-model
-```
-This extracts the DistilBERT model into `services/whisperx/models/speaker_role/distilbert/`. The zip is gitignored — it must be provided separately. WhisperX will fail to start without these model files.
-
 
 
 ### Audio Auto-Ingest

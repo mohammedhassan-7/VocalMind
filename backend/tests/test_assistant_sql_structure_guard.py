@@ -20,12 +20,23 @@ def _override_manager():
     return _inner
 
 
+class _FakeRow:
+    def __init__(self, d):
+        self._mapping = d
+
 class _FakeResult:
     def __init__(self, rows=None):
         self._rows = rows or []
 
+    def __iter__(self):
+        return iter([_FakeRow(r) for r in self._rows])
+
     def all(self):
         return self._rows
+
+    def scalar(self):
+        from uuid import UUID
+        return UUID("c0000000-0000-0000-0000-000000000001")
 
 
 class _FakeConn:
@@ -93,3 +104,47 @@ def test_assistant_rejects_multi_statement_injection(client, monkeypatch):
     assert body.get("success") is False
     assert "safe analytics queries" in body.get("content", "").lower()
     assert "exactly one statement" in body.get("content", "").lower()
+
+
+def test_assistant_accepts_valid_prompt_examples(client, monkeypatch):
+    async def _fake_resolve_sql(_self, _q, _org_id, _conversation_block="", **_kwargs):
+        return (
+            "SELECT u.name, ROUND(AVG(s.overall_score)::NUMERIC * 10, 1) AS avg_score "
+            "FROM users u JOIN interactions i ON i.agent_id = u.id AND i.organization_id = 'a0000000-0000-0000-0000-000000000001' "
+            "JOIN interaction_scores s ON s.interaction_id = i.id WHERE u.role = 'agent' "
+            "GROUP BY u.id, u.name ORDER BY avg_score DESC LIMIT 5"
+        )
+
+    monkeypatch.setattr("app.api.routes.assistant.engine", _FakeEngine())
+    monkeypatch.setattr("app.api.routes.assistant.assistant_sql_engine", _FakeEngine([{"name": "Agent A", "avg_score": 8.5}]))
+    monkeypatch.setattr("app.api.routes.assistant.IntentResolver.resolve_sql", _fake_resolve_sql)
+    monkeypatch.setattr("app.api.routes.assistant.IntentResolver.synthesize_answer", lambda *_a, **_k: "synthesized answer")
+    client.app.dependency_overrides[get_current_user] = _override_manager()
+
+    response = client.post("/api/v1/assistant/query", json={"query_text": "show top agents", "mode": "chat"})
+
+    client.app.dependency_overrides.pop(get_current_user, None)
+    body = response.json()
+    assert response.status_code == 200
+    # Should be success since valid aliases and type casts are used
+    assert body.get("success") is True
+
+
+def test_assistant_rejects_restricted_column_in_where(client, monkeypatch):
+    async def _fake_resolve_sql(_self, _q, _org_id, _conversation_block="", **_kwargs):
+        return (
+            "SELECT u.id FROM users u WHERE u.password_hash LIKE 'a%' AND u.organization_id = 'a0000000-0000-0000-0000-000000000001' LIMIT 50"
+        )
+
+    monkeypatch.setattr("app.api.routes.assistant.engine", _FakeEngine())
+    monkeypatch.setattr("app.api.routes.assistant.IntentResolver.resolve_sql", _fake_resolve_sql)
+    client.app.dependency_overrides[get_current_user] = _override_manager()
+
+    response = client.post("/api/v1/assistant/query", json={"query_text": "attack", "mode": "chat"})
+
+    client.app.dependency_overrides.pop(get_current_user, None)
+    body = response.json()
+    assert response.status_code == 200
+    assert body.get("success") is False
+    assert "safe analytics queries" in body.get("content", "").lower()
+    assert "password_hash" in body.get("content", "").lower()

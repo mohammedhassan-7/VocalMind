@@ -45,12 +45,6 @@ class Settings(BaseSettings):
     VAD_API_URL: str = "http://localhost:8002"
     WHISPERX_API_URL: str = "http://localhost:8003"
 
-    # Optional: Hugging Face export dir for DistilBERT agent/customer classifier (same bundle as WhisperX).
-    # When set, the backend relabels transcript segments after full analysis.
-    SPEAKER_ROLE_MODEL_DIR: str = ""
-    # Keep backend relabeling disabled by default to avoid double relabeling with WhisperX.
-    BACKEND_SPEAKER_RELABEL_ENABLED: bool = False
-
     # Kaggle inference server (used when IS_LOCAL=false)
     KAGGLE_SERVER_URL: str = ""
     KAGGLE_NGROK_URL: str = ""
@@ -89,9 +83,28 @@ class Settings(BaseSettings):
     OLLAMA_NLI_MODEL: str = ""
     OLLAMA_CLOUD_EMBED_ENABLED: bool = False
 
+    # ── Vertex AI (Gemini) ──
+    # Service-account auth via GOOGLE_APPLICATION_CREDENTIALS (path to the JSON key).
+    # GEMINI_PROJECT / GEMINI_REGION select the Vertex AI project + location.
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""
+    GEMINI_PROJECT: str = ""
+    GEMINI_REGION: str = "us-central1"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    # Cheaper/faster model for fast_classification-class stages (gibberish check, etc.).
+    GEMINI_FAST_MODEL: str = "gemini-2.5-flash-lite"
+    # Output token cap for Gemini. Higher than the shared LLM_MAX_TOKENS because the
+    # process-adherence JSON (steps + justification + citations) truncates at 1024,
+    # producing partial JSON that fails Pydantic parsing.
+    GEMINI_MAX_OUTPUT_TOKENS: int = 2048
+    # Optional per-stage overrides (leave blank to use GEMINI_MODEL / GEMINI_FAST_MODEL by class).
+    GEMINI_MODEL_EMOTION_SHIFT: str = ""
+    GEMINI_MODEL_PROCESS_ADHERENCE: str = ""
+    GEMINI_MODEL_NLI_POLICY: str = ""
+
     # ── Provider switch ──
-    # "groq"         → current production behaviour
-    # "ollama_cloud" → all LLM calls route to Ollama Cloud
+    # "gemini"       → Vertex AI Gemini (production primary)
+    # "groq"         → Groq + LangChain (fallback)
+    # "ollama_cloud" → all LLM calls route to Ollama Cloud (fallback)
     LLM_PROVIDER: str = "groq"
 
     # Qdrant / Embeddings retrieval for SOP context
@@ -127,7 +140,8 @@ class Settings(BaseSettings):
 
     # Auto-ingest watcher: scans storage/audio/<org_slug>/ and enqueues new
     # audio files for processing via the existing in-memory worker.
-    AUDIO_FOLDER_WATCHER_ENABLED: bool = True
+    # Default OFF: ingestion is manual (UI upload). Opt in via .env if needed.
+    AUDIO_FOLDER_WATCHER_ENABLED: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
@@ -156,6 +170,18 @@ def validate_startup_settings(cfg: Settings) -> None:
             "LLM_PROVIDER=ollama_cloud requires OLLAMA_CLOUD_API_KEY (or OLLAMA_API_KEY), but none is set. "
             "Set OLLAMA_CLOUD_API_KEY or OLLAMA_API_KEY in your .env before starting the app."
         )
+    if provider == "gemini":
+        creds = (cfg.GOOGLE_APPLICATION_CREDENTIALS or "").strip()
+        if not creds:
+            raise RuntimeError(
+                "LLM_PROVIDER=gemini requires GOOGLE_APPLICATION_CREDENTIALS (path to a Vertex AI "
+                "service-account JSON key). Set it in your .env before starting the app."
+            )
+        if not Path(creds).is_file():
+            raise RuntimeError(
+                f"GOOGLE_APPLICATION_CREDENTIALS points to a missing file: {creds!r}. "
+                "Set it to a valid Vertex AI service-account JSON key path."
+            )
 
     if not (cfg.HF_TOKEN or "").strip():
         warnings.warn(

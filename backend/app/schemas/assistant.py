@@ -6,10 +6,12 @@ from app.models.enums import QueryMode
 class AssistantQueryRequest(BaseModel):
     query_text: str
     mode: Optional[QueryMode] = QueryMode.chat
+    session_id: Optional[str] = None
 
 
 class AssistantQueryResponse(BaseModel):
     id: str | None = None
+    session_id: str | None = None
     type: str
     content: str
     mode: str

@@ -1,4 +1,5 @@
 import json
+import uuid
 import asyncio
 import time
 import logging
@@ -20,8 +21,8 @@ from app.core.config import settings
 from app.core.llm_circuit_breaker import CircuitOpenError, get_breaker, is_transient_llm_error
 from app.llm_trigger.chains import get_model_for_stage
 
+from app.api.deps import CurrentUser, get_db, SessionDep
 from app.core.database import engine
-from app.api.deps import CurrentUser
 from app.models.enums import QueryMode, UserRole
 from app.schemas.assistant import AssistantQueryRequest, AssistantQueryResponse
 
@@ -113,6 +114,7 @@ _SQL_KEYWORDS = {
     "outer", "cross", "full", "union", "all", "limit", "offset", "with", "select", "like", "ilike", "between", "exists",
     "count", "sum", "avg", "min", "max", "round", "date_trunc", "now", "current_date", "current_timestamp", "interval",
     "cast", "coalesce", "json_build_object", "jsonb_build_object", "row_number", "over", "partition",
+    "numeric", "text", "varchar", "integer", "int", "float", "boolean", "timestamp", "date", "extract", "month", "year", "day"
 }
 
 
@@ -215,6 +217,7 @@ def _extract_cte_names(sql: str) -> set[str]:
 
 
 def _extract_table_aliases(sql: str) -> dict[str, str]:
+    sql = _neutralize_func_from(sql)
     aliases: dict[str, str] = {}
     pattern = re.compile(
         r"\b(?:from|join)\s+([a-z_][a-z0-9_]*)(?:\s+(?:as\s+)?([a-z_][a-z0-9_]*))?",
@@ -232,7 +235,31 @@ def _extract_table_aliases(sql: str) -> dict[str, str]:
     return aliases
 
 
+# Functions that use the `EXPR FROM source` SQL syntax. Their inner `FROM` must
+# not be mistaken for a table source by the table/alias extractors below.
+_FUNC_FROM_PATTERN = re.compile(
+    r"(\b(?:extract|substring|trim|overlay)\s*\([^()]*?)\bfrom\b",
+    re.IGNORECASE,
+)
+
+
+def _neutralize_func_from(sql: str) -> str:
+    """Replace the `FROM` keyword inside EXTRACT/SUBSTRING/TRIM/OVERLAY calls.
+
+    `EXTRACT(MONTH FROM i.interaction_date)` would otherwise make the table
+    extractor read `i` as a real table and reject the query.
+    """
+    prev = None
+    out = sql
+    # Re-apply until stable so multiple such calls in one statement are handled.
+    while prev != out:
+        prev = out
+        out = _FUNC_FROM_PATTERN.sub(r"\1,", out)
+    return out
+
+
 def _extract_referenced_tables(sql: str) -> set[str]:
+    sql = _neutralize_func_from(sql)
     cte_names = _extract_cte_names(sql)
     refs: set[str] = set()
     for table in re.findall(r"\b(?:from|join)\s+([a-z_][a-z0-9_]*)", sql, flags=re.IGNORECASE):
@@ -288,27 +315,59 @@ def _validate_sql_structure(sql: str) -> None:
         raise ValueError(f"SQL references disallowed tables: {', '.join(disallowed_tables)}.")
 
     aliases = _extract_table_aliases(sql_clean)
-    for clause in _iter_select_clauses(sql_clean):
-        normalized = re.sub(r"\bcount\s*\(\s*\*\s*\)", "count(__all__)", clause, flags=re.IGNORECASE)
-        if re.search(r"(^|,)\s*[a-z_][a-z0-9_]*\.\*\s*(,|$)", normalized, re.IGNORECASE):
-            raise ValueError("Wildcard projection (table.*) is not allowed.")
-        if re.search(r"(^|,)\s*\*\s*(,|$)", normalized, re.IGNORECASE):
-            raise ValueError("Wildcard projection (SELECT *) is not allowed.")
+    
+    # Extract AS aliases to allow them as columns (e.g. AS avg_score)
+    defined_aliases = set()
+    for match in re.finditer(r"\bas\s+([a-z_][a-z0-9_]*)\b", sql_clean, flags=re.IGNORECASE):
+        defined_aliases.add(match.group(1).lower())
+        
+    # Strip string literals so we don't validate inside them
+    sql_no_strings = re.sub(r"'[^']*'", "''", sql_clean)
+    
+    # Strip comments
+    sql_no_strings = re.sub(r"/\*.*?\*/", " ", sql_no_strings, flags=re.DOTALL)
+    sql_no_strings = re.sub(r"--.*?\n", " ", sql_no_strings)
 
-        for alias_ref, col_ref in re.findall(
-            r"\b([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\b",
-            clause,
-            flags=re.IGNORECASE,
-        ):
-            _validate_column_reference(f"{alias_ref}.{col_ref}", aliases)
+    # COUNT(*) is the most common aggregate. Collapse it to COUNT(1) so the
+    # wildcard-projection guard below does not see the `*`, and so the inner
+    # token is a bare digit (ignored) rather than a fake column.
+    normalized = re.sub(r"\bcount\s*\(\s*\*\s*\)", "count(1)", sql_no_strings, flags=re.IGNORECASE)
+    # `table.*` is never legitimate here (COUNT(*) was already collapsed above),
+    # so reject any qualified-wildcard regardless of what follows it. The earlier
+    # anchored form let `SELECT i.* FROM ...` slip through and exfiltrate columns.
+    if re.search(r"[a-z_][a-z0-9_]*\s*\.\s*\*", normalized, re.IGNORECASE):
+        raise ValueError("Wildcard projection (table.*) is not allowed.")
+    if re.search(r"(^|select|,)\s*\*\s*(,|$|from)", normalized, re.IGNORECASE):
+        raise ValueError("Wildcard projection (SELECT *) is not allowed.")
 
-        bare_words = re.findall(r"\b([a-z_][a-z0-9_]*)\b", clause, flags=re.IGNORECASE)
-        for word in bare_words:
-            if word.lower() in aliases:
-                continue
-            if re.search(rf"\b[a-z_][a-z0-9_]*\.{word}\b", clause, flags=re.IGNORECASE):
-                continue
-            _validate_column_reference(word, aliases)
+    for alias_ref, col_ref in re.findall(
+        r"\b([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\b",
+        normalized,
+        flags=re.IGNORECASE,
+    ):
+        _validate_column_reference(f"{alias_ref}.{col_ref}", aliases)
+
+    # Any identifier immediately followed by '(' is a function call, not a
+    # column. Function names never leak sensitive columns (the read-only DB
+    # role is the real execution guard), so allow them generically instead of
+    # maintaining a brittle allowlist of every Postgres function.
+    called_functions = {
+        m.lower()
+        for m in re.findall(r"\b([a-z_][a-z0-9_]*)\s*\(", normalized, flags=re.IGNORECASE)
+    }
+
+    bare_words = re.findall(r"\b([a-z_][a-z0-9_]*)\b", normalized, flags=re.IGNORECASE)
+    for word in bare_words:
+        w_lower = word.lower()
+        if w_lower in aliases:
+            continue
+        if w_lower in defined_aliases:
+            continue
+        if w_lower in called_functions:
+            continue
+        if re.search(rf"\b[a-z_][a-z0-9_]*\.{word}\b", normalized, flags=re.IGNORECASE):
+            continue
+        _validate_column_reference(word, aliases)
 
     limit_matches = list(re.finditer(r"\blimit\s+(\d+)\b", sql_clean, re.IGNORECASE))
     if not limit_matches:
@@ -321,19 +380,26 @@ def _validate_sql_structure(sql: str) -> None:
 def _is_org_scoped_sql(sql: str, org_id: UUID) -> bool:
     """
     Verify generated SQL explicitly scopes to the caller organization.
-
-    This is a hard guard before execution; prompt instructions alone are not
-    trusted for tenant isolation.
     """
-    normalized = re.sub(r"\s+", " ", (sql or "").lower()).strip()
+    s = sql or ""
+    # Strip multi-line and single-line comments
+    s = re.sub(r"/\*.*?\*/", " ", s, flags=re.DOTALL)
+    s = re.sub(r"--.*?\n", " ", s)
+
+    normalized = re.sub(r"\s+", " ", s.lower()).strip()
     org_str = str(org_id).lower()
     if not normalized:
         return False
-    if "organization_id" not in normalized:
-        return False
-    if "where" not in normalized:
-        return False
-    return org_str in normalized
+
+    # Require an explicit binding of `organization_id` to the CALLER's own org id,
+    # e.g. `organization_id = '<caller-org>'` (any alias prefix). Checking only that
+    # both tokens appear somewhere let the org id hide in an unrelated string literal
+    # while `organization_id` was actually filtered to a different tenant.
+    binding = re.compile(
+        r"organization_id\s*=\s*'" + re.escape(org_str) + r"'",
+        re.IGNORECASE,
+    )
+    return bool(binding.search(normalized))
 
 
 def _ordinal_followup_offset(question: str) -> Optional[int]:
@@ -765,7 +831,17 @@ class IntentResolver:
                 self.last_llm_backend = "Gemini"
             return t
 
-        # auto: use Ollama Cloud only
+        # auto fallback chain: Gemini -> Groq -> Ollama Cloud
+        t = await self._gemini_generate(prompt, temperature, raise_on_rate_limit=False)
+        if t:
+            self.last_llm_backend = "Gemini"
+            return t
+            
+        t = await _groq_chat_complete(prompt, temperature)
+        if t:
+            self.last_llm_backend = "Groq"
+            return t
+
         t = await _ollama_cloud_chat_complete(prompt, temperature, stage=stage)
         if t:
             self.last_llm_backend = "Ollama Cloud"
@@ -835,19 +911,25 @@ class IntentResolver:
             logger.warning(f"Synthesis failed: {exc}")
             return f"I found {len(rows)} result(s)." if rows else "No results found for that query."
 
-async def _fetch_conversation_block(conn, user_id: UUID, max_pairs: int = 6, max_chars: int = 1800) -> str:
+async def _fetch_conversation_block(conn, user_id: UUID, session_id: Optional[str] = None, max_pairs: int = 6, max_chars: int = 1800) -> str:
     """Recent user prompts only (helps follow-up context without noisy answer text)."""
+    where_clause = "user_id = :uid AND query_text IS NOT NULL AND trim(query_text) != ''"
+    params = {"uid": str(user_id), "lim": max_pairs}
+    if session_id:
+        where_clause += " AND CAST(session_id AS TEXT) = :sid"
+        params["sid"] = session_id
+        
     hist_r = await conn.execute(
         text(
-            """
+            f"""
             SELECT query_text
             FROM assistant_queries
-            WHERE user_id = :uid AND query_text IS NOT NULL AND trim(query_text) != ''
+            WHERE {where_clause}
             ORDER BY created_at DESC
             LIMIT :lim
             """
         ),
-        {"uid": str(user_id), "lim": max_pairs},
+        params,
     )
     rows = list(hist_r.all())
     rows.reverse()
@@ -863,126 +945,113 @@ async def _fetch_conversation_block(conn, user_id: UUID, max_pairs: int = 6, max
 
 @router.get("/history", responses={401: {"description": "Not authenticated"}, 403: {"description": "Access denied - manager role required"}})
 async def get_assistant_history(current_user: CurrentUser):
-    """
-    Retrieve recent AI assistant query history for the authenticated manager.
-    """
+    """Recent assistant sessions for the signed-in manager."""
     if current_user.role != UserRole.manager:
         raise HTTPException(status_code=403, detail="Assistant is only available to managers")
 
     async with engine.connect() as conn:
+        sessions_r = await conn.execute(
+            text("""
+                SELECT id, title, is_deleted, created_at
+                FROM assistant_sessions
+                WHERE user_id = :uid AND is_deleted = false
+                ORDER BY created_at DESC
+                LIMIT 30
+            """),
+            {"uid": str(current_user.id)},
+        )
+        sessions_db = sessions_r.all()
+        if not sessions_db:
+            return []
+        session_ids = [str(s.id) for s in sessions_db]
+
+        sids_placeholders = ", ".join([f":sid_{i}" for i in range(len(session_ids))])
+        params = {f"sid_{i}": session_ids[i] for i in range(len(session_ids))}
         try:
-            hist_r = await conn.execute(
-                text(
-                    """
-                    SELECT id, query_text, response_text, generated_sql, execution_time_ms, ai_understanding,
+            queries_r = await conn.execute(
+                text(f"""
+                    SELECT id, session_id, query_text, response_text, generated_sql, execution_time_ms, ai_understanding,
                            result_rows, created_at
                     FROM assistant_queries
-                    WHERE user_id = :uid
-                    ORDER BY created_at DESC
-                    LIMIT 40
-                    """
-                ),
-                {"uid": str(current_user.id)},
+                    WHERE CAST(session_id AS TEXT) IN ({sids_placeholders})
+                    ORDER BY created_at ASC
+                """),
+                params,
             )
             has_rows_column = True
         except Exception:
             await conn.rollback()
-            # Backward compatibility for existing DBs not yet patched with result_rows.
-            hist_r = await conn.execute(
-                text(
-                    """
-                    SELECT id, query_text, response_text, generated_sql, execution_time_ms, ai_understanding,
+            queries_r = await conn.execute(
+                text(f"""
+                    SELECT id, session_id, query_text, response_text, generated_sql, execution_time_ms, ai_understanding,
                            created_at
                     FROM assistant_queries
-                    WHERE user_id = :uid
-                    ORDER BY created_at DESC
-                    LIMIT 40
-                    """
-                ),
-                {"uid": str(current_user.id)},
+                    WHERE CAST(session_id AS TEXT) IN ({sids_placeholders})
+                    ORDER BY created_at ASC
+                """),
+                params,
             )
             has_rows_column = False
-        db_rows = list(hist_r.all())
-        db_rows.reverse()
+            
+        queries_db = list(queries_r.all())
 
         def _coerce_result_rows(raw) -> Optional[list]:
-            if raw is None:
-                return None
-            if isinstance(raw, list):
-                return raw
+            if raw is None: return None
+            if isinstance(raw, list): return raw
             if isinstance(raw, str):
                 try:
                     parsed = json.loads(raw)
                     return parsed if isinstance(parsed, list) else None
-                except json.JSONDecodeError:
-                    return None
+                except json.JSONDecodeError: return None
             return None
 
         def _ts_label(created_at) -> Optional[str]:
-            if created_at is None:
-                return None
-            try:
-                return created_at.isoformat()
-            except Exception:
-                return str(created_at)
+            if created_at is None: return None
+            try: return created_at.isoformat()
+            except Exception: return str(created_at)
 
         def _ai_turn_success(response_text: Optional[str], gen_sql: Optional[str], ai_u: Optional[str]) -> bool:
-            if ai_u and str(ai_u).lower() == "help":
-                return True
-            if not gen_sql:
-                return False
+            if ai_u and str(ai_u).lower() == "help": return True
+            if not gen_sql: return False
             low = (response_text or "").lower()
-            if any(
-                p in low
-                for p in (
-                    "database error",
-                    "hit a database error",
-                    "rate limits",
-                    "not sure how to answer",
-                    "having trouble connecting",
-                )
-            ):
+            if any(p in low for p in ("database error", "hit a database error", "rate limits", "not sure how to answer", "having trouble connecting")):
                 return False
             return True
 
-        history: list[dict] = []
-        for row in db_rows:
+        session_map = {}
+        for s in sessions_db:
+            session_map[str(s.id)] = {
+                "id": str(s.id),
+                "title": s.title,
+                "deleted": s.is_deleted,
+                "messages": []
+            }
+
+        for row in queries_db:
             if has_rows_column:
-                idx, q, r_text, gen_sql, exec_ms, ai_u, result_rows_raw, created_at = row
+                idx, sid, q, r_text, gen_sql, exec_ms, ai_u, result_rows_raw, created_at = row
             else:
-                idx, q, r_text, gen_sql, exec_ms, ai_u, created_at = row
+                idx, sid, q, r_text, gen_sql, exec_ms, ai_u, created_at = row
                 result_rows_raw = None
-            if not r_text:
-                continue
+            if not r_text: continue
             ts = _ts_label(created_at)
             stored_data = _coerce_result_rows(result_rows_raw)
-            history.append(
-                {
-                    "id": f"q_{idx}",
-                    "type": "user",
-                    "content": q,
-                    "mode": "chat",
-                    "created_at": ts,
+            sid_str = str(sid)
+            
+            if sid_str in session_map:
+                session_map[sid_str]["messages"].append({
+                    "id": f"q_{idx}", "type": "user", "content": q, "mode": "chat", "created_at": ts,
+                })
+                success = _ai_turn_success(r_text, gen_sql, ai_u)
+                exec_label = f"{exec_ms}ms" if exec_ms is not None else None
+                ai_payload: dict = {
+                    "id": f"a_{idx}", "type": "ai", "content": r_text, "mode": "chat", "success": success,
+                    "sql": gen_sql or None, "executionTime": exec_label, "execution_time": exec_label, "created_at": ts,
                 }
-            )
-            success = _ai_turn_success(r_text, gen_sql, ai_u)
-            exec_label = f"{exec_ms}ms" if exec_ms is not None else None
-            ai_payload: dict = {
-                "id": f"a_{idx}",
-                "type": "ai",
-                "content": r_text,
-                "mode": "chat",
-                "success": success,
-                "sql": gen_sql or None,
-                "executionTime": exec_label,
-                "execution_time": exec_label,
-                "created_at": ts,
-            }
-            if stored_data is not None:
-                ai_payload["data"] = stored_data
-            history.append(ai_payload)
+                if stored_data is not None: ai_payload["data"] = stored_data
+                session_map[sid_str]["messages"].append(ai_payload)
 
-        return history
+        return list(session_map.values())
 
 
 @router.post("/query", response_model=AssistantQueryResponse, responses={401: {"description": "Not authenticated"}, 403: {"description": "Access denied - manager role required"}, 422: {"description": "Invalid input query parameters"}})
@@ -1002,7 +1071,20 @@ async def process_assistant_query(
     org_id = current_user.organization_id
     start_time = time.time()
 
+    session_id_val = request.session_id
     async with engine.connect() as conn:
+        if not session_id_val:
+            title = query_text.strip()[:42] + ("..." if len(query_text) > 42 else "")
+            if not title:
+                title = "New Chat"
+            new_session_id = str(uuid.uuid4())
+            ins_session = await conn.execute(
+                text("INSERT INTO assistant_sessions (id, user_id, organization_id, title, is_deleted, created_at) VALUES (:sid, :uid, :oid, :title, false, timezone('utc', now())) RETURNING id"),
+                {"sid": new_session_id, "uid": str(manager_id), "oid": str(org_id), "title": title}
+            )
+            session_id_val = str(ins_session.scalar())
+            await conn.commit()
+
         # Help / schema discovery (persist so it appears in history)
         if query_text.lower() in _HELP_TRIGGERS or query_text in ("?", ""):
             help_ms = int((time.time() - start_time) * 1000)
@@ -1010,12 +1092,13 @@ async def process_assistant_query(
                 text(
                     """
                     INSERT INTO assistant_queries
-                    (user_id, organization_id, query_mode, query_text, ai_understanding, response_text, execution_time_ms)
-                    VALUES (:u, :o, :m, :q, :ai, :r, :e)
+                    (session_id, user_id, organization_id, query_mode, query_text, ai_understanding, response_text, execution_time_ms)
+                    VALUES (:sid, :u, :o, :m, :q, :ai, :r, :e)
                     RETURNING id
                     """
                 ),
                 {
+                    "sid": session_id_val,
                     "u": str(manager_id),
                     "o": str(org_id),
                     "m": mode.value,
@@ -1030,6 +1113,7 @@ async def process_assistant_query(
             exec_label = f"{help_ms}ms"
             return {
                 "id": str(qid) if qid else "",
+                "session_id": session_id_val,
                 "type": "ai",
                 "content": _HELP_RESPONSE,
                 "mode": mode.value,
@@ -1040,7 +1124,7 @@ async def process_assistant_query(
             }
 
         resolver = IntentResolver()
-        conversation_block = await _fetch_conversation_block(conn, manager_id)
+        conversation_block = await _fetch_conversation_block(conn, manager_id, session_id_val)
 
         sql = None
         ordinal_offset = _ordinal_followup_offset(query_text)
@@ -1068,9 +1152,10 @@ async def process_assistant_query(
             msg = "I'm currently receiving too many requests. Google Gemini rate limits have been temporarily exceeded. Please try again in a few minutes."
             await conn.execute(
                 text(
-                    "INSERT INTO assistant_queries (user_id, organization_id, query_mode, query_text, response_text, execution_time_ms) VALUES (:u, :o, :m, :q, :r, :e)"
+                    "INSERT INTO assistant_queries (session_id, user_id, organization_id, query_mode, query_text, response_text, execution_time_ms) VALUES (:sid, :u, :o, :m, :q, :r, :e)"
                 ),
                 {
+                    "sid": session_id_val,
                     "u": str(manager_id),
                     "o": str(org_id),
                     "m": mode.value,
@@ -1081,6 +1166,7 @@ async def process_assistant_query(
             )
             await conn.commit()
             return {
+                "session_id": session_id_val,
                 "type": "ai",
                 "content": msg,
                 "mode": mode.value,
@@ -1097,9 +1183,10 @@ async def process_assistant_query(
             )
             await conn.execute(
                 text(
-                    "INSERT INTO assistant_queries (user_id, organization_id, query_mode, query_text, response_text, execution_time_ms) VALUES (:u, :o, :m, :q, :r, :e)"
+                    "INSERT INTO assistant_queries (session_id, user_id, organization_id, query_mode, query_text, response_text, execution_time_ms) VALUES (:sid, :u, :o, :m, :q, :r, :e)"
                 ),
                 {
+                    "sid": session_id_val,
                     "u": str(manager_id),
                     "o": str(org_id),
                     "m": mode.value,
@@ -1110,6 +1197,7 @@ async def process_assistant_query(
             )
             await conn.commit()
             return {
+                "session_id": session_id_val,
                 "type": "ai",
                 "content": msg,
                 "mode": mode.value,
@@ -1126,9 +1214,10 @@ async def process_assistant_query(
             )
             await conn.execute(
                 text(
-                    "INSERT INTO assistant_queries (user_id, organization_id, query_mode, query_text, generated_sql, response_text, execution_time_ms) VALUES (:u, :o, :m, :q, :s, :r, :e)"
+                    "INSERT INTO assistant_queries (session_id, user_id, organization_id, query_mode, query_text, generated_sql, response_text, execution_time_ms) VALUES (:sid, :u, :o, :m, :q, :s, :r, :e)"
                 ),
                 {
+                    "sid": session_id_val,
                     "u": str(manager_id),
                     "o": str(org_id),
                     "m": mode.value,
@@ -1140,6 +1229,7 @@ async def process_assistant_query(
             )
             await conn.commit()
             return {
+                "session_id": session_id_val,
                 "type": "ai",
                 "content": err_msg,
                 "mode": mode.value,
@@ -1159,9 +1249,10 @@ async def process_assistant_query(
             )
             await conn.execute(
                 text(
-                    "INSERT INTO assistant_queries (user_id, organization_id, query_mode, query_text, generated_sql, response_text, execution_time_ms) VALUES (:u, :o, :m, :q, :s, :r, :e)"
+                    "INSERT INTO assistant_queries (session_id, user_id, organization_id, query_mode, query_text, generated_sql, response_text, execution_time_ms) VALUES (:sid, :u, :o, :m, :q, :s, :r, :e)"
                 ),
                 {
+                    "sid": session_id_val,
                     "u": str(manager_id),
                     "o": str(org_id),
                     "m": mode.value,
@@ -1173,6 +1264,7 @@ async def process_assistant_query(
             )
             await conn.commit()
             return {
+                "session_id": session_id_val,
                 "type": "ai",
                 "content": err_msg,
                 "mode": mode.value,
@@ -1185,7 +1277,6 @@ async def process_assistant_query(
 
         try:
             t0 = time.time()
-            print("ASSISTANT_SQL_ENGINE_EXEC readonly role path")
             async with assistant_sql_engine.connect() as assistant_conn:
                 res = await assistant_conn.execute(text(sql))
             rows = [dict(r._mapping) for r in res]
@@ -1197,9 +1288,10 @@ async def process_assistant_query(
             err_msg = "I understood your request but hit a database error. Try rephrasing or type 'help' for example queries."
             await conn.execute(
                 text(
-                    "INSERT INTO assistant_queries (user_id, organization_id, query_mode, query_text, generated_sql, response_text, execution_time_ms) VALUES (:u, :o, :m, :q, :s, :r, :e)"
+                    "INSERT INTO assistant_queries (session_id, user_id, organization_id, query_mode, query_text, generated_sql, response_text, execution_time_ms) VALUES (:sid, :u, :o, :m, :q, :s, :r, :e)"
                 ),
                 {
+                    "sid": session_id_val,
                     "u": str(manager_id),
                     "o": str(org_id),
                     "m": mode.value,
@@ -1211,6 +1303,7 @@ async def process_assistant_query(
             )
             await conn.commit()
             return {
+                "session_id": session_id_val,
                 "type": "ai",
                 "content": err_msg,
                 "mode": mode.value,
@@ -1237,12 +1330,13 @@ async def process_assistant_query(
                 text(
                     """
                     INSERT INTO assistant_queries
-                    (user_id, organization_id, query_mode, query_text, ai_understanding, generated_sql, response_text, execution_time_ms, result_rows)
-                    VALUES (:u, :o, :m, :q, :ai, :s, :r, :e, CAST(:data AS jsonb))
+                    (session_id, user_id, organization_id, query_mode, query_text, ai_understanding, generated_sql, response_text, execution_time_ms, result_rows)
+                    VALUES (:sid, :u, :o, :m, :q, :ai, :s, :r, :e, CAST(:data AS jsonb))
                     RETURNING id
                     """
                 ),
                 {
+                    "sid": session_id_val,
                     "u": str(manager_id),
                     "o": str(org_id),
                     "m": mode.value,
@@ -1261,12 +1355,13 @@ async def process_assistant_query(
                 text(
                     """
                     INSERT INTO assistant_queries
-                    (user_id, organization_id, query_mode, query_text, ai_understanding, generated_sql, response_text, execution_time_ms)
-                    VALUES (:u, :o, :m, :q, :ai, :s, :r, :e)
+                    (session_id, user_id, organization_id, query_mode, query_text, ai_understanding, generated_sql, response_text, execution_time_ms)
+                    VALUES (:sid, :u, :o, :m, :q, :ai, :s, :r, :e)
                     RETURNING id
                     """
                 ),
                 {
+                    "sid": session_id_val,
                     "u": str(manager_id),
                     "o": str(org_id),
                     "m": mode.value,
@@ -1283,7 +1378,8 @@ async def process_assistant_query(
 
         return {
             "id": str(qid) if qid else "",
-            "type": "ai",
+            "session_id": session_id_val,
+                "type": "ai",
             "content": answer,
             "mode": mode.value,
             "sql": sql,
@@ -1294,3 +1390,47 @@ async def process_assistant_query(
             "success": True,
             "degraded": False,
         }
+
+
+from pydantic import BaseModel
+class AssistantSessionRenameRequest(BaseModel):
+    title: str
+
+@router.patch("/session/{session_id}")
+async def rename_assistant_session(
+    session_id: str,
+    request: AssistantSessionRenameRequest,
+    current_user: CurrentUser,
+    session: SessionDep,
+):
+    """Rename an assistant session."""
+    if current_user.role != UserRole.manager:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    res = await session.exec(
+        text("UPDATE assistant_sessions SET title = :t WHERE CAST(id AS TEXT) = :sid AND CAST(user_id AS TEXT) = :uid RETURNING id"),
+        params={"t": request.title[:255], "sid": session_id, "uid": str(current_user.id)},
+    )
+    if not res.scalar():
+        raise HTTPException(status_code=404, detail="Session not found")
+    await session.commit()
+    return {"success": True}
+
+@router.delete("/session/{session_id}")
+async def delete_assistant_session(
+    session_id: str,
+    current_user: CurrentUser,
+    session: SessionDep,
+):
+    """Soft delete an assistant session."""
+    if current_user.role != UserRole.manager:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    res = await session.exec(
+        text("UPDATE assistant_sessions SET is_deleted = true WHERE CAST(id AS TEXT) = :sid AND CAST(user_id AS TEXT) = :uid RETURNING id"),
+        params={"sid": session_id, "uid": str(current_user.id)},
+    )
+    if not res.scalar():
+        raise HTTPException(status_code=404, detail="Session not found")
+    await session.commit()
+    return {"success": True}

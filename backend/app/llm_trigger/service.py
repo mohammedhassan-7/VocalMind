@@ -8,7 +8,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlmodel import select
@@ -379,6 +379,90 @@ _FRICTION_TITLES = {
 def _friction_title(dissonance_type: str | None) -> str:
     key = (dissonance_type or "none").strip().lower().replace("-", "_").replace(" ", "_")
     return _FRICTION_TITLES.get(key, "Agent Friction")
+
+
+# A diagnosed friction must be anchored to something the AGENT actually said.
+# This guards against the friction LLM over-detecting on clean calls (e.g.
+# inferring "interruption" from a frustrated-but-well-handled customer).
+_FRICTION_GROUNDING_MIN_OVERLAP = 0.5
+
+
+def _agent_turn_texts(conversation_text: str) -> list[str]:
+    texts: list[str] = []
+    for line in (conversation_text or "").splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("agent:"):
+            texts.append(stripped.split(":", 1)[1].strip())
+    return texts
+
+
+_POLICY_QUOTE_MIN_OVERLAP = 0.5
+
+
+def _quote_anchored_in_policy(quote: str, policy_text: str) -> bool:
+    """True if a quote is verbatim-contained in, or strongly overlaps, the policy."""
+    normalized = _normalize_for_match(quote)
+    if len(normalized.split()) < 3:
+        return False
+    if normalized in _normalize_for_match(policy_text):
+        return True
+    return any(
+        _token_overlap_ratio(quote, segment) >= _POLICY_QUOTE_MIN_OVERLAP
+        for segment in _split_sentences(policy_text)
+    )
+
+
+def _customer_turn_texts(conversation_text: str) -> list[str]:
+    texts: list[str] = []
+    for line in (conversation_text or "").splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("customer:"):
+            texts.append(stripped.split(":", 1)[1].strip())
+    return texts
+
+
+def _friction_grounded_in_agent_turns(
+    result: EmotionShiftAnalysis,
+    conversation_text: str,
+) -> bool:
+    """Recall-safe grounding check for a diagnosed friction.
+
+    Only returns False (suppress) when the model DID supply evidence and that
+    evidence aligns to a CUSTOMER turn rather than any agent turn — the specific
+    false-positive mode where the LLM cites the customer's own emotional line as
+    "agent friction". When the model omits evidence entirely (a frequent Gemini
+    habit) we do NOT suppress: absence of a quote is not proof of innocence, and
+    over-suppressing there was wiping out real interruption/dismissive verdicts.
+    """
+    agent_turns = _agent_turn_texts(conversation_text)
+    if not agent_turns:
+        return True  # cannot verify without labelled turns; do not suppress
+
+    # An explicit agent-speaker citation with text is sufficient grounding.
+    if any(c.speaker == "agent" and (c.quote or "").strip() for c in (result.citations or [])):
+        return True
+
+    quotes = [q for q in (result.evidence_quotes or []) if len(_normalize_for_match(q).split()) >= 3]
+    if not quotes:
+        return True  # nothing to verify; keep the model's verdict
+
+    agent_blob_norm = _normalize_for_match(" \n ".join(agent_turns))
+    customer_turns = _customer_turn_texts(conversation_text)
+    for quote in quotes:
+        normalized = _normalize_for_match(quote)
+        agent_overlap = (
+            1.0 if normalized in agent_blob_norm
+            else max((_token_overlap_ratio(quote, turn) for turn in agent_turns), default=0.0)
+        )
+        if agent_overlap >= _FRICTION_GROUNDING_MIN_OVERLAP:
+            return True
+        customer_overlap = max((_token_overlap_ratio(quote, turn) for turn in customer_turns), default=0.0)
+        # Only this quote is customer-aligned; keep scanning the rest.
+        if agent_overlap >= customer_overlap:
+            # Ambiguous (not clearly customer-sourced) — don't suppress on it.
+            return True
+    # Every usable quote aligned better to the customer than to any agent turn.
+    return False
 
 
 def _log_step(interaction_id: UUID | str, step: str, **kwargs) -> None:
@@ -891,13 +975,13 @@ def _merge_missing_steps(
     return merged
 
 
-def _is_resolved_heuristic(transcript_text: str) -> bool:
+def _is_resolved_heuristic(transcript_text: str) -> Optional[bool]:
     """Detect call-level resolution.
 
     Strategy:
       1) Hard NEGATIVE markers (escalation / no-resolution) → not resolved.
       2) Strong POSITIVE markers (concrete outcome delivered) → resolved.
-      3) Otherwise weight positive vs negative soft signals; tie/none → not resolved.
+      3) Otherwise weight positive vs negative soft signals; tie/none → abstain (None).
 
     Bare 'thank you' alone is never enough; every polite call ends with it.
     """
@@ -1011,7 +1095,9 @@ def _is_resolved_heuristic(transcript_text: str) -> bool:
     )
     pos = sum(1 for m in soft_positive if m in text)
     neg = sum(1 for m in soft_negative if m in text)
-    return pos >= 2 and pos > neg
+    if pos >= 2 and pos > neg:
+        return True
+    return None
 
 
 def _efficiency_score_heuristic(transcript_text: str, missing_steps: list[str], expected_steps: list[str]) -> int:
@@ -1885,6 +1971,28 @@ def _fallback_claim_citations(agent_statement: str) -> list[EvidenceCitation]:
     ]
 
 
+def _estimate_nli_confidence(verdict: str, similarity: float | None) -> float:
+    """Estimate a claim-provenance confidence when the LLM omits it.
+
+    Gemini routinely returns valid NLI JSON without a ``confidence_score``. Rather
+    than surface "Confidence N/A", derive a grounded estimate: a verdict-based
+    prior nudged toward the retrieval similarity that anchored the verdict.
+    """
+    verdict_prior = {
+        "Contradiction": 0.82,
+        "Entailment": 0.82,
+        "Supported": 0.82,
+        "Partial Attempt": 0.66,
+        "Neutral": 0.6,
+        "Insufficient Evidence": 0.5,
+    }.get(verdict, 0.6)
+    if similarity is not None:
+        # Blend the prior with retrieval evidence so weakly-anchored verdicts
+        # (low similarity) read as lower confidence.
+        verdict_prior = 0.6 * verdict_prior + 0.4 * _clamp_unit(similarity)
+    return round(_clamp_unit(verdict_prior), 2)
+
+
 def _build_claim_provenance_cards(
     nli_policy: NLIEvaluation,
     utterances: list[Utterance],
@@ -1949,6 +2057,11 @@ def _build_claim_provenance_cards(
             policy_context,
         )
         best_policy_chunk = _best_retrieved_chunk(candidate_chunks, claim_text)
+        similarity = (
+            _clamp_unit(best_policy_chunk.score)
+            if best_policy_chunk and best_policy_chunk.score is not None
+            else None
+        )
         policy_reference = _build_policy_reference_from_chunk(
             best_policy_chunk,
             source_kind="policy",
@@ -1992,9 +2105,13 @@ def _build_claim_provenance_cards(
                 claim_text=claim_text,
                 claim_span=span,
                 retrieved_policy=PolicyReference.model_validate(policy_reference.model_dump()),
-                semantic_similarity=_clamp_unit(best_policy_chunk.score) if best_policy_chunk and best_policy_chunk.score is not None else None,
+                semantic_similarity=similarity,
                 nli_verdict=verdict,  # type: ignore[arg-type]
-                confidence=nli_policy.confidence_score,
+                confidence=(
+                    nli_policy.confidence_score
+                    if nli_policy.confidence_score is not None
+                    else _estimate_nli_confidence(verdict, similarity)
+                ),
                 reasoning=nli_policy.justification,
                 provenance=provenance or "Active policy context",
                 supporting_quotes=[quote for quote in [claim_text, policy_reference.clause] if quote],
@@ -2177,17 +2294,27 @@ async def analyze_emotion_shift(
     agent_context: str,
     customer_text: str,
     acoustic_emotion: str,
+    conversation_text: str = "",
 ) -> EmotionShiftAnalysis:
     inferred_emotion = _normalize_acoustic_label(acoustic_emotion)
     _text_emotion, text_confidence = infer_text_emotion_with_provider(customer_text)
-    negative_acoustic = inferred_emotion in {"anger", "frustrated", "frustration", "disgust", "fear", "sad"}
-    cross_modal = _detect_cross_modal_dissonance(customer_text, acoustic_emotion, text_emotion=_text_emotion)
-    if not cross_modal and not negative_acoustic:
+
+    # Agent-behaviour friction (interruption / dismissive tone / missing
+    # acknowledgment) is INDEPENDENT of the customer's acoustic-vs-text state:
+    # an agent can be dismissive to a perfectly calm customer. We therefore no
+    # longer gate the friction LLM on cross-modal/negative-acoustic signals
+    # (that gate was returning "none" for every call, pinning empathy at 1.0).
+    # Instead we always run the detector whenever there is a real conversation,
+    # and feed it the speaker-labelled transcript so it can actually see the
+    # agent's turns — previously it was asked to spot agent interruptions while
+    # receiving only the customer's text.
+    conversation = (conversation_text or "").strip()
+    if len(conversation.split()) < 8:
         quotes = _quote_candidates(customer_text, max_quotes=2, target_emotion=inferred_emotion)
         return EmotionShiftAnalysis(
             is_dissonance_detected=False,
             dissonance_type="None",
-            root_cause="No strong contradiction detected between text sentiment and acoustic emotion.",
+            root_cause="Conversation too short to assess agent friction.",
             counterfactual_correction="If the agent had continued the same supportive approach, the interaction likely would have remained stable.",
             evidence_quotes=quotes,
             current_customer_emotion=inferred_emotion,
@@ -2204,8 +2331,16 @@ async def analyze_emotion_shift(
                 )
                 for quote in quotes
             ],
+            insufficient_evidence=True,
             confidence_score=_clamp_unit(text_confidence),
         )
+
+    friction_agent_context = (
+        f"{agent_context}\n\n"
+        "Full conversation (speaker-labelled — analyze the AGENT turns for "
+        "interruption, dismissive tone, or missing acknowledgment):\n"
+        f"{conversation}"
+    )
 
     chain = build_emotion_shift_chain()
     try:
@@ -2214,7 +2349,7 @@ async def analyze_emotion_shift(
             chain,
             {
                 "detected_emotion": acoustic_emotion,
-                "agent_context": _sanitize_for_prompt(agent_context),
+                "agent_context": _sanitize_for_prompt(friction_agent_context, max_length=7000),
                 "customer_text": _sanitize_for_prompt(customer_text),
                 "acoustic_emotion": acoustic_emotion,
             },
@@ -2238,10 +2373,16 @@ async def analyze_emotion_shift(
                 root_cause=INSUFFICIENT_EVIDENCE_LABEL,
                 quotes=quotes,
             ),
-            insufficient_evidence=True,
-            confidence_score=None,
+            confidence_score=0.0,
         )
     result.is_dissonance_detected = result.dissonance_type.strip().lower() != "none"
+    # Suppress ungrounded friction: if the model claims agent friction but cannot
+    # back it with an agent-spoken quote, treat the call as friction-free so a
+    # well-handled call is not penalized on the empathy axis.
+    if result.is_dissonance_detected and not _friction_grounded_in_agent_turns(result, conversation):
+        result.dissonance_type = "none"
+        result.is_dissonance_detected = False
+        result.root_cause = "No agent-grounded friction evidence; treated as no friction."
     if not result.evidence_quotes:
         result.evidence_quotes = _quote_candidates(customer_text, max_quotes=3, target_emotion=inferred_emotion)
     if not result.root_cause.strip():
@@ -2403,7 +2544,7 @@ async def evaluate_process_adherence(
 
         return ProcessAdherenceReport(
             detected_topic=topic_hint,
-            is_resolved=deterministic_resolved,
+            is_resolved=deterministic_resolved if deterministic_resolved is not None else False,
             efficiency_score=deterministic_efficiency,
             justification=(
                 f"LLM analysis is temporarily unavailable because {_llm_failure_reason(exc)}. "
@@ -2413,8 +2554,7 @@ async def evaluate_process_adherence(
             missing_sop_steps=deterministic_missing,
             evidence_quotes=evidence_quotes,
             citations=citations,
-            insufficient_evidence=not bool(evidence_quotes),
-            confidence_score=None,
+            confidence_score=0.0,
         )
 
     # If the deterministic topic detector found a STRONG signal (high keyword score
@@ -2458,14 +2598,8 @@ async def evaluate_process_adherence(
         1,
         min(10, int(round((result.efficiency_score + deterministic_efficiency) / 2))),
     )
-    result.is_resolved = result.is_resolved and deterministic_resolved
-    if result.is_resolved:
-        missing = result.missing_sop_steps or []
-        if len(missing) > 1:
-            result.is_resolved = False
-            result.justification = (
-                f"{result.justification} Overridden: {len(missing)} SOP steps missing."
-            ).strip()
+    if deterministic_resolved is not None:
+        result.is_resolved = deterministic_resolved
     STRONG_UNRESOLVED_SIGNALS = [
         "escalat",
         "not resolved",
@@ -2619,9 +2753,18 @@ async def run_single_claim_nli_policy_check(
             evidence_quotes=evidence_quotes,
             citations=citations,
             insufficient_evidence=not bool(citations),
-            confidence_score=None,
+            confidence_score=0.0,
             policy_alignment_score=None,
         )
+    # Capture the MODEL's own policy anchors before any synthetic backfill below
+    # (the fallbacks pull quotes straight from the policy text, which would
+    # otherwise auto-ground every verdict and defeat the contradiction gate).
+    model_policy_quotes = [
+        c.quote for c in (result.citations or [])
+        if (c.source or "").lower() == "policy" and (c.quote or "").strip()
+    ]
+    model_policy_quotes += list(result.evidence_quotes or [])
+
     if not result.evidence_quotes:
         result.evidence_quotes = _quote_candidates(
             f"{agent_statement}\n{ground_truth_policy}",
@@ -2648,6 +2791,22 @@ async def run_single_claim_nli_policy_check(
             result.policy_alignment_score = 0.45
         elif category in {"contradiction", "policy hallucination"}:
             result.policy_alignment_score = 0.1
+
+    # Contradiction grounding gate: a genuine contradiction must quote a clause
+    # that actually exists in the retrieved policy. When the model cannot anchor
+    # one, the alleged violation is likely spurious (the false-positive mode seen
+    # on PASS calls where the agent correctly enforced/denied), so soften to
+    # Benign Deviation instead of flooring the policy score. NOT applied to Policy
+    # Hallucination, whose defining trait is citing a clause ABSENT from policy.
+    if result.nli_category == "Contradiction" and (ground_truth_policy or "").strip():
+        if not any(_quote_anchored_in_policy(q, ground_truth_policy) for q in model_policy_quotes):
+            result.nli_category = "Benign Deviation"
+            result.severity = "none"
+            result.policy_alignment_score = max(result.policy_alignment_score or 0.0, 0.45)
+            result.justification = (
+                "Downgraded from Contradiction: no retrieved-policy clause was quoted to anchor "
+                "the alleged violation. " + (result.justification or "")
+            ).strip()
     return result
 
 
@@ -2703,22 +2862,22 @@ def _derive_llm_inputs(
         total_weight = sum(customer_emotion_weights.values())
         acoustic_confidence = customer_emotion_weights[acoustic_emotion] / total_weight if total_weight > 0 else 0.5
 
+    # Speaker-attributed text only. Empty when diarization could not separate a
+    # speaker — the caller decides how to fall back, keeping the LLM-input and
+    # the manager-facing display values distinct.
     customer_text = _truncate_text("\n".join(customer_fragments), 2400)
     agent_statement = _truncate_text("\n".join(agent_fragments), 2400)
-
-    if not customer_text:
-        customer_text = _truncate_text(transcript_text, 900) if transcript_text else "No customer text available."
-
-    if not agent_statement:
-        agent_statement = _truncate_text(transcript_text, 900) if transcript_text else "No agent statement available."
 
     agent_label = agent_name or "Unknown Agent"
     agent_context = (
         f"Agent name: {agent_label}. "
         "Analyze full-call behavior in a customer-service quality assurance setting."
     )
+    # Text-emotion fusion still needs content even when customer turns were not
+    # separable; fall back locally without polluting the returned display text.
+    fusion_text = customer_text or (_truncate_text(transcript_text, 900) if transcript_text else "")
     fused = fuse_emotion_signals(
-        text=customer_text,
+        text=fusion_text,
         acoustic_emotion=acoustic_emotion,
         acoustic_confidence=acoustic_confidence,
     )
@@ -2729,11 +2888,13 @@ async def _evaluate_emotion_pipeline(
     agent_context: str,
     customer_text: str,
     fused_emotion: str,
+    conversation_text: str = "",
 ) -> EmotionShiftAnalysis:
     return await analyze_emotion_shift(
         agent_context=agent_context,
         customer_text=customer_text,
         acoustic_emotion=fused_emotion,
+        conversation_text=conversation_text,
     )
 
 
@@ -2959,11 +3120,24 @@ async def evaluate_interaction_triggers(
 
     process_context_text = _render_window_bundle(process_windows) or transcript_text
 
-    agent_context, customer_text, acoustic_emotion, fused_emotion, agent_statement = _derive_llm_inputs(
+    agent_context, customer_fragments_text, acoustic_emotion, fused_emotion, agent_fragments_text = _derive_llm_inputs(
         utterances=utterances,
         transcript_text=transcript_text,
         agent_name=agent.name if agent else None,
     )
+
+    # Honest, speaker-attributed text for the manager-facing UI. When diarization
+    # could not isolate a speaker we say so rather than dumping the entire
+    # (cross-contaminated) transcript into both the customer and agent panels.
+    roles_unavailable_note = "Speaker roles were unavailable for this call — see the full transcript."
+    display_customer_text = customer_fragments_text or roles_unavailable_note
+    display_agent_statement = agent_fragments_text or roles_unavailable_note
+
+    # LLM-side inputs may fall back to the full transcript so the chains still
+    # have content to reason over even when role attribution failed.
+    transcript_fallback = _truncate_text(transcript_text, 900) if transcript_text else ""
+    customer_text = customer_fragments_text or transcript_fallback or "No customer text available."
+    agent_statement = agent_fragments_text or transcript_fallback or "No agent statement available."
 
     if selected_emotion_window:
         agent_context += (
@@ -3077,6 +3251,7 @@ async def evaluate_interaction_triggers(
         agent_context=agent_context,
         customer_text=customer_text,
         fused_emotion=fused_emotion,
+        conversation_text=_reconstruct_transcript(utterances) or transcript_text,
     )
     grounded_trigger_checks_task = _evaluate_policy_and_sop_trigger_checks(
         process_context_text=process_context_text,
@@ -3181,10 +3356,10 @@ async def evaluate_interaction_triggers(
         emotion_shift=emotion_shift,
         process_adherence=process_adherence,
         nli_policy=nli_policy,
-        derived_customer_text=customer_text,
+        derived_customer_text=display_customer_text,
         derived_acoustic_emotion=acoustic_emotion,
         derived_fused_emotion=fused_emotion,
-        derived_agent_statement=agent_statement,
+        derived_agent_statement=display_agent_statement,
         explainability=explainability,
     )
 

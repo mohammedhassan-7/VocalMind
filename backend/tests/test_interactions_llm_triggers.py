@@ -18,6 +18,7 @@ def test_map_llm_trigger_report_contains_process_and_nli_fields():
             dissonance_type="Sarcasm",
             root_cause="Customer wording conflicts with tone.",
             counterfactual_correction="If the agent had validated the customer concern first, tension may have dropped.",
+            confidence_score=0.95,
             evidence_quotes=["I am fine, whatever."],
             citations=[
                 EvidenceCitation(
@@ -32,6 +33,7 @@ def test_map_llm_trigger_report_contains_process_and_nli_fields():
             detected_topic="billing_issue",
             is_resolved=False,
             efficiency_score=5,
+            confidence_score=0.95,
             justification="Agent confirmed the account check but did not complete full SOP verification.",
             missing_sop_steps=["Confirm account details"],
             evidence_quotes=["Let me check your account."],
@@ -47,6 +49,7 @@ def test_map_llm_trigger_report_contains_process_and_nli_fields():
         nli_policy=NLIEvaluation(
             nli_category="Contradiction",
             justification="Agent promised refund outside policy window.",
+            confidence_score=0.95,
             evidence_quotes=["We can refund after 60 days.", "Refunds are allowed only within 30 days."],
             citations=[
                 EvidenceCitation(

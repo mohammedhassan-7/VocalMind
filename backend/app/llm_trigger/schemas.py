@@ -134,19 +134,47 @@ def _normalize_quote_list(value: list[str] | str | None) -> list[str]:
     return normalized
 
 
+def _clean_citations(value: list | None) -> list:
+    if not value:
+        return []
+    cleaned = []
+    for c in value:
+        # Drop malformed citations the model sometimes emits (e.g. a trailing
+        # {"source": "policy"} with no quote). A citation without a quote carries
+        # no evidence, and keeping it would fail EvidenceCitation's required
+        # `quote` field and discard the whole response into the degraded fallback.
+        if isinstance(c, dict):
+            if not c:
+                continue
+            if not str(c.get("quote") or "").strip():
+                continue
+        cleaned.append(c)
+    return cleaned
+
+
 class EmotionShiftAnalysis(BaseModel):
+    # NOTE: these four carry defaults so a partial-but-valid JSON object from the
+    # model (Gemini in particular routinely omits counterfactual_correction)
+    # still parses and we keep the model's dissonance_type signal, rather than
+    # discarding the whole response and dropping empathy to the 0.8 fallback.
     is_dissonance_detected: bool = Field(
-        description="Whether acoustic emotion contradicts text sentiment."
+        default=False,
+        description="Whether acoustic emotion contradicts text sentiment.",
     )
     dissonance_type: str = Field(
+        default="none",
         description=(
             'Agent friction root cause — exactly one of: "interruption", "dismissive_tone", '
             '"missing_acknowledgment", "none" (mirrors friction_root_cause / shift_type).'
-        )
+        ),
     )
-    root_cause: str = Field(description="Transcript-grounded explanation of the mismatch.")
+    root_cause: str = Field(
+        default="insufficient evidence",
+        description="Transcript-grounded explanation of the mismatch.",
+    )
     counterfactual_correction: str = Field(
-        description='Actionable rewrite starting with "If the agent had...".'
+        default="If the agent had used a clearer empathy-and-verification step, escalation risk could have decreased.",
+        description='Actionable rewrite starting with "If the agent had...".',
     )
     evidence_quotes: list[str] = Field(
         default_factory=list,
@@ -168,6 +196,9 @@ class EmotionShiftAnalysis(BaseModel):
         default=False,
         description="True when the analysis had to be downgraded due to missing or unmapped evidence.",
     )
+    # Optional: Gemini routinely omits confidence_score from otherwise-valid JSON.
+    # Keeping it required discarded the whole response and forced the degraded
+    # heuristic fallback. Downstream code backfills None from a signal estimate.
     confidence_score: float | None = Field(
         default=None,
         ge=0.0,
@@ -196,17 +227,28 @@ class EmotionShiftAnalysis(BaseModel):
         text = (value or "").strip()
         return text or "insufficient evidence"
 
+    @field_validator("citations", mode="before")
+    @classmethod
+    def drop_empty_citations(cls, value: list | None) -> list:
+        return _clean_citations(value)
+
 
 class ProcessAdherenceReport(BaseModel):
-    detected_topic: str = Field(description="Detected customer-service topic.")
-    is_resolved: bool = Field(description="Whether issue appears resolved by end of dialogue.")
+    # NOTE: these four carry defaults so a partial-but-valid JSON object from the
+    # model (Gemini in particular tends to omit fields it deems uninteresting)
+    # still parses and we keep the model's missing_sop_steps/detected_topic signal,
+    # rather than discarding the whole response and dropping to pure heuristics.
+    detected_topic: str = Field(default="", description="Detected customer-service topic.")
+    is_resolved: bool = Field(default=False, description="Whether issue appears resolved by end of dialogue.")
     efficiency_score: int = Field(
+        default=5,
         ge=1,
         le=10,
         description="Resolution efficiency score where 10 is optimal process adherence.",
     )
     justification: str = Field(
-        description="A short, quote-grounded paragraph explaining exactly why the efficiency score was given and why any steps were missed."
+        default="",
+        description="A short, quote-grounded paragraph explaining exactly why the efficiency score was given and why any steps were missed.",
     )
     missing_sop_steps: list[str] = Field(
         default_factory=list,
@@ -227,6 +269,8 @@ class ProcessAdherenceReport(BaseModel):
         default=False,
         description="True when process verdict could not be grounded to transcript evidence.",
     )
+    # Optional: see EmotionShiftAnalysis.confidence_score — Gemini omits this and a
+    # required field was forcing the degraded heuristic fallback. Backfilled downstream.
     confidence_score: float | None = Field(
         default=None,
         ge=0.0,
@@ -238,6 +282,11 @@ class ProcessAdherenceReport(BaseModel):
     @classmethod
     def normalize_process_evidence_quotes(cls, value: list[str] | str | None) -> list[str]:
         return _normalize_quote_list(value)
+
+    @field_validator("citations", mode="before")
+    @classmethod
+    def drop_empty_citations(cls, value: list | None) -> list:
+        return _clean_citations(value)
 
 
 NLICategory = Literal[
@@ -281,6 +330,8 @@ class NLIEvaluation(BaseModel):
         default=False,
         description="True when NLI verdict had insufficient policy-grounded evidence.",
     )
+    # Optional: see EmotionShiftAnalysis.confidence_score — Gemini omits this and a
+    # required field was forcing the degraded heuristic fallback.
     confidence_score: float | None = Field(
         default=None,
         ge=0.0,
@@ -293,11 +344,30 @@ class NLIEvaluation(BaseModel):
         le=1.0,
         description="How strongly the statement is supported by policy. Low values imply contradiction or hallucination.",
     )
+    severity: Literal["critical", "major", "minor", "none"] = Field(
+        default="none",
+        description=(
+            "Severity of the policy breach: 'critical' (regulatory/financial/identity harm), "
+            "'major' (clear violation, limited harm), 'minor' (small procedural slip such as a "
+            "missing recording notice), or 'none' for Entailment / Benign Deviation."
+        ),
+    )
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def normalize_severity(cls, value: str | None) -> str:
+        normalized = (value or "none").strip().lower()
+        return normalized if normalized in {"critical", "major", "minor", "none"} else "none"
 
     @field_validator("evidence_quotes", mode="before")
     @classmethod
     def normalize_nli_evidence_quotes(cls, value: list[str] | str | None) -> list[str]:
         return _normalize_quote_list(value)
+
+    @field_validator("citations", mode="before")
+    @classmethod
+    def drop_empty_citations(cls, value: list | None) -> list:
+        return _clean_citations(value)
 
 
 class InteractionLLMTriggerReport(BaseModel):

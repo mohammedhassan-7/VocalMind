@@ -3,7 +3,15 @@
 
 from collections import Counter
 from datetime import datetime, timezone
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Path as FastAPIPath, Query as FastAPIQuery
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    Path as FastAPIPath,
+    Query as FastAPIQuery,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import select, func
@@ -44,6 +52,21 @@ from app.models.user import User as UserModel
 from app.models.enums import JobStatus, ProcessingStatus, UserRole
 from app.models.feedback import ComplianceFeedback, EmotionFeedback
 from app.models.llm_trigger_cache import InteractionLLMTriggerCache
+
+
+def _iso_utc_z(dt: datetime | None) -> str | None:
+    """Serialize a datetime as a clean UTC ISO-8601 string with a trailing Z.
+
+    Tolerates both naive (assumed UTC) and tz-aware values. Naively appending
+    "Z" to a tz-aware ``isoformat()`` produced "...+00:00Z" — an invalid string
+    that the frontend's ``new Date()`` rejected, surfacing as "Invalid Date".
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.isoformat() + "Z"
+
 
 router = APIRouter()
 
@@ -238,6 +261,7 @@ class InteractionDetailSummaryResponse(APIModel):
     agentId: str
     date: str
     time: str
+    timestamp: str | None = None
     duration: str
     language: str
     overallScore: float
@@ -1212,6 +1236,7 @@ async def list_interactions(session: SessionDep, current_user: CurrentUser):
             "agentId": str(row.agent_id),
             "date": row.interaction_date.strftime("%Y-%m-%d") if row.interaction_date else "",
             "time": row.interaction_date.strftime("%I:%M %p") if row.interaction_date else "",
+            "timestamp": _iso_utc_z(row.interaction_date),
             "duration": f"{mins}:{secs:02d}",
             "language": row.language_detected or "Unknown",
             "overallScore": round(to_percentage(row.overall_score), 0),
@@ -1490,6 +1515,7 @@ async def get_interaction_detail(
             "agentId": str(row.agent_id),
             "date": row.interaction_date.strftime("%Y-%m-%d") if row.interaction_date else "",
             "time": row.interaction_date.strftime("%I:%M %p") if row.interaction_date else "",
+            "timestamp": _iso_utc_z(row.interaction_date),
             "duration": f"{mins}:{secs:02d}",
             "language": row.language_detected or "Unknown",
             "overallScore": scores_payload["overallScore"],

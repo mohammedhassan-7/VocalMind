@@ -4,12 +4,16 @@ import { parse, isValid } from "date-fns";
 import {
   Search, ArrowDown, ArrowUp, Loader2, AlertTriangle,
   RefreshCw, MoreHorizontal, Eye, RotateCcw, Trash2,
+  Upload, X, FileAudio
 } from "lucide-react";
 import {
   getInteractions,
   reprocessInteraction,
   deleteInteraction,
+  createInteraction,
+  getAgents,
   type InteractionSummary,
+  type AgentSummary,
 } from "../../services/api";
 
 type ScoreTier = "excellent" | "good" | "fair" | "poor";
@@ -124,6 +128,14 @@ export function SessionInspector() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Upload Modal State
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadAgentId, setUploadAgentId] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
+
   // Close menu on outside click
   useEffect(() => {
     if (!openMenuId) return;
@@ -142,7 +154,32 @@ export function SessionInspector() {
       .then(setInteractions)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+
+    getAgents().then(setAgents).catch(console.error);
   }, []);
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) return;
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      await createInteraction(uploadFile, uploadAgentId || undefined);
+      setIsUploadModalOpen(false);
+      setUploadFile(null);
+      setUploadAgentId("");
+      
+      // Refresh interactions list to show the new pending interaction
+      const refreshed = await getInteractions();
+      setInteractions(refreshed);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Failed to upload audio file");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Poll for processing rows
   const hasProcessing = interactions.some(isProcessingStatus);
@@ -289,6 +326,14 @@ export function SessionInspector() {
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="flex items-center gap-2 h-10 px-4 bg-primary text-primary-foreground rounded-[10px] text-[13px] font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+          >
+            <Upload className="w-4 h-4" />
+            Upload audio
+          </button>
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
@@ -538,6 +583,104 @@ export function SessionInspector() {
           </div>
         </div>
       </div>
+
+      {/* Upload Modal */}
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md bg-card rounded-2xl border shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-muted/20">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileAudio className="w-5 h-5 text-primary" />
+                Upload Session Audio
+              </h3>
+              <button 
+                onClick={() => !isUploading && setIsUploadModalOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted text-muted-foreground transition-colors disabled:opacity-50"
+                disabled={isUploading}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpload} className="p-5">
+              {uploadError && (
+                <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[13px] font-medium text-destructive flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <p>{uploadError}</p>
+                </div>
+              )}
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[13px] font-semibold text-foreground mb-1.5">
+                    Audio File (.wav, .mp3)
+                  </label>
+                  <input
+                    type="file"
+                    accept=".wav,.mp3,audio/wav,audio/mpeg"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    className="w-full text-[13px] text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[12px] file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-colors cursor-pointer"
+                    disabled={isUploading}
+                    required
+                  />
+                  {uploadFile && (
+                    <p className="mt-2 text-[12px] text-muted-foreground truncate">
+                      Selected: {uploadFile.name} ({(uploadFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </p>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="block text-[13px] font-semibold text-foreground mb-1.5">
+                    Agent (Optional)
+                  </label>
+                  <select
+                    value={uploadAgentId}
+                    onChange={(e) => setUploadAgentId(e.target.value)}
+                    className="w-full h-10 px-3 bg-background border rounded-[10px] text-[13px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+                    disabled={isUploading || agents.length === 0}
+                  >
+                    <option value="">Auto-assign (or select an agent)</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(false)}
+                  className="flex-1 h-10 rounded-xl border font-semibold text-[13px] hover:bg-muted transition-colors disabled:opacity-50"
+                  disabled={isUploading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!uploadFile || isUploading}
+                  className="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-semibold text-[13px] hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      Upload
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

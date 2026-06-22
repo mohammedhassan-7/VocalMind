@@ -105,8 +105,8 @@ export function AgentLayout() {
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center rounded-xl transition-all h-11 ${
-                        collapsed ? "justify-center px-0" : "gap-3 px-3.5"
+                      className={`flex items-center h-11 rounded-xl transition-all ${
+                        collapsed ? "justify-center w-11 mx-auto" : "justify-start gap-3 px-3.5"
                       } ${
                         isActive
                           ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"

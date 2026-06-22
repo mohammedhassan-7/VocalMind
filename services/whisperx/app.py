@@ -26,19 +26,16 @@ warnings.filterwarnings("ignore")
 # ──────────────────────────────────────────────────────────────────────────────
 from dotenv import load_dotenv
 
-env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(env_path)
 
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "large-v2")
-SPEAKER_ROLE_MODEL_ENABLED = os.getenv("SPEAKER_ROLE_MODEL_ENABLED", "true").lower() == "true"
+# Transcription batch size. Lower = less peak VRAM, which matters on 8GB GPUs
+# where WhisperX coexists with the diarization + emotion models (batch_size=16
+# could spike past 8GB and silently OOM-kill the process). Default 8.
+WHISPER_BATCH_SIZE = int(os.getenv("WHISPER_BATCH_SIZE", "8"))
 STRICT_DIARIZATION = os.getenv("STRICT_DIARIZATION", "false").lower() == "true"
-SPEAKER_ROLE_MODEL_DIR = Path(
-    os.getenv(
-        "SPEAKER_ROLE_MODEL_DIR",
-        str(Path(__file__).resolve().parent / "models" / "speaker_role" / "distilbert"),
-    )
-)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Compatibility patches — MUST run BEFORE importing whisperx / pyannote
@@ -88,7 +85,6 @@ import whisperx
 from whisperx.diarize import DiarizationPipeline
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
-from speaker_role_classifier import SpeakerRoleClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +115,45 @@ def detect_overlaps(segments: List[Dict], threshold: float = 0.1) -> List[Dict]:
             curr["overlap"] = True
             nxt["overlap"] = True
     return segments
+
+def split_segments_by_word_speakers(segments: List[Dict]) -> List[Dict]:
+    """Split Whisper segments if PyAnnote assigned multiple speakers to the same segment's words."""
+    split_segments = []
+    for seg in segments:
+        words = seg.get("words")
+        if not words or len(words) == 0:
+            split_segments.append(dict(seg))
+            continue
+        
+        current_speaker = words[0].get("speaker", seg.get("speaker", "UNKNOWN"))
+        current_words = []
+        
+        for w in words:
+            spk = w.get("speaker", seg.get("speaker", "UNKNOWN"))
+            if spk != current_speaker:
+                if current_words:
+                    new_seg = dict(seg)
+                    new_seg["speaker"] = current_speaker
+                    new_seg["text"] = " ".join(cw.get("word", "").strip() for cw in current_words).strip()
+                    new_seg["start"] = current_words[0].get("start", seg.get("start", 0.0))
+                    new_seg["end"] = current_words[-1].get("end", current_words[-1].get("start", seg.get("end", 0.0)))
+                    new_seg["words"] = list(current_words)
+                    split_segments.append(new_seg)
+                current_speaker = spk
+                current_words = [w]
+            else:
+                current_words.append(w)
+        
+        if current_words:
+            new_seg = dict(seg)
+            new_seg["speaker"] = current_speaker
+            new_seg["text"] = " ".join(cw.get("word", "").strip() for cw in current_words).strip()
+            new_seg["start"] = current_words[0].get("start", seg.get("start", 0.0))
+            new_seg["end"] = current_words[-1].get("end", current_words[-1].get("start", seg.get("end", 0.0)))
+            new_seg["words"] = list(current_words)
+            split_segments.append(new_seg)
+            
+    return split_segments
 
 
 def merge_short_same_speaker_segments(
@@ -173,7 +208,7 @@ def merge_short_same_speaker_segments(
         # Case 2: micro-fragment (< min_seg_s) sandwiched between same-speaker
         # neighbors → absorb into the LAST segment. Avoids ".", "Yes." dangling.
         cur_dur = float(seg.get("end", 0.0)) - float(seg.get("start", 0.0))
-        if cur_dur < min_seg_s and gap <= max_gap_s and merged_dur <= max_merged_s:
+        if cur_dur < min_seg_s and gap <= max_gap_s and merged_dur <= max_merged_s and _same_speaker(last, seg):
             last_dur = float(last.get("end", 0.0)) - float(last.get("start", 0.0))
             if last_dur >= min_seg_s:
                 last["end"] = float(seg.get("end", last["end"]))
@@ -336,10 +371,6 @@ class Models:
     diarize_model = None
     diarization_enabled = False
     diarization_reason = "not_loaded"
-    speaker_role_classifier = SpeakerRoleClassifier(
-        model_dir=SPEAKER_ROLE_MODEL_DIR,
-        enabled=SPEAKER_ROLE_MODEL_ENABLED,
-    )
 
 def load_models():
     logger.info(f"Loading WhisperX model ({WHISPER_MODEL_SIZE}) on {DEVICE} ({COMPUTE_TYPE})...")
@@ -394,6 +425,59 @@ def unload_models():
     if DEVICE == "cuda":
         torch.cuda.empty_cache()
 
+
+def _env_speaker_int(name: str, default: int | None = None) -> int | None:
+    """Parse a positive-int speaker-count env var; 0/empty/invalid -> None."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    raw = raw.strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else None
+
+
+def _resolve_diarize_call_kwargs() -> dict:
+    """Speaker-count constraints passed to the pyannote diarization call.
+
+    These are 1:1 agent/customer calls; with no hint pyannote over-clusters a
+    single mono speaker's prosody into many spurious clusters. Default forces
+    exactly 2 speakers. Override via env for multi-party audio:
+      DIARIZATION_NUM_SPEAKERS  exact count (default 2; set 0 to disable)
+      DIARIZATION_MIN_SPEAKERS / DIARIZATION_MAX_SPEAKERS  range (overrides NUM)
+
+    The desired kwargs are filtered against the actual pipeline signature so
+    this stays compatible across whisperx/pyannote versions.
+    """
+    mn = _env_speaker_int("DIARIZATION_MIN_SPEAKERS")
+    mx = _env_speaker_int("DIARIZATION_MAX_SPEAKERS")
+    if mn is not None or mx is not None:
+        desired: dict = {}
+        if mn is not None:
+            desired["min_speakers"] = mn
+        if mx is not None:
+            desired["max_speakers"] = mx
+    else:
+        num = _env_speaker_int("DIARIZATION_NUM_SPEAKERS", default=2)
+        desired = (
+            {"num_speakers": num, "min_speakers": num, "max_speakers": num}
+            if num
+            else {}
+        )
+
+    if Models.diarize_model is None or not desired:
+        return {}
+    try:
+        params = inspect.signature(Models.diarize_model.__call__).parameters
+    except (TypeError, ValueError):
+        return {}
+    return {k: v for k, v in desired.items() if k in params}
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app
 # ──────────────────────────────────────────────────────────────────────────────
@@ -432,7 +516,6 @@ def health():
         "models_loaded": Models.asr_model is not None,
         "diarization_enabled": Models.diarization_enabled,
         "diarization_reason": Models.diarization_reason,
-        "speaker_role_model_available": Models.speaker_role_classifier.is_available,
     }
 
 
@@ -496,7 +579,7 @@ async def transcribe(
 
         # Step 1 — Transcribe
         audio = whisperx.load_audio(tmp_path)
-        result = Models.asr_model.transcribe(audio, batch_size=16, language=language)
+        result = Models.asr_model.transcribe(audio, batch_size=WHISPER_BATCH_SIZE, language=language)
         detected_language = result["language"]
 
         # Step 2 — Align
@@ -524,8 +607,13 @@ async def transcribe(
                 agent_channel=stereo_layout["agent_channel"],
             )
         elif Models.diarize_model is not None:
-            diarize_segments = Models.diarize_model(audio)
+            # Constrain pyannote to the expected speaker count. These are 1:1
+            # agent/customer calls; with no hint pyannote over-clusters one mono
+            # speaker's prosody into many spurious clusters (10+ on TTS audio),
+            # which collapses to a wrong agent/customer split downstream.
+            diarize_segments = Models.diarize_model(audio, **_resolve_diarize_call_kwargs())
             result = whisperx.assign_word_speakers(diarize_segments, result)
+            result["segments"] = split_segments_by_word_speakers(result["segments"])
             # Ensure diarization_speaker is always populated in speaker_meta
             # so _count_diarization_clusters() works regardless of classifier state
             for seg in result["segments"]:
@@ -548,13 +636,7 @@ async def transcribe(
                 segment["speaker_meta"].setdefault("strategy", "cluster")
                 segment["speaker_meta"].setdefault("fallback_reason", "diarization_unavailable")
 
-        # Step 4 — Optional speaker role relabeling.
-        # Skip the text-based relabel in channel mode — the channel signal is
-        # already ground-truth-grade and shouldn't be second-guessed.
-        if diarization_strategy != "channel":
-            result["segments"] = Models.speaker_role_classifier.relabel_segments(result["segments"])
-
-        # Step 4b — Merge over-segmented same-speaker fragments. WhisperX VAD
+        # Step 4 — Merge over-segmented same-speaker fragments. WhisperX VAD
         # tends to split sentences into many sub-second pieces; downstream
         # emotion + diarization both suffer from that. We collapse them here.
         result["segments"] = merge_short_same_speaker_segments(result["segments"])

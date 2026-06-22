@@ -124,6 +124,7 @@ def test_llm_trigger_run_blocks_cross_org_access(client, tmp_path, monkeypatch):
                 justification="ok",
                 evidence_quotes=[],
                 citations=[],
+                confidence_score=0.95,
             ),
         )
 

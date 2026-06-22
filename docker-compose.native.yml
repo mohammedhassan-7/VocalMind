@@ -1,0 +1,15 @@
+# Local-only override for NATIVE-GPU dev mode (backend + whisperx/emotion/vad run
+# on the host under the vocalmind_gpu conda env; only infra + frontend stay in Docker).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.native.yml up -d --no-deps frontend
+#
+# Why: the Dockerized frontend's Vite proxy defaults to http://backend:8000 (the
+# compose service), but in native mode there is no backend container. This points
+# the proxy at the native backend on the host instead. NOT for full-Docker mode.
+services:
+  frontend:
+    depends_on: []
+    environment:
+      - VITE_API_URL=
+      - VITE_DEV_PROXY_TARGET=http://host.docker.internal:8000

@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from app.llm_trigger.retrieval import RetrievedChunk
-from app.llm_trigger.schemas import EmotionShiftAnalysis, ProcessAdherenceReport
+from app.llm_trigger.schemas import EmotionShiftAnalysis, NLIEvaluation, ProcessAdherenceReport
 from app.llm_trigger.service import (
     _build_policy_reference_from_chunk,
     _build_emotion_transition_attributions,
@@ -13,11 +13,13 @@ from app.llm_trigger.service import (
     _detect_topic,
     _detect_topic_from_sop_chunks,
     _derive_llm_inputs,
+    _quote_anchored_in_policy,
     _render_window_bundle,
     _trajectory_missing_steps,
     _window_citations,
     analyze_emotion_shift,
     evaluate_process_adherence,
+    run_single_claim_nli_policy_check,
 )
 from app.llm_trigger.chains import get_model_for_stage, recognized_stage_names
 
@@ -30,6 +32,7 @@ class _FakeProcessChain:
             efficiency_score=8,
             justification="Agent completed key verification steps but skipped the refund confirmation closeout.",
             missing_sop_steps=["Confirm refund method and timeline"],
+            confidence_score=0.95,
         )
 
 
@@ -39,44 +42,151 @@ class _FailingProcessChain:
 
 
 @pytest.mark.asyncio
-async def test_analyze_emotion_shift_skips_llm_when_no_dissonance():
+async def test_analyze_emotion_shift_skips_llm_when_no_conversation():
+    # Friction analysis needs a real, speaker-labelled conversation. With no
+    # conversation supplied the detector must short-circuit (insufficient
+    # evidence) rather than invoking the LLM.
     with patch("app.llm_trigger.service.build_emotion_shift_chain") as mock_builder:
         result = await analyze_emotion_shift(
             agent_context="Agent context",
             customer_text="Thank you for your help, that was great.",
             acoustic_emotion="happy",
+            conversation_text="",
         )
 
     assert isinstance(result, EmotionShiftAnalysis)
     assert result.is_dissonance_detected is False
     assert result.dissonance_type == "None"
+    assert result.insufficient_evidence is True
     mock_builder.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_analyze_emotion_shift_runs_llm_when_dissonance():
+async def test_analyze_emotion_shift_runs_llm_for_agent_friction_on_calm_customer():
+    # Regression guard for the dead-empathy bug: agent friction must be analyzed
+    # even when the customer's acoustic emotion is calm/positive — the old gate
+    # only ran the LLM on cross-modal/negative-acoustic customers, pinning
+    # empathy at a constant.
     class _FakeEmotionChain:
         async def ainvoke(self, _payload):
             return EmotionShiftAnalysis(
                 is_dissonance_detected=True,
-                dissonance_type="None",
-                root_cause="Positive lexical phrase with negative tone.",
-                counterfactual_correction="If the agent had acknowledged frustration first, escalation may have dropped.",
+                dissonance_type="dismissive_tone",
+                root_cause="Agent used blaming language toward the customer.",
+                counterfactual_correction="If the agent had apologized instead of blaming, tone would improve.",
+                evidence_quotes=["If you had listened the first time we would not be here."],
+                confidence_score=0.9,
             )
 
+    conversation = (
+        "agent: If you had listened the first time we would not be here.\n"
+        "customer: I am just trying to understand my bill.\n"
+        "agent: I already explained this, there is nothing more to do."
+    )
     with (
-        patch("app.llm_trigger.service.infer_text_emotion_with_provider", return_value=("happy", 0.9)),
+        patch("app.llm_trigger.service.infer_text_emotion_with_provider", return_value=("neutral", 0.5)),
+        patch("app.llm_trigger.service.build_emotion_shift_chain", return_value=_FakeEmotionChain()) as mock_builder,
+    ):
+        result = await analyze_emotion_shift(
+            agent_context="Agent context",
+            customer_text="I am just trying to understand my bill.",
+            acoustic_emotion="neutral",
+            conversation_text=conversation,
+        )
+
+    mock_builder.assert_called_once()
+    assert result.is_dissonance_detected is True
+    assert result.dissonance_type == "dismissive_tone"
+
+
+@pytest.mark.asyncio
+async def test_analyze_emotion_shift_downgrades_ungrounded_friction():
+    # The model claims interruption but its only evidence is a CUSTOMER line that
+    # never appears in an agent turn -> must be downgraded to "none" so a
+    # well-handled call keeps full empathy.
+    class _FakeEmotionChain:
+        async def ainvoke(self, _payload):
+            return EmotionShiftAnalysis(
+                is_dissonance_detected=True,
+                dissonance_type="interruption",
+                root_cause="Claimed interruption.",
+                counterfactual_correction="If the agent had paused, things improve.",
+                evidence_quotes=["I am really upset about this whole situation"],
+                confidence_score=0.9,
+            )
+
+    conversation = (
+        "agent: Thank you for calling, I can certainly help you with that today.\n"
+        "customer: I am really upset about this whole situation.\n"
+        "agent: I understand, let me pull up your account and sort this out."
+    )
+    with (
+        patch("app.llm_trigger.service.infer_text_emotion_with_provider", return_value=("frustrated", 0.7)),
         patch("app.llm_trigger.service.build_emotion_shift_chain", return_value=_FakeEmotionChain()),
     ):
         result = await analyze_emotion_shift(
             agent_context="Agent context",
-            customer_text="That is just perfect, thanks a lot.",
-            acoustic_emotion="angry",
+            customer_text="I am really upset about this whole situation.",
+            acoustic_emotion="frustrated",
+            conversation_text=conversation,
         )
 
-    # Service computes this from dissonance_type; "None" must map to False.
+    assert result.dissonance_type == "none"
     assert result.is_dissonance_detected is False
-    assert result.dissonance_type == "None"
+
+
+def test_quote_anchored_in_policy_matches_verbatim_and_overlap():
+    policy = "Refunds are allowed only within 30 days of purchase. Agents must verify identity first."
+    assert _quote_anchored_in_policy("Refunds are allowed only within 30 days", policy) is True
+    assert _quote_anchored_in_policy("Agents must verify the customer identity first", policy) is True
+    assert _quote_anchored_in_policy("Managers approve all wire transfers above the cap", policy) is False
+
+
+@pytest.mark.asyncio
+async def test_nli_contradiction_downgraded_when_not_policy_anchored():
+    # Model claims Contradiction but its policy quote is NOT in the policy text.
+    class _FakeNLIChain:
+        async def ainvoke(self, _payload):
+            return NLIEvaluation(
+                nli_category="Contradiction",
+                severity="major",
+                justification="Alleged violation.",
+                evidence_quotes=["Managers must approve any credit over five thousand dollars"],
+                confidence_score=0.9,
+                policy_alignment_score=0.1,
+            )
+
+    with patch("app.llm_trigger.service.build_nli_policy_chain", return_value=_FakeNLIChain()):
+        result = await run_single_claim_nli_policy_check(
+            agent_statement="I issued a $50 goodwill credit to your account.",
+            ground_truth_policy="Frontline agents may apply goodwill credits up to $200 without approval.",
+        )
+    assert result.nli_category == "Benign Deviation"
+    assert result.severity == "none"
+
+
+@pytest.mark.asyncio
+async def test_nli_contradiction_kept_when_policy_anchored():
+    class _FakeNLIChain:
+        async def ainvoke(self, _payload):
+            return NLIEvaluation(
+                nli_category="Contradiction",
+                severity="critical",
+                justification="Insufficient verification.",
+                evidence_quotes=["Agents must complete 3-of-5 identity verification before any financial adjustment"],
+                confidence_score=0.9,
+                policy_alignment_score=0.1,
+            )
+
+    with patch("app.llm_trigger.service.build_nli_policy_chain", return_value=_FakeNLIChain()):
+        result = await run_single_claim_nli_policy_check(
+            agent_statement="I verified your account number and PIN, then adjusted the charge.",
+            ground_truth_policy="Agents must complete 3-of-5 identity verification before any financial adjustment.",
+        )
+    assert result.nli_category == "Contradiction"
+    assert result.severity == "critical"
+
+
 
 
 def test_detect_cross_modal_dissonance_heuristic():

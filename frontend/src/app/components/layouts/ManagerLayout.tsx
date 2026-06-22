@@ -4,11 +4,11 @@ import { UserNav } from "./UserNav";
 import {
   LayoutDashboard,
   Search,
-  MessageSquare,
   BookOpen,
   ClipboardCheck,
   Download,
   Menu,
+  Settings,
 } from "lucide-react";
 import logoSrc from "../../../assets/logo/logo.svg";
 import { Separator } from "../ui/separator";
@@ -29,6 +29,7 @@ export function ManagerLayout() {
     { icon: Search, label: "Session Inspector", path: "/manager/inspector" },
     { icon: ClipboardCheck, label: "Review Queue", path: "/manager/reviews" },
     { icon: BookOpen, label: "Knowledge Base", path: "/manager/knowledge" },
+    { icon: Settings, label: "Settings", path: "/manager/settings" },
   ];
 
   const getPageTitle = () => {
@@ -108,8 +109,8 @@ export function ManagerLayout() {
                       )}
                       <Link
                         to={item.path}
-                        className={`flex items-center rounded-xl transition-all h-11 ${
-                          collapsed ? "justify-center px-0" : "gap-3 px-3.5"
+                        className={`flex items-center h-11 rounded-xl transition-all ${
+                          collapsed ? "justify-center w-11 mx-auto" : "justify-start gap-3 px-3.5"
                         } ${
                           isActive
                             ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"

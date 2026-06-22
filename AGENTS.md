@@ -122,9 +122,7 @@ VocalMind/
 │   ├── vad/app.py               Silero VAD (host :8002)
 │   ├── emotion/app.py           FunASR emotion2vec (host :8001 → container :8000)
 │   ├── whisperx/
-│   │   ├── app.py                 POST /transcribe: transcribe → align → diarize → speaker-role
-│   │   ├── speaker_role_classifier.py  Text cues + DistilBERT (models/speaker_role/distilbert/)
-│   │   └── models/speaker_role/   Extracted from speaker_classifier_export.zip (gitignored)
+│   │   └── app.py                 POST /transcribe: transcribe → align → diarize
 │   └── rag/                     Ingestion container (vocalmind-ingestion)
 │       ├── main.py              CLI: --ingest, --watch, -q, --compliance
 │       ├── ingest.py            Docling → parent/child chunks → Ollama embed → Qdrant
@@ -142,7 +140,7 @@ VocalMind/
 ├── infra/
 │   ├── db/                    01_schema.sql + migrations 04–06; 02_seed.sql (legacy NileTech/CairoConnect)
 │   ├── scripts/               migrate.py, e2e_local_audio.py, ingest_audio_folder.py,
-│   │                          prepare_speaker_role_model.py, benchmark/eval harness (many)
+│   │                          benchmark/eval harness (many)
 │   ├── benchmarks/            thresholds.json, expected/, overnight reports/
 │   └── fixtures/audio/        Test fixtures (gitignored)
 │
@@ -186,7 +184,6 @@ POST /api/v1/interactions              POST /.../from-storage
    │ 2. fetch_audio_bytes() — local FS or Supabase    │
    │ 3. Call /full/analyze (local or Kaggle)          │
    │    → VAD splits → WhisperX transcribe+diarize   │
-   │    → WhisperX DistilBERT + text cues (1st pass) │
    │    → Emotion per segment → build_local_full_resp │
    │ 4. inference_contracts.py normalizes response     │
    │ 5. Speaker roles (backend interaction_processing):│
@@ -305,7 +302,6 @@ cp .env.example .env && cp backend/.env.example backend/.env   # fill OLLAMA_API
 make build                  # Build all Docker images (use make build-retry on Windows)
 make up                     # Full stack: db+backend+frontend+ollama+qdrant+ingestion+vad+emotion+whisperx
 make ollama-pull-embed      # Pull snowflake-arctic-embed2 into compose Ollama
-make prepare-speaker-model  # Extract DistilBERT for WhisperX (needs speaker_classifier_export.zip at repo root)
 # Backend auto-seeds Nexalink + Meridian on first startup (SEED_DEMO_DATA=true)
 # OR Supabase remote seed:
 make seed                   # Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in backend/.env
@@ -351,7 +347,7 @@ make migrate                # Alembic migrations via infra/scripts/migrate.py
 
 ## Critical Gotchas
 
-1. **`BACKEND_SPEAKER_RELABEL_ENABLED=false`** — WhisperX already labels speaker roles; enabling backend relabeling causes double-labeling. Backend uses LR+TF-IDF (`model.pkl`) for cluster assignment and single-cluster per-segment fallback — separate from WhisperX DistilBERT.
+1. **Speaker-role classifier is LR+TF-IDF** — the backend assigns agent/customer roles with the logistic-regression model (`model.pkl` + `vectorizer.pkl` in `backend/app/core/`) plus rule-based text-cue priors, in `interaction_processing.py`. There is no DistilBERT relabel pass.
 2. **`IS_LOCAL` routing** — single boolean routes all inference. `true` = Docker containers, `false` = Kaggle remote. Mismatch = all inference calls fail.
 3. **Single-cluster diarization** — PyAnnote sometimes returns one speaker cluster; backend falls back to per-segment LR labeling. Reprocess with `?priority=true` after model/heuristic changes.
 4. **Emotion fusion weights** — acoustic 0.55 / text 0.45 are tuned; changing them requires re-running `make quality-eval-emotion` against gold standards.
@@ -365,7 +361,7 @@ make migrate                # Alembic migrations via infra/scripts/migrate.py
 12. **Cypress requires build** — E2E runs against `pnpm run build` + `vite preview`, never the dev server.
 13. **Docker on Windows** — use `make build-retry` or `docker_compose_retry.ps1` for transient daemon errors.
 14. **`uv.lock` gitignored** — run `uv sync` locally; lock file is not committed.
-15. **Model artifacts gitignored** — `*.pt`, `*.safetensors`, `speaker_classifier_export.zip`; run `make prepare-speaker-model`. LR speaker model (`model.pkl`, `vectorizer.pkl`) lives in `backend/app/core/` after retraining.
+15. **Model artifacts gitignored** — `*.pt`, `*.safetensors`. The LR speaker model (`model.pkl`, `vectorizer.pkl`) lives in `backend/app/core/` and is committed (force-included in `.gitignore`).
 16. **WhisperX alignment** — corrupted checkpoint auto-re-downloads; first attempt may fail.
 17. **Assistant SQL is read-only** — no INSERT/UPDATE/DELETE allowed in generated SQL execution.
 18. **ngrok / public demos** — tunnel **port 3000** (frontend), not 8000. Compose uses Vite proxy so API calls stay same-origin. Avoid running host Ollama and compose Ollama both on `:11434`.
@@ -396,7 +392,6 @@ make migrate                # Alembic migrations via infra/scripts/migrate.py
 | `SECRET_KEY` | JWT signing | dev placeholder in compose |
 | `DATABASE_URL` | Postgres (in container) | `postgresql+asyncpg://vocalmind:vocalmind_dev@db:5432/vocalmind` |
 | `ASSISTANT_LLM_PROVIDER` | gemini / groq / ollama_cloud / ollama / auto | `ollama_cloud` |
-| `BACKEND_SPEAKER_RELABEL_ENABLED` | Never enable with WhisperX running | `false` |
 | `SEED_DEMO_DATA` | Auto-seed Nexalink + Meridian on backend startup | `true` |
 | `EMOTION/VAD/WHISPERX_API_URL` | Microservice endpoints | Docker service names |
 | `OLLAMA_BASE_URL` | Local embeddings | `http://ollama:11434` (compose); `http://localhost:11434` (host dev) |

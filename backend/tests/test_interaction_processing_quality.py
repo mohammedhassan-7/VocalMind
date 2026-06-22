@@ -86,7 +86,6 @@ async def test_process_interaction_uses_stable_role_mapping(monkeypatch, tmp_pat
     monkeypatch.setattr(ip, "AsyncSession", lambda *args, **kwargs: AsyncSessionAdapter(session))
     monkeypatch.setattr(ip, "engine", SimpleNamespace())
     monkeypatch.setattr(ip, "evaluate_interaction_triggers", AsyncMock(return_value=None))
-    monkeypatch.setattr(ip, "relabel_segments_with_speaker_model", lambda segments: segments)
 
     async def _fake_fetch(_path):
         return b"RIFF0000WAVEfmt ", "call.wav"
@@ -183,8 +182,8 @@ def test_assign_cluster_roles_handles_three_clusters_warm_transfer():
 
 
 def test_assign_cluster_roles_honors_explicit_agent_customer_labels():
-    """If diarization (or DistilBERT relabeler) already labeled segments as
-    'agent'/'customer', cluster scoring must not re-decide them.
+    """If diarization already labeled segments as 'agent'/'customer',
+    cluster scoring must not re-decide them.
     """
     segments = [
         {"start": 0.0, "end": 5.0, "speaker": "agent", "text": "Thank you for calling."},

@@ -7,14 +7,12 @@ This microservice provides automated speech recognition (ASR), word-level alignm
 ## 1. System Specifications & Configuration
 
 *   **Port**: `:8003`
-*   **Technology Stack**: Python, WhisperX, PyAnnote (diarization), PyTorch, torchaudio, DistilBERT (for text-based speaker role classification)
+*   **Technology Stack**: Python, WhisperX, PyAnnote (diarization), PyTorch, torchaudio
 *   **CUDA passthrough**: Runs on `cuda` if GPU is available (using `float16` compute type), otherwise falls back to `cpu` (using `int8` compute type).
 *   **Key Environment Settings**:
     *   `HF_TOKEN`: Required. Authenticates access to the PyAnnote diarization model on Hugging Face.
     *   `WHISPER_MODEL_SIZE`: Whisper model size (defaults to `large-v2`).
     *   `CHANNEL_DIARIZATION_ENABLED`: Enables channel-based layout checks for stereo telephony calls.
-    *   `SPEAKER_ROLE_MODEL_ENABLED`: Enables DistilBERT classifier.
-    *   `BACKEND_SPEAKER_RELABEL_ENABLED`: **Must remain `false`** to prevent duplicate relabeling loops.
 
 ---
 
@@ -79,9 +77,8 @@ WhisperX/PyAnnote tend to fragment continuous turns into micro-segments (e.g. "O
 
 ---
 
-## 4. DistilBERT Speaker Role Classifier
+## 4. Speaker Role Assignment
 
-If enabled (`SPEAKER_ROLE_MODEL_ENABLED`), the service uses a 3-tier classification path:
-1.  **Lexical Cue Rules**: Identifies standard greetings or structural agent markers (e.g. *"Thank you for calling NexaLink, my name is..."*).
-2.  **DistilBERT Classifier**: A text model trained on conversational scripts to classify agent vs. customer turns.
-3.  **Diarization Fallback**: If models disagree or return low confidence, the pipeline falls back to assigning speaker IDs based on turn density.
+WhisperX returns diarized speaker clusters; agent/customer role assignment is performed
+downstream in the backend (`interaction_processing.py`) using a logistic-regression
+classifier (`model.pkl` + `vectorizer.pkl`) combined with rule-based text-cue priors.

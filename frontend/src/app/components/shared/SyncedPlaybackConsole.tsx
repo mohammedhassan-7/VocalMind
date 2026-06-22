@@ -1,5 +1,5 @@
-import { useMemo, useId, type KeyboardEvent, type MouseEvent } from "react";
-import { SkipBack, SkipForward, Play, Pause } from "lucide-react";
+import { useId, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { SkipBack, SkipForward, Play, Pause, Pin, PinOff } from "lucide-react";
 
 // ── Emotion → valence mapping (shared with the timeline + markers) ───────────
 const EMOTION_VALENCE: Record<string, number> = {
@@ -96,6 +96,7 @@ export function SyncedPlaybackConsole({
   utterances, markers, duration, currentTime, isPlaying, rate,
   onTogglePlay, onSkip, onSeek, onRate,
 }: SyncedPlaybackConsoleProps) {
+  const [isSticky, setIsSticky] = useState(true);
   const dur = duration || 1;
   const gradientId = `vmEmo-${useId().replace(/[:]/g, "")}`;
 
@@ -140,7 +141,7 @@ export function SyncedPlaybackConsole({
 
   return (
     <section
-      className="mt-4 rounded-2xl border border-[var(--border)] bg-card p-4 sm:p-5"
+      className={`${isSticky ? "sticky top-2" : "relative"} z-30 mt-4 rounded-2xl border border-[var(--border)] bg-card p-4 sm:p-5 transition-all`}
       style={{ boxShadow: "var(--shadow-md)" }}
     >
       <div className="flex items-center gap-3 mb-3">
@@ -150,6 +151,13 @@ export function SyncedPlaybackConsole({
           <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--primary)" }} />
           Transcript &amp; timeline locked to audio
         </span>
+        <button
+          onClick={() => setIsSticky(!isSticky)}
+          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors ml-2"
+          title={isSticky ? "Unpin playback console" : "Pin playback console"}
+        >
+          {isSticky ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+        </button>
         <div className="flex-1" />
         <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-[var(--text-faint)]">
           <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "var(--primary)" }} />Customer sentiment

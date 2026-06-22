@@ -171,14 +171,9 @@ class PolicyComplianceEvaluator:
 
         t0 = time.perf_counter()
         try:
-            response = _invoke_judge_with_retry(
+            content = _invoke_judge_with_retry(
                 lambda: groq_breaker.call_sync(
-                    lambda: self._judge_client.chat.completions.create(
-                        model=rag_judge_model(),
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.0,
-                        max_tokens=2048,
-                    )
+                    lambda: _run_judge_client(self._judge_client, prompt, 2048)
                 )
             )
         except Exception as llm_exc:
@@ -194,7 +189,7 @@ class PolicyComplianceEvaluator:
         eval_time = time.perf_counter() - t0
 
         # 3. Parse response
-        content = response.choices[0].message.content.strip()
+        content = content.strip()
         try:
             parsed = _parse_json_response(content)
             if "error" in parsed:
@@ -335,14 +330,9 @@ class AnswerCorrectnessEvaluator:
 
         t0 = time.perf_counter()
         try:
-            response = _invoke_judge_with_retry(
+            content = _invoke_judge_with_retry(
                 lambda: groq_breaker.call_sync(
-                    lambda: self._judge_client.chat.completions.create(
-                        model=rag_judge_model(),
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.0,
-                        max_tokens=2048,
-                    )
+                    lambda: _run_judge_client(self._judge_client, prompt, 2048)
                 )
             )
         except Exception as llm_exc:
@@ -358,7 +348,7 @@ class AnswerCorrectnessEvaluator:
         eval_time = time.perf_counter() - t0
 
         # 3. Parse response
-        content = response.choices[0].message.content.strip()
+        content = content.strip()
         try:
             parsed = _parse_json_response(content)
             if "error" in parsed:
@@ -473,6 +463,23 @@ def run_correctness_batch(
 
 def _is_transient_llm_error(exc: Exception) -> bool:
     return is_transient_llm_error(exc)
+
+def _run_judge_client(client, prompt: str, max_tokens: int) -> str:
+    if hasattr(client, "invoke"):
+        # LangChain ChatModel (e.g. ChatVertexAI)
+        from langchain_core.messages import HumanMessage
+        response = client.invoke([HumanMessage(content=prompt)])
+        return response.content
+    else:
+        # OpenAI or Groq client
+        from .config import rag_judge_model
+        response = client.chat.completions.create(
+            model=rag_judge_model(),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content
 
 
 def _invoke_judge_with_retry(call, max_retries: int = 3) -> object:
