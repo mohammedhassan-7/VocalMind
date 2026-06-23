@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
 
 import { ManagerAssistant } from '../app/components/manager/ManagerAssistant'
+import type { ChatSession } from '../app/services/api'
 
 const { sendAssistantQueryMock, getAssistantHistoryMock } = vi.hoisted(() => ({
     sendAssistantQueryMock: vi.fn(),
@@ -34,6 +35,18 @@ vi.mock('../app/contexts/AuthContext', () => ({
     }),
 }))
 
+/** Wrap one or more AI messages in the ChatSession[] shape the component expects. */
+function sessionWith(messages: Record<string, unknown>[]): ChatSession[] {
+    return [
+        {
+            id: 'session-1',
+            title: 'Saved chat',
+            deleted: false,
+            messages: messages as unknown as ChatSession['messages'],
+        },
+    ]
+}
+
 describe('ManagerAssistant', () => {
     beforeEach(() => {
         sendAssistantQueryMock.mockReset()
@@ -60,23 +73,38 @@ describe('ManagerAssistant', () => {
         fireEvent.change(input, { target: { value: 'Test question' } })
         fireEvent.keyDown(input, { key: 'Enter' })
 
-        expect(sendAssistantQueryMock).toHaveBeenCalledWith('Test question')
+        expect(sendAssistantQueryMock).toHaveBeenCalledWith('Test question', 'chat', undefined)
         expect(await screen.findByText('Mocked assistant reply')).toBeInTheDocument()
         expect(input.value).toBe('')
     })
 
+    it('sends a suggested starter question when its chip is clicked', async () => {
+        render(
+            <MemoryRouter>
+                <ManagerAssistant />
+            </MemoryRouter>
+        )
+
+        const suggestion = await screen.findByText('List all policy violations')
+        fireEvent.click(suggestion)
+
+        expect(sendAssistantQueryMock).toHaveBeenCalledWith('List all policy violations', 'chat', undefined)
+    })
+
     it('renders saved history with structured result data', async () => {
-        getAssistantHistoryMock.mockResolvedValue([
-            {
-                id: 'ai-history',
-                type: 'ai',
-                content: 'Previous insight',
-                mode: 'chat',
-                success: true,
-                data: [{ name: 'Sarah M.', score: 92 }],
-                execution_time: '120ms',
-            },
-        ])
+        getAssistantHistoryMock.mockResolvedValue(
+            sessionWith([
+                {
+                    id: 'ai-history',
+                    type: 'ai',
+                    content: 'Previous insight',
+                    mode: 'chat',
+                    success: true,
+                    data: [{ name: 'Sarah M.', score: 92 }],
+                    execution_time: '120ms',
+                },
+            ])
+        )
 
         render(
             <MemoryRouter>
@@ -88,6 +116,33 @@ describe('ManagerAssistant', () => {
         expect(screen.getByRole('table')).toBeInTheDocument()
         expect(screen.getByText('Sarah M.')).toBeInTheDocument()
         expect(screen.getByText('Executed in 120ms')).toBeInTheDocument()
+    })
+
+    it('renders boolean outcome columns as friendly Yes/No badges', async () => {
+        getAssistantHistoryMock.mockResolvedValue(
+            sessionWith([
+                {
+                    id: 'ai-bool',
+                    type: 'ai',
+                    content: 'Resolution breakdown',
+                    mode: 'chat',
+                    success: true,
+                    data: [{ name: 'Sarah M.', was_resolved: true }],
+                    execution_time: '80ms',
+                },
+            ])
+        )
+
+        render(
+            <MemoryRouter>
+                <ManagerAssistant />
+            </MemoryRouter>
+        )
+
+        expect(await screen.findByText('Resolution breakdown')).toBeInTheDocument()
+        expect(screen.getByText('Yes')).toBeInTheDocument()
+        // header underscores are normalized to spaces for readability
+        expect(screen.getByText('was resolved')).toBeInTheDocument()
     })
 
     it('renders the service fallback message when the request fails', async () => {
@@ -139,7 +194,7 @@ describe('ManagerAssistant', () => {
         fireEvent.change(input, { target: { value: 'List all policy violations' } })
         fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
 
-        expect(sendAssistantQueryMock).toHaveBeenCalledWith('List all policy violations')
+        expect(sendAssistantQueryMock).toHaveBeenCalledWith('List all policy violations', 'chat', undefined)
         expect(input).toBeDisabled()
 
         resolveResponse?.({
@@ -155,18 +210,20 @@ describe('ManagerAssistant', () => {
     })
 
     it('renders generated sql and formatted numeric result values from assistant history', async () => {
-        getAssistantHistoryMock.mockResolvedValue([
-            {
-                id: 'ai-history',
-                type: 'ai',
-                content: 'Historical answer',
-                mode: 'chat',
-                success: true,
-                data: [{ agent_name: 'Sarah M.', avg_score: 91.25 }],
-                sql: 'SELECT agent_name, avg_score FROM leaderboard',
-                execution_time: '95ms',
-            },
-        ])
+        getAssistantHistoryMock.mockResolvedValue(
+            sessionWith([
+                {
+                    id: 'ai-history',
+                    type: 'ai',
+                    content: 'Historical answer',
+                    mode: 'chat',
+                    success: true,
+                    data: [{ agent_name: 'Sarah M.', avg_score: 91.25 }],
+                    sql: 'SELECT agent_name, avg_score FROM leaderboard',
+                    execution_time: '95ms',
+                },
+            ])
+        )
 
         render(
             <MemoryRouter>
