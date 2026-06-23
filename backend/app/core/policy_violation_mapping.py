@@ -587,6 +587,10 @@ async def persist_policy_violations(
     if not policies or not specs:
         return []
 
+    from app.core.knowledge_versioning import get_active_version_number
+
+    knowledge_version = await get_active_version_number(session, organization_id)
+
     rows: list[PolicyCompliance] = []
     for spec in specs:
         policy = resolve_policy_for_spec(policies, spec)
@@ -599,6 +603,7 @@ async def persist_policy_violations(
                 is_compliant=False,
                 compliance_score=max(0.0, min(1.0, spec.compliance_score)),
                 degraded=spec.degraded,
+                knowledge_version=knowledge_version,
                 llm_reasoning=spec.reasoning,
                 evidence_text=spec.evidence_text or spec.title,
                 retrieved_policy_text=policy.policy_text,

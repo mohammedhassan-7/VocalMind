@@ -13,6 +13,8 @@ class InteractionLLMTriggerCache(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     interaction_id: UUID = Field(foreign_key="interactions.id", index=True)
     org_filter: str | None = Field(default=None, max_length=120)
+    # Knowledge version this report was judged against (NULL = pre-versioning / unknown).
+    knowledge_version: int | None = Field(default=None)
     report_payload: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column(JSON, nullable=False),

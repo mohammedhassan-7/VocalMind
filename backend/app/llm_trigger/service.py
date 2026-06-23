@@ -2998,12 +2998,25 @@ async def _load_cached_trigger_report(
         return None
 
 
+async def _resolve_active_knowledge_version(session: AsyncSession, interaction_id) -> int | None:
+    """Active knowledge version number for an interaction's org (seeds a baseline)."""
+    from app.core.knowledge_versioning import get_active_version_number
+
+    org_id = (await session.exec(
+        select(Interaction.organization_id).where(Interaction.id == interaction_id)
+    )).first()
+    if org_id is None:
+        return None
+    return await get_active_version_number(session, org_id)
+
+
 async def _persist_trigger_report(
     session: AsyncSession,
     report: InteractionLLMTriggerReport,
     org_filter: str | None,
     *,
     commit: bool,
+    knowledge_version_override: int | None = None,
 ) -> None:
     if org_filter is not None:
         org_filter = str(org_filter)
@@ -3012,7 +3025,17 @@ async def _persist_trigger_report(
     )
     cached = cached_result.first() or InteractionLLMTriggerCache(interaction_id=report.interaction_id)
     cached.org_filter = org_filter
-    cached.report_payload = {**report.model_dump(mode="json"), "_schema_version": CACHE_SCHEMA_VERSION}
+    knowledge_version = (
+        knowledge_version_override
+        if knowledge_version_override is not None
+        else await _resolve_active_knowledge_version(session, report.interaction_id)
+    )
+    cached.knowledge_version = knowledge_version
+    cached.report_payload = {
+        **report.model_dump(mode="json"),
+        "_schema_version": CACHE_SCHEMA_VERSION,
+        "knowledge_version": knowledge_version,
+    }
     cached.computed_at = datetime.now(timezone.utc)
     session.add(cached)
     if commit:
@@ -3047,6 +3070,8 @@ async def evaluate_interaction_triggers(
     requester_organization_id: UUID | None = None,
     force_rerun: bool = False,
     commit_cache: bool = False,
+    force_persist: bool = False,
+    knowledge_version_override: int | None = None,
 ) -> InteractionLLMTriggerReport:
     """
     Orchestrate the interaction-level trigger pipeline with explicit layer roles:
@@ -3363,12 +3388,13 @@ async def evaluate_interaction_triggers(
         explainability=explainability,
     )
 
-    if not retrieved_sop_from_pinecone.strip() and not ground_truth_policy.strip():
+    if force_persist or (not retrieved_sop_from_pinecone.strip() and not ground_truth_policy.strip()):
         await _persist_trigger_report(
             session=session,
             report=report,
             org_filter=org_filter,
             commit=commit_cache,
+            knowledge_version_override=knowledge_version_override,
         )
         _log_step(interaction_id, "cache_persisted")
 

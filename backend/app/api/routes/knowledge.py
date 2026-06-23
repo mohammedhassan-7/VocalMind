@@ -13,11 +13,40 @@ from pypdf import PdfReader
 
 from app.api.deps import SessionDep, CurrentUser
 from app.core.config import settings
+from app.core.knowledge_versioning import (
+    activate_version,
+    create_version,
+    get_active_version,
+    get_active_version_number,
+    get_version_by_number,
+    list_versions,
+    snapshot_to_grounding,
+)
+from app.core.interaction_processing import (
+    enqueue_interaction_processing,
+    reset_interaction_for_reprocess,
+)
+from app.llm_trigger.service import evaluate_interaction_triggers
+from app.models.enums import UserRole
+from app.models.interaction import Interaction
+from app.models.llm_trigger_cache import InteractionLLMTriggerCache
 from app.models.organization import Organization
 from app.models.policy import CompanyPolicy, OrganizationPolicy, PolicyCompliance
 from app.models.faq import FAQArticle, OrganizationFAQArticle
 
 router = APIRouter()
+
+
+async def _record_kb_version(session: SessionDep, current_user: CurrentUser, summary: str) -> None:
+    """Snapshot the org's knowledge into a new active version after a mutation.
+
+    Called after each mutating knowledge endpoint commits. Editing knowledge
+    deliberately does NOT invalidate cached session analysis — existing results
+    are preserved with their original version tag; the new version only applies
+    to interactions that are explicitly reprocessed.
+    """
+    await create_version(session, current_user.organization_id, current_user.id, summary)
+    await session.commit()
 
 POLICY_DOCS_FOLDER = "policy-docs"
 SOP_DOCS_FOLDER = "sop-procedures"
@@ -174,9 +203,7 @@ async def create_policy(session: SessionDep, current_user: CurrentUser, data: Po
     )
     session.add(org_link)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Added policy '{policy.policy_title}'")
     return {"status": "success", "id": str(policy.id)}
 
 
@@ -219,9 +246,7 @@ async def upload_policy(
     )
     session.add(org_link)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Uploaded policy '{policy.policy_title}'")
     return {"status": "success", "id": str(policy.id)}
 
 
@@ -254,6 +279,7 @@ async def update_policy(
 
     session.add(policy)
     await session.commit()
+    await _record_kb_version(session, current_user, f"Updated policy '{policy.policy_title}'")
     return {"status": "success"}
 
 
@@ -293,9 +319,7 @@ async def replace_policy_upload(
     policy.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(policy)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Replaced policy '{policy.policy_title}'")
     return {"status": "success", "id": str(policy.id)}
 
 
@@ -320,9 +344,8 @@ async def toggle_policy(
     org_policy.is_active = not org_policy.is_active
     session.add(org_policy)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    _action = "Activated" if org_policy.is_active else "Deactivated"
+    await _record_kb_version(session, current_user, f"{_action} a policy")
     return {"status": "success", "isActive": org_policy.is_active}
 
 
@@ -380,9 +403,7 @@ async def create_faq(session: SessionDep, current_user: CurrentUser, data: FAQCr
     )
     session.add(org_link)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Added SOP '{faq.question}'")
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -425,9 +446,7 @@ async def upload_faq(
     )
     session.add(org_link)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Uploaded SOP '{faq.question}'")
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -460,9 +479,7 @@ async def update_faq(
 
     session.add(faq)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Updated SOP '{faq.question}'")
     return {"status": "success"}
 
 
@@ -502,9 +519,7 @@ async def replace_faq_upload(
     faq.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(faq)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Replaced SOP '{faq.question}'")
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -525,13 +540,12 @@ async def toggle_faq(
     org_faq = result.first()
     if not org_faq:
         return {"status": "error", "message": "Assignment not found"}
-    
+
     org_faq.is_active = not org_faq.is_active
     session.add(org_faq)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    _action = "Activated" if org_faq.is_active else "Deactivated"
+    await _record_kb_version(session, current_user, f"{_action} an SOP")
     return {"status": "success", "isActive": org_faq.is_active}
 
 @router.delete("/policies/{policy_id}", responses={401: {"description": "Not authenticated"}, 403: {"description": "Access denied - not authorized to delete this policy"}, 404: {"description": "Policy not found"}, 422: {"description": "Invalid UUID format"}})
@@ -579,9 +593,7 @@ async def delete_policy(
         _delete_document_file(settings.POLICY_DOCS_ROOT, org_slug, POLICY_DOCS_FOLDER, str(policy_id))
 
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, "Deleted a policy")
     return {"status": "success", "message": "Policy deleted"}
 
 
@@ -626,9 +638,7 @@ async def delete_faq(
         _delete_document_file(settings.KNOWLEDGE_DOCS_ROOT, org_slug, SOP_DOCS_FOLDER, str(faq_id))
         _delete_document_file(settings.KNOWLEDGE_DOCS_ROOT, org_slug, LEGACY_FAQ_DOCS_FOLDER, str(faq_id))
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, "Deleted an SOP")
     return {"status": "success", "message": "FAQ deleted"}
 
 
@@ -715,9 +725,7 @@ async def upload_kb_article(
     )
     session.add(org_link)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Uploaded KB article '{faq.question}'")
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -758,9 +766,7 @@ async def replace_kb_upload(
     faq.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(faq)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, f"Replaced KB article '{faq.question}'")
     return {"status": "success", "id": str(faq.id)}
 
 
@@ -785,9 +791,8 @@ async def toggle_kb_article(
     org_faq.is_active = not org_faq.is_active
     session.add(org_faq)
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    _action = "Activated" if org_faq.is_active else "Deactivated"
+    await _record_kb_version(session, current_user, f"{_action} a KB article")
     return {"status": "success", "isActive": org_faq.is_active}
 
 
@@ -831,7 +836,182 @@ async def delete_kb_article(
         _delete_document_file(settings.KNOWLEDGE_DOCS_ROOT, org_slug, KB_DOCS_FOLDER, str(kb_id))
 
     await session.commit()
-    # KB edits intentionally do NOT invalidate cached session analysis — existing
-    # results persist so prior sessions keep their data; the new KB only applies
-    # when an interaction is explicitly reprocessed.
+    await _record_kb_version(session, current_user, "Deleted a KB article")
     return {"status": "success", "message": "KB article deleted"}
+
+
+# --- Knowledge Versioning Endpoints (manager-only) ---
+
+
+class ReprocessVersionRequest(BaseModel):
+    interaction_ids: Optional[list[UUID]] = Field(
+        default=None, description="Explicit interactions to reprocess. Omit to use `scope`."
+    )
+    scope: Optional[str] = Field(
+        default=None, description="Set to 'stale' to reprocess all results tagged below the active version."
+    )
+    target: str = Field(
+        default="active",
+        description="'active' = judge against the current active version; 'original' = re-judge each result against the version it was first tagged with.",
+    )
+
+
+def _require_manager(current_user: CurrentUser) -> None:
+    if current_user.role != UserRole.manager:
+        raise HTTPException(status_code=403, detail="Knowledge versioning is only available to managers")
+
+
+def _serialize_version(version, active_number: int) -> dict:
+    return {
+        "id": str(version.id),
+        "versionNumber": version.version_number,
+        "summary": version.summary,
+        "createdBy": str(version.created_by) if version.created_by else None,
+        "createdAt": version.created_at.isoformat() if version.created_at else None,
+        "isActive": version.is_active,
+        "isLatest": version.version_number == active_number,
+    }
+
+
+@router.get("/versions", responses={401: {"description": "Not authenticated"}, 403: {"description": "Manager role required"}})
+async def list_knowledge_versions(session: SessionDep, current_user: CurrentUser):
+    """List the organization's knowledge versions, newest first."""
+    _require_manager(current_user)
+    org_id = current_user.organization_id
+    active_number = await get_active_version_number(session, org_id, current_user.id)
+    await session.commit()  # persist any lazily-created baseline
+    versions = await list_versions(session, org_id)
+    return [_serialize_version(v, active_number) for v in versions]
+
+
+@router.get("/versions/active", responses={401: {"description": "Not authenticated"}, 403: {"description": "Manager role required"}})
+async def get_active_knowledge_version(session: SessionDep, current_user: CurrentUser):
+    """Return the organization's currently active knowledge version."""
+    _require_manager(current_user)
+    org_id = current_user.organization_id
+    await get_active_version_number(session, org_id, current_user.id)
+    await session.commit()
+    active = await get_active_version(session, org_id)
+    return _serialize_version(active, active.version_number) if active else None
+
+
+@router.post("/versions/{version_id}/activate", responses={401: {"description": "Not authenticated"}, 403: {"description": "Manager role required"}, 404: {"description": "Version not found"}})
+async def activate_knowledge_version(
+    session: SessionDep,
+    current_user: CurrentUser,
+    version_id: UUID = FastAPIPath(..., description="The knowledge version to restore and activate."),
+):
+    """Restore a previous version's knowledge snapshot and make it active.
+
+    Existing analysis results are preserved with their original version tags; the
+    restored knowledge only applies to interactions that are reprocessed.
+    """
+    _require_manager(current_user)
+    try:
+        version = await activate_version(session, current_user.organization_id, version_id, current_user.id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Knowledge version not found")
+    await session.commit()
+    return {"status": "success", "activeVersion": version.version_number}
+
+
+@router.post("/versions/reprocess", responses={401: {"description": "Not authenticated"}, 403: {"description": "Manager role required"}, 422: {"description": "No target interactions specified"}})
+async def reprocess_against_version(
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: ReprocessVersionRequest,
+):
+    """Re-judge interactions' LLM analysis against a knowledge version.
+
+    - ``target='active'`` runs the standard reprocess (re-tags to the active version).
+    - ``target='original'`` re-judges each result against the snapshot it was first
+      tagged with, leaving the active version unchanged.
+    """
+    _require_manager(current_user)
+    org_id = current_user.organization_id
+    org_slug = await _get_org_slug(session, org_id)
+    active_number = await get_active_version_number(session, org_id, current_user.id)
+
+    interaction_ids = await _resolve_reprocess_targets(session, org_id, body, active_number)
+    if not interaction_ids:
+        raise HTTPException(status_code=422, detail="No target interactions to reprocess")
+
+    if body.target == "original":
+        processed = await _reprocess_originals(session, org_id, org_slug, interaction_ids)
+        await session.commit()
+        return {"status": "success", "target": "original", "reprocessed": processed, "queued": False}
+
+    # target == "active": full reprocess via the existing reset + enqueue path.
+    for interaction_id in interaction_ids:
+        await reset_interaction_for_reprocess(session, interaction_id)
+    await session.commit()
+    for interaction_id in interaction_ids:
+        await enqueue_interaction_processing(interaction_id, priority=False)
+    return {
+        "status": "success",
+        "target": "active",
+        "activeVersion": active_number,
+        "queued": True,
+        "count": len(interaction_ids),
+    }
+
+
+async def _resolve_reprocess_targets(
+    session: SessionDep, org_id: UUID, body: ReprocessVersionRequest, active_number: int
+) -> list[UUID]:
+    if body.interaction_ids:
+        rows = (await session.exec(
+            select(Interaction.id).where(
+                Interaction.organization_id == org_id,
+                Interaction.id.in_(body.interaction_ids),  # type: ignore[attr-defined]
+            )
+        )).all()
+        return list(rows)
+    if body.scope == "stale":
+        rows = (await session.exec(
+            select(InteractionLLMTriggerCache.interaction_id)
+            .join(Interaction, Interaction.id == InteractionLLMTriggerCache.interaction_id)
+            .where(
+                Interaction.organization_id == org_id,
+                InteractionLLMTriggerCache.knowledge_version.isnot(None),  # type: ignore[union-attr]
+                InteractionLLMTriggerCache.knowledge_version < active_number,  # type: ignore[operator]
+            )
+        )).all()
+        return list(rows)
+    return []
+
+
+async def _reprocess_originals(
+    session: SessionDep, org_id: UUID, org_slug: str, interaction_ids: list[UUID]
+) -> int:
+    """Re-judge each interaction against its own originally-tagged version snapshot."""
+    processed = 0
+    for interaction_id in interaction_ids:
+        tag = (await session.exec(
+            select(InteractionLLMTriggerCache.knowledge_version).where(
+                InteractionLLMTriggerCache.interaction_id == interaction_id
+            )
+        )).first()
+        if tag is None:
+            continue
+        version = await get_version_by_number(session, org_id, tag)
+        if version is None:
+            continue
+        policy_text, sop_text = snapshot_to_grounding(version.snapshot or {})
+        try:
+            await evaluate_interaction_triggers(
+                session=session,
+                interaction_id=interaction_id,
+                retrieved_sop_from_pinecone=sop_text,
+                ground_truth_policy=policy_text,
+                org_filter=org_slug,
+                requester_organization_id=org_id,
+                force_rerun=True,
+                commit_cache=False,
+                force_persist=True,
+                knowledge_version_override=tag,
+            )
+            processed += 1
+        except Exception:
+            continue
+    return processed

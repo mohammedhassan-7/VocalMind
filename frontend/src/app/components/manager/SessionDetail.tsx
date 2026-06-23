@@ -12,11 +12,15 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import {
-  getInteractionDetail, getAudioUrl, reprocessInteraction,
+  getInteractionDetail, getAudioUrl, reprocessInteraction, reprocessAgainstVersion,
   getInteractionProcessingStatus, fetchAuthenticatedBlob,
   type InteractionDetail, type UtteranceData, type EmotionEventData,
   type LLMEvidenceCitation, type ProcessingStatusResult,
 } from "../../services/api";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "../../components/ui/dialog";
+import { Button } from "../../components/ui/button";
 import { EvidenceAnchoredExplainabilityPanel } from "./EvidenceAnchoredExplainabilityPanel";
 import { SyncedPlaybackConsole, type TimelineMarker } from "../shared/SyncedPlaybackConsole";
 import { AnalysisTabs } from "./AnalysisTabs";
@@ -299,6 +303,7 @@ export function SessionDetail() {
   const [llmLoading, setLlmLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
+  const [reprocessOpen, setReprocessOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);
@@ -526,6 +531,22 @@ export function SessionDetail() {
     } finally { setReprocessing(false); }
   };
 
+  const handleReprocessOriginal = async () => {
+    if (!id || reprocessing) return;
+    setActionError(null);
+    setReprocessing(true);
+    setReprocessOpen(false);
+    try {
+      await reprocessAgainstVersion({ interactionIds: [id], target: "original" });
+      const full = await getInteractionDetail(id, {
+        skipCache: true, includeLLMTriggers: true, llmForceRerun: false,
+      });
+      setData(full);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to reprocess");
+    } finally { setReprocessing(false); }
+  };
+
 
   // ── Computed ────────────────────────────────────────────────────────────
   const interaction = data?.interaction;
@@ -605,6 +626,12 @@ export function SessionDetail() {
 
   const emotionTrigger = data?.emotionTriggers ?? data?.llmTriggers ?? null;
   const ragCompliance = data?.ragCompliance ?? null;
+  const _verSource = data?.llmTriggers ?? data?.emotionTriggers ?? data?.ragCompliance ?? null;
+  const versionInfo = {
+    knowledgeVersion: _verSource?.knowledgeVersion ?? null,
+    activeKnowledgeVersion: _verSource?.activeKnowledgeVersion ?? null,
+    isStale: _verSource?.isStale ?? false,
+  };
   const ragProcess = ragCompliance?.processAdherence ?? data?.llmTriggers?.processAdherence ?? null;
   const ragNli = ragCompliance?.nliPolicy ?? data?.llmTriggers?.nliPolicy ?? null;
   // Prefer the merged llmTriggers payload: it carries both emotion + sop/policy
@@ -656,12 +683,52 @@ export function SessionDetail() {
         <Link to="/manager/inspector" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary hover:underline">
           <ArrowLeft className="w-4 h-4" /> Back to Session Inspector
         </Link>
-        <button type="button" onClick={() => void handleReprocess()} disabled={reprocessing}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-[12px] font-semibold text-foreground hover:bg-muted disabled:opacity-50">
-          <RefreshCw className={`h-3.5 w-3.5 ${reprocessing ? "animate-spin" : ""}`} />
-          {reprocessing ? "Reprocessing..." : "Reprocess"}
-        </button>
+        <div className="flex items-center gap-2">
+          {versionInfo.knowledgeVersion != null && (
+            <span
+              title={versionInfo.isStale
+                ? `Judged against knowledge v${versionInfo.knowledgeVersion}; active is v${versionInfo.activeKnowledgeVersion}`
+                : `Judged against the active knowledge version (v${versionInfo.knowledgeVersion})`}
+              className={`inline-flex h-7 items-center gap-1 rounded-lg border px-2 text-[11px] font-bold ${
+                versionInfo.isStale
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
+                  : "border-border bg-muted/40 text-muted-foreground"
+              }`}
+            >
+              KB v{versionInfo.knowledgeVersion}{versionInfo.isStale ? " · stale" : ""}
+            </span>
+          )}
+          <button type="button"
+            onClick={() => (versionInfo.knowledgeVersion != null ? setReprocessOpen(true) : void handleReprocess())}
+            disabled={reprocessing}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-[12px] font-semibold text-foreground hover:bg-muted disabled:opacity-50">
+            <RefreshCw className={`h-3.5 w-3.5 ${reprocessing ? "animate-spin" : ""}`} />
+            {reprocessing ? "Reprocessing..." : "Reprocess"}
+          </button>
+        </div>
       </div>
+
+      <Dialog open={reprocessOpen} onOpenChange={setReprocessOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reprocess this call</DialogTitle>
+            <DialogDescription>
+              This analysis was judged against knowledge version{" "}
+              <strong>v{versionInfo.knowledgeVersion}</strong>. The active version is{" "}
+              <strong>v{versionInfo.activeKnowledgeVersion}</strong>. Choose which version to
+              re-judge it against.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => void handleReprocessOriginal()} disabled={reprocessing}>
+              Reprocess against original v{versionInfo.knowledgeVersion}
+            </Button>
+            <Button onClick={() => { setReprocessOpen(false); void handleReprocess(); }} disabled={reprocessing}>
+              Reprocess to active v{versionInfo.activeKnowledgeVersion}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {actionError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-[12px] font-medium text-destructive">{actionError}</div>

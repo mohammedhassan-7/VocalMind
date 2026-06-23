@@ -15,11 +15,13 @@ import {
   FileText,
   Upload,
   ClipboardList,
-  Database
+  Database,
+  History
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { KnowledgeVersions } from "./KnowledgeVersions";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Switch } from "../../components/ui/switch";
@@ -324,7 +326,7 @@ export function KnowledgeBase() {
             Refresh Sync
           </Button>
           <Button 
-            className="rounded-xl bg-success hover:bg-success/90 text-white shadow-lg shadow-success/20 gap-2 font-bold px-6 border-none"
+            className="rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 gap-2 font-bold px-6 border-none"
             onClick={() => {
               if (activeTab === "policies") openPolicyModal();
               else if (activeTab === "kb") openKbModal();
@@ -393,6 +395,10 @@ export function KnowledgeBase() {
             <TabsTrigger value="kb" className="rounded-xl px-6 font-bold data-[state=active]:shadow-lg">
               <Database className="w-4 h-4 mr-2" />
               Knowledge Base
+            </TabsTrigger>
+            <TabsTrigger value="versions" className="rounded-xl px-6 font-bold data-[state=active]:shadow-lg">
+              <History className="w-4 h-4 mr-2" />
+              Versions
             </TabsTrigger>
           </TabsList>
         </div>
@@ -690,6 +696,10 @@ export function KnowledgeBase() {
               </div>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="versions" className="animate-in fade-in slide-in-from-bottom-2 duration-400 outline-none">
+          <KnowledgeVersions />
         </TabsContent>
       </Tabs>
 
