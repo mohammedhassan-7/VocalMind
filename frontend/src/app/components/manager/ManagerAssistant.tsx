@@ -1,8 +1,58 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquare, Mic, MoreHorizontal, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { Check, Copy, Download, Lightbulb, MessageSquare, Mic, MoreHorizontal, Pencil, Plus, Send, Sparkles, Trash2 } from "lucide-react";
 
 import { AssistantResponse, ChatSession, deleteAssistantSession, getAssistantHistory, renameAssistantSession, sendAssistantQuery } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
+
+/** Example questions shown to managers who don't know what they can ask. */
+const SUGGESTED_QUESTIONS: readonly string[] = [
+  "Who are my top 5 agents by overall score?",
+  "How many calls were not resolved in the last 30 days?",
+  "List all policy violations",
+  "What are the most common customer emotions?",
+  "Which agent has the lowest resolution rate?",
+  "Show agents ranked by empathy score",
+];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Columns whose boolean values read naturally as a resolved/compliant outcome. */
+const POSITIVE_BOOLEAN_COLUMNS = new Set(["was_resolved", "is_compliant", "is_active", "resolved", "compliant"]);
+
+function isScoreColumn(key: string): boolean {
+  return /score|empathy|resolution|policy|compliance|rating/i.test(key);
+}
+
+/** Format a numeric cell: whole numbers stay as-is, decimals round to 1 place. */
+function formatNumber(val: number): string {
+  return val % 1 === 0 ? String(val) : val.toFixed(1);
+}
+
+function buildCsv(rows: Record<string, unknown>[]): string {
+  if (!rows.length) return "";
+  const keys = Object.keys(rows[0]);
+  const escape = (value: unknown): string => {
+    const s = value == null ? "" : String(value);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const header = keys.join(",");
+  const body = rows.map((row) => keys.map((k) => escape(row[k])).join(",")).join("\n");
+  return `${header}\n${body}`;
+}
+
+function downloadCsv(rows: Record<string, unknown>[]): void {
+  const csv = buildCsv(rows);
+  if (!csv) return;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `assistant-results-${Date.now()}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 interface AssistantMessage extends Partial<AssistantResponse> {
   id: string;
@@ -40,6 +90,98 @@ function deriveTitle(content: string): string {
   const normalized = content.replace(/\s+/g, " ").trim();
   if (!normalized) return "New chat";
   return normalized.length > 42 ? `${normalized.slice(0, 42)}...` : normalized;
+}
+
+/** Render a single result cell in manager-friendly form (badges, scores, short IDs). */
+function ResultCell({ columnKey, value }: { columnKey: string; value: unknown }) {
+  if (typeof value === "boolean") {
+    const isOutcome = POSITIVE_BOOLEAN_COLUMNS.has(columnKey.toLowerCase());
+    const label = isOutcome ? (value ? "Yes" : "No") : value ? "True" : "False";
+    return (
+      <span
+        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${value ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/15 text-rose-600 dark:text-rose-400"}`}
+      >
+        {label}
+      </span>
+    );
+  }
+
+  if (typeof value === "number") {
+    const text = formatNumber(value);
+    if (isScoreColumn(columnKey) && value >= 0 && value <= 10) {
+      const tone = value >= 7 ? "text-emerald-600 dark:text-emerald-400" : value >= 4 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400";
+      return <span className={`font-semibold tabular-nums ${tone}`}>{text}</span>;
+    }
+    return <span className="tabular-nums text-foreground">{text}</span>;
+  }
+
+  const str = String(value ?? "");
+  if (UUID_RE.test(str)) {
+    return (
+      <span className="font-mono text-xs text-muted-foreground" title={str}>
+        {str.slice(0, 8)}…
+      </span>
+    );
+  }
+  return <span className="text-foreground">{str}</span>;
+}
+
+function ResultTable({ rows }: { rows: Record<string, unknown>[] }) {
+  const columns = Object.keys(rows[0]);
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className="overflow-x-auto scrollbar-thin">
+        <table className="min-w-full divide-y divide-border text-sm">
+          <thead className="bg-muted/60">
+            <tr>
+              {columns.map((key) => (
+                <th
+                  key={key}
+                  className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground capitalize"
+                >
+                  {key.replace(/_/g, " ")}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((row, idx) => (
+              <tr key={idx} className="hover:bg-muted/40 transition-colors">
+                {columns.map((key) => (
+                  <td key={key} className="px-3 py-2 whitespace-nowrap text-[13px]">
+                    <ResultCell columnKey={key} value={row[key]} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable; no-op */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+    >
+      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
 }
 
 export function ManagerAssistant() {
@@ -204,8 +346,8 @@ export function ManagerAssistant() {
     });
   };
 
-  const handleSend = async () => {
-    const queryText = input;
+  const handleSend = async (questionOverride?: string) => {
+    const queryText = questionOverride ?? input;
     if (!queryText.trim()) return;
 
     const isNew = !selectedChatId || isDraftNewChat;
@@ -277,6 +419,29 @@ export function ManagerAssistant() {
       setIsLoading(false);
     }
   };
+
+  const suggestionChips = (
+    <div className="mt-6 w-full max-w-md">
+      <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground mb-3">
+        <Lightbulb className="w-3.5 h-3.5" />
+        Try asking
+      </div>
+      <div className="flex flex-col gap-2">
+        {SUGGESTED_QUESTIONS.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => handleSend(q)}
+            disabled={isLoading}
+            className="group flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-left text-sm text-foreground hover:border-primary/50 hover:bg-accent transition-colors disabled:opacity-50"
+          >
+            <Sparkles className="w-3.5 h-3.5 shrink-0 text-primary/70 group-hover:text-primary" />
+            <span>{q}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -350,18 +515,24 @@ export function ManagerAssistant() {
               </div>
             ) : isDraftNewChat ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
-                <h2 className="text-2xl font-bold text-foreground mb-1">Start a new chat</h2>
-                <p className="text-sm text-muted-foreground">Ask your first question below.</p>
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+                  <MessageSquare className="w-6 h-6 text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold text-foreground mb-1">How can I help?</h2>
+                <p className="text-sm text-muted-foreground max-w-sm">Ask about agent performance, call outcomes, policy compliance, or customer emotions — in plain English.</p>
+                {suggestionChips}
               </div>
             ) : !selectedSession ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <h2 className="text-2xl font-bold text-foreground mb-1">No chat selected</h2>
                 <p className="text-sm text-muted-foreground">Select a recent chat or click New chat.</p>
+                {suggestionChips}
               </div>
             ) : visibleMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <h2 className="text-2xl font-bold text-foreground mb-1">{selectedSession.title}</h2>
                 <p className="text-sm text-muted-foreground">This chat is empty. Ask your first question below.</p>
+                {suggestionChips}
               </div>
             ) : (
               <>
@@ -373,15 +544,37 @@ export function ManagerAssistant() {
                         {message.type === "user" ? (
                           <div className="max-w-[520px] bg-primary text-primary-foreground rounded-[18px_18px_4px_18px] px-4 py-3"><p className="text-sm">{message.content}</p></div>
                         ) : (
-                          <div className="max-w-[92%] md:max-w-[660px] bg-[#1f2937] border border-white/10 rounded-[18px_18px_18px_4px] px-4 py-3 space-y-3 shadow-lg">
-                            <p className="text-sm text-white font-medium leading-relaxed">{message.content}</p>
+                          <div className={`max-w-[92%] md:max-w-[680px] rounded-[18px_18px_18px_4px] px-4 py-3 space-y-3 shadow-sm border ${message.success === false ? "bg-destructive/10 border-destructive/30" : "bg-card border-border"}`}>
+                            <p className={`text-sm font-medium leading-relaxed whitespace-pre-line ${message.success === false ? "text-destructive" : "text-foreground"}`}>{message.content}</p>
                             {message.success && message.data && message.data.length > 0 && (
-                              <div className="border border-white/10 rounded-lg overflow-hidden bg-[#0f172a]"><div className="overflow-x-auto"><table className="min-w-full divide-y divide-white/5"><thead className="bg-[#020617]"><tr>{Object.keys(message.data[0]).map((key) => (<th key={key} className="px-3 py-2 text-left text-[11px] font-bold text-white/50 uppercase tracking-wider">{key.replace(/_/g, " ")}</th>))}</tr></thead><tbody className="bg-[#1f2937] divide-y divide-white/5">{message.data.map((row, idx) => (<tr key={idx} className="hover:bg-white/5 transition-colors">{Object.values(row).map((val: any, vIdx) => (<td key={vIdx} className="px-3 py-2 whitespace-nowrap text-[13px] text-white/90">{typeof val === "number" ? (val % 1 === 0 ? val : val.toFixed(1)) : String(val)}</td>))}</tr>))}</tbody></table></div></div>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-medium text-muted-foreground">{message.data.length} result{message.data.length === 1 ? "" : "s"}</span>
+                                  <div className="flex items-center gap-1">
+                                    <CopyButton text={message.content} />
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadCsv(message.data as Record<string, unknown>[])}
+                                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                    >
+                                      <Download className="w-3 h-3" /> Export CSV
+                                    </button>
+                                  </div>
+                                </div>
+                                <ResultTable rows={message.data as Record<string, unknown>[]} />
+                              </div>
                             )}
-                            {message.sql && (
-                              <details className="cursor-pointer"><summary className="text-[11px] text-white/60 hover:text-white/85 transition-colors mb-1">Show generated SQL</summary><div className="bg-[#0D1117] rounded-lg p-3 overflow-x-auto" style={{ fontFamily: "var(--font-mono)" }}><pre className="text-[10px] text-[#A7F3D0] whitespace-pre-wrap">{message.sql}</pre></div></details>
-                            )}
-                            {(message.execution_time ?? message.executionTime) && <span className="inline-flex px-2 py-1 bg-white/10 text-white/60 rounded text-[10px] font-medium border border-white/5">Executed in {message.execution_time ?? message.executionTime}</span>}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {(message.execution_time ?? message.executionTime) && <span className="inline-flex px-2 py-1 bg-muted text-muted-foreground rounded text-[10px] font-medium border border-border">Executed in {message.execution_time ?? message.executionTime}</span>}
+                              {message.sql && (
+                                <details className="cursor-pointer">
+                                  <summary className="text-[11px] text-muted-foreground hover:text-foreground transition-colors select-none">Show generated SQL</summary>
+                                  <div className="mt-2 bg-muted rounded-lg p-3 overflow-x-auto" style={{ fontFamily: "var(--font-mono)" }}>
+                                    <pre className="text-[10px] text-emerald-600 dark:text-emerald-400 whitespace-pre-wrap">{message.sql}</pre>
+                                  </div>
+                                </details>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
