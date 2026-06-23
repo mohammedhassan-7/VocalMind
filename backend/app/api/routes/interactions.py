@@ -71,6 +71,25 @@ def _iso_utc_z(dt: datetime | None) -> str | None:
 router = APIRouter()
 
 
+async def _knowledge_version_info(
+    session: SessionDep, interaction_id: UUID, organization_id: UUID
+) -> dict[str, Any]:
+    """Version tag for an interaction's cached analysis + the org's active version."""
+    from app.core.knowledge_versioning import get_active_version_number
+
+    tag = (await session.exec(
+        select(InteractionLLMTriggerCache.knowledge_version).where(
+            InteractionLLMTriggerCache.interaction_id == interaction_id
+        )
+    )).first()
+    active = await get_active_version_number(session, organization_id)
+    return {
+        "knowledgeVersion": tag,
+        "activeKnowledgeVersion": active,
+        "isStale": tag is not None and tag < active,
+    }
+
+
 def _interaction_scope_filters(current_user: CurrentUser) -> list:
     filters = [Interaction.organization_id == current_user.organization_id]
     if current_user.role == UserRole.agent:
@@ -1469,6 +1488,11 @@ async def get_interaction_detail(
                 llm_triggers = _map_llm_trigger_report(report)
                 llm_triggers["orgFilter"] = resolved_org_filter
                 llm_triggers["forcedRerun"] = llm_force_rerun
+                _version_info = await _knowledge_version_info(
+                    session, interaction_id, current_user.organization_id
+                )
+                for _block in (emotion_triggers, rag_compliance, llm_triggers):
+                    _block.update(_version_info)
             else:
                 cache_message = (
                     "LLM analysis is not cached yet. Use Run Pipeline to generate it."

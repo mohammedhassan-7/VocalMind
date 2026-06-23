@@ -14,3 +14,4 @@ from app.models.snapshot import AgentPerformanceSnapshot  # noqa: F401
 from app.models.query import AssistantQuery, AssistantSession  # noqa: F401
 from app.models.llm_trigger_cache import InteractionLLMTriggerCache  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
+from app.models.knowledge_version import KnowledgeVersion  # noqa: F401

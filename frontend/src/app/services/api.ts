@@ -878,6 +878,9 @@ export interface LLMTriggerReport {
   error?: string;
   orgFilter?: string | null;
   forcedRerun?: boolean;
+  knowledgeVersion?: number | null;
+  activeKnowledgeVersion?: number | null;
+  isStale?: boolean;
   interactionId?: string;
   emotionShift?: LLMEmotionShift;
   processAdherence?: LLMProcessAdherence;
@@ -896,6 +899,9 @@ export interface EmotionTriggerReport {
   error?: string;
   orgFilter?: string | null;
   forcedRerun?: boolean;
+  knowledgeVersion?: number | null;
+  activeKnowledgeVersion?: number | null;
+  isStale?: boolean;
   interactionId?: string;
   emotionShift?: LLMEmotionShift;
   explainability?: EvidenceAnchoredExplainability;
@@ -912,6 +918,9 @@ export interface RagComplianceReport {
   error?: string;
   orgFilter?: string | null;
   forcedRerun?: boolean;
+  knowledgeVersion?: number | null;
+  activeKnowledgeVersion?: number | null;
+  isStale?: boolean;
   interactionId?: string;
   processAdherence?: LLMProcessAdherence;
   nliPolicy?: LLMNliPolicy;
@@ -1045,6 +1054,58 @@ export function reprocessInteraction(id: string, options?: { force?: boolean }):
   const suffix = options?.force ? "?force=true" : "";
   return apiFetch<ReprocessResult>(`/interactions/${id}/reprocess${suffix}`, {
     method: "POST",
+  });
+}
+
+// ── Knowledge Versioning ─────────────────────────────────────────────────────
+
+export interface KnowledgeVersion {
+  id: string;
+  versionNumber: number;
+  summary: string;
+  createdBy: string | null;
+  createdAt: string | null;
+  isActive: boolean;
+  isLatest: boolean;
+}
+
+export function listKnowledgeVersions(): Promise<KnowledgeVersion[]> {
+  if (USE_OFFLINE_DEMO) return Promise.resolve([]);
+  return apiFetch<KnowledgeVersion[]>("/knowledge/versions");
+}
+
+export function getActiveKnowledgeVersion(): Promise<KnowledgeVersion | null> {
+  if (USE_OFFLINE_DEMO) return Promise.resolve(null);
+  return apiFetch<KnowledgeVersion | null>("/knowledge/versions/active");
+}
+
+export function activateKnowledgeVersion(versionId: string): Promise<{ status: string; activeVersion: number }> {
+  if (USE_OFFLINE_DEMO) return Promise.resolve({ status: "success", activeVersion: 0 });
+  return apiFetch(`/knowledge/versions/${versionId}/activate`, { method: "POST" });
+}
+
+export interface ReprocessVersionResult {
+  status: string;
+  target: "active" | "original";
+  reprocessed?: number;
+  count?: number;
+  queued: boolean;
+  activeVersion?: number;
+}
+
+export function reprocessAgainstVersion(body: {
+  interactionIds?: string[];
+  scope?: "stale";
+  target: "active" | "original";
+}): Promise<ReprocessVersionResult> {
+  if (USE_OFFLINE_DEMO) return Promise.resolve({ status: "success", target: body.target, queued: false });
+  return apiFetch<ReprocessVersionResult>("/knowledge/versions/reprocess", {
+    method: "POST",
+    body: JSON.stringify({
+      interaction_ids: body.interactionIds ?? null,
+      scope: body.scope ?? null,
+      target: body.target,
+    }),
   });
 }
 

@@ -46,6 +46,8 @@ class PolicyCompliance(SQLModel, table=True):
     is_compliant: bool
     compliance_score: float
     degraded: bool = Field(default=False)
+    # Knowledge version this verdict was judged against (NULL = pre-versioning).
+    knowledge_version: Optional[int] = Field(default=None)
     llm_reasoning: Optional[str] = None
     evidence_text: Optional[str] = None
     retrieved_policy_text: Optional[str] = None
